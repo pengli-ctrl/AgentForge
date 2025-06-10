@@ -1,0 +1,16 @@
+# Prometheus scrape configuration for AgentForge.
+# Collects metrics from the /metrics endpoint every 15 seconds.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "agentforge"
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - "agentforge-app:8000"
+        labels:
+          service: "agentforge-api"
+          environment: "production"

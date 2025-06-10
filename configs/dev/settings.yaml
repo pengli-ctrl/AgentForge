@@ -1,0 +1,49 @@
+# AgentForge Development Environment Configuration
+
+# General
+debug: true
+log_level: DEBUG
+
+# Rate Limiting (relaxed for development)
+rate_limit:
+  capacity: 1000
+  rate: 100  # requests per second
+
+# LLM Gateway
+llm:
+  mock_llm: true
+  model: "mock-model"
+  endpoint: "http://localhost:8000/v1"
+  api_key: "EMPTY"
+  max_tokens: 4096
+  timeout: 30.0
+  temperature: 0.7
+
+# Redis (local single instance)
+redis:
+  url: "redis://localhost:6379"
+  key_prefix: "agentforge:snapshot"
+  default_ttl: 3600
+
+# MySQL (local single instance)
+mysql:
+  host: "localhost"
+  port: 3306
+  database: "agentforge_dev"
+  user: "agentforge"
+  password: "agentforge_secret"
+
+# Kafka (disabled in development — use Redis Pub/Sub)
+kafka:
+  enabled: false
+  bootstrap_servers: ""
+
+# Event Bus
+event_bus:
+  backend: "memory"  # in-memory for development
+
+# API Server
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 1

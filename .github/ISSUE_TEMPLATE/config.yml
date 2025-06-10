@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 GitHub Discussions
+    url: https://github.com/pengli-ctrl/AgentForge/discussions
+    about: 功能建议、使用问题、架构讨论请使用 Discussions
+  - name: 📧 邮件联系
+    url: mailto:pl2847253@gmail.com
+    about: 安全漏洞或敏感问题请直接邮件联系
