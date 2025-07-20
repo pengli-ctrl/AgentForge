@@ -38,7 +38,7 @@ def _make_mock_process(
     Returns:
         MagicMock 模拟的 Process 对象。
     """
-    process = AsyncMock()
+    process = MagicMock()
     process.communicate = AsyncMock(return_value=(stdout, stderr))
     process.returncode = returncode
     return process
@@ -231,8 +231,8 @@ class TestTestExecutionTimeout:
     @pytest.mark.asyncio
     async def test_timeout_returns_failure(self) -> None:
         """超时应返回 success=False。"""
-        mock_process = AsyncMock()
-        mock_process.communicate = AsyncMock(side_effect=asyncio.TimeoutError())
+        mock_process = MagicMock()
+        mock_process.communicate = MagicMock()
         mock_process.kill = MagicMock()
         mock_process.returncode = None
 
@@ -256,7 +256,7 @@ class TestTestExecutionTimeout:
     @pytest.mark.asyncio
     async def test_timeout_metadata(self) -> None:
         """超时元数据应正确。"""
-        mock_process = AsyncMock()
+        mock_process = MagicMock()
         mock_process.kill = MagicMock()
 
         with (

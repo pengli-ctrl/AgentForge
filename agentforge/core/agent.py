@@ -20,28 +20,29 @@ Design rationale:
     - on_error() enables graceful degradation per agent type
 """
 
-import time
 import asyncio
 import logging
-from enum import Enum
+import time
 from abc import ABC, abstractmethod
-from typing import Optional, Any
 from dataclasses import dataclass, field
+from enum import Enum
+from typing import Optional
 
-from agentforge.core.memory import MemoryManager, MemoryConfig
-from agentforge.orchestration.timeout import TimeoutManager, TimeoutConfig
-from agentforge.observability.tracing import Span, SpanType, SpanStatus
+from agentforge.core.memory import MemoryConfig, MemoryManager
+from agentforge.observability.tracing import Span, SpanStatus
+from agentforge.orchestration.timeout import TimeoutConfig, TimeoutManager
 
 logger = logging.getLogger(__name__)
 
 
 class AgentState(Enum):
     """Agent lifecycle states. State transitions are enforced."""
-    IDLE = "idle"                 # Ready to accept work
-    RUNNING = "running"           # Currently executing
-    DEGRADED = "degraded"         # Running with degraded capabilities
-    FAILED = "failed"             # Terminal failure, needs reset
-    TIMEOUT = "timeout"           # Timed out, can retry
+
+    IDLE = "idle"  # Ready to accept work
+    RUNNING = "running"  # Currently executing
+    DEGRADED = "degraded"  # Running with degraded capabilities
+    FAILED = "failed"  # Terminal failure, needs reset
+    TIMEOUT = "timeout"  # Timed out, can retry
 
     # Valid state transitions (enforced in _transition_to)
     _TRANSITIONS = {
@@ -59,23 +60,25 @@ class Tool:
     Tool descriptor for Agent tool-use.
     Agents declare which tools they need via get_tools().
     """
+
     name: str
     description: str
-    parameters: dict = field(default_factory=dict)    # JSON Schema for params
+    parameters: dict = field(default_factory=dict)  # JSON Schema for params
     required: bool = True
 
 
 @dataclass
 class AgentResult:
     """Standardized result returned by Agent.execute()."""
+
     success: bool
     data: dict = field(default_factory=dict)
     error: Optional[str] = None
-    degraded: bool = False                  # True if result used fallback/degraded path
+    degraded: bool = False  # True if result used fallback/degraded path
     token_usage: dict = field(default_factory=dict)  # {prompt_tokens, completion_tokens, total}
     cost: float = 0.0
     latency_ms: float = 0.0
-    span: Optional[Span] = None             # The AGENT span for this execution
+    span: Optional[Span] = None  # The AGENT span for this execution
 
 
 class BaseAgent(ABC):
@@ -164,9 +167,7 @@ class BaseAgent(ABC):
         Handle execution errors. Default: return degraded result.
         Override for agent-specific error recovery.
         """
-        logger.warning(
-            "Agent[%s] error: %s", self._name, str(error), exc_info=True
-        )
+        logger.warning("Agent[%s] error: %s", self._name, str(error), exc_info=True)
         return {
             "result": None,
             "error": str(error),
@@ -269,14 +270,14 @@ class BaseAgent(ABC):
         if new_state not in valid:
             logger.warning(
                 "Agent[%s] invalid transition: %s → %s (allowed: %s)",
-                self._name, self._state.value, new_state.value,
+                self._name,
+                self._state.value,
+                new_state.value,
                 {s.value for s in valid},
             )
         self._state = new_state
 
-    async def _end_agent_span(
-        self, span: Span, result: dict, status: SpanStatus
-    ) -> None:
+    async def _end_agent_span(self, span: Span, result: dict, status: SpanStatus) -> None:
         """Finalize the Agent span with execution metrics."""
         span.set_attribute("agent_name", self._name)
         span.set_attribute("execution_count", self._execution_count)
@@ -313,3 +314,144 @@ class BaseAgent(ABC):
         """Reset agent to IDLE state. Used after FAILED/TIMEOUT recovery."""
         self._state = AgentState.IDLE
         self._last_error = None
+
+
+class Agent:
+    """Compatibility event-driven Agent used by the legacy workflow layer.
+
+    The platform runtime uses :class:`BaseAgent`. The code-review workflow and
+    SDK builder still exchange ``AgentEvent`` objects, so this class preserves
+    that contract without forcing the newer runtime to inherit legacy behavior.
+    """
+
+    def __init__(
+        self,
+        llm_gateway,
+        name: str,
+        tool_registry=None,
+        max_iterations: int = 5,
+        token_budget: int = 8000,
+    ) -> None:
+        self._llm_gateway = llm_gateway
+        self._name = name
+        self._tool_registry = tool_registry
+        self._max_iterations = max_iterations
+        self._token_budget = token_budget
+        self.prompt_template = ""
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    async def execute(self, event):
+        from agentforge.core.event_types import AgentEvent, EventType
+
+        try:
+            relevant_context = self._extract_context(event.context_snapshot)
+            task = str(event.payload.get("task") or event.payload.get("query") or "")
+            messages = self._build_initial_messages(task)
+            tools = self._get_tool_schemas()
+            total_tokens = 0
+            final_content = ""
+            tool_results = []
+
+            for _ in range(self._max_iterations):
+                if total_tokens >= self._token_budget:
+                    break
+
+                response = await self._llm_gateway.chat(
+                    messages,
+                    tools=tools or None,
+                )
+                total_tokens += self._usage_tokens(response.usage)
+                final_content = response.content
+
+                if not response.tool_calls:
+                    break
+
+                messages.append({"role": "assistant", "content": response.content})
+                for tool_call in response.tool_calls:
+                    result = await self._execute_tool(tool_call)
+                    tool_results.append(result)
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": f"Tool observation: {result.to_json()}",
+                        }
+                    )
+
+            downstream = self._build_downstream_context(
+                event.context_snapshot,
+                relevant_context,
+                tool_results,
+            )
+            return AgentEvent(
+                event_type=EventType.AGENT_COMPLETED,
+                source_agent=self._name,
+                payload={
+                    "result": final_content,
+                    "tokens": {"total_tokens": total_tokens},
+                    "cost": 0.0,
+                },
+                correlation_id=event.correlation_id,
+                context_snapshot=downstream,
+            )
+        except Exception as exc:
+            logger.exception("Agent[%s] execution failed", self._name)
+            return AgentEvent(
+                event_type=EventType.AGENT_FAILED,
+                source_agent=self._name,
+                payload={"result": "", "error": str(exc)},
+                correlation_id=event.correlation_id,
+                context_snapshot={},
+            )
+
+    def _extract_context(self, context_snapshot: dict) -> dict:
+        return context_snapshot
+
+    def _build_initial_messages(self, task: str) -> list[dict[str, str]]:
+        system_prompt = self.prompt_template or "You are a helpful assistant."
+        try:
+            system_prompt = system_prompt.format(task=task, context="{}")
+        except (KeyError, ValueError):
+            pass
+        return [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": task},
+        ]
+
+    def _build_downstream_context(
+        self,
+        original_snapshot: dict,
+        relevant_context: dict,
+        tool_results: list,
+    ) -> dict:
+        return {"agent_result": {"summary": self._summarize(None, tool_results)}}
+
+    def _summarize(self, response, tool_results: list) -> str:
+        if response is not None and getattr(response, "content", ""):
+            return response.content
+        outputs = [result.output for result in tool_results if result.output]
+        return "; ".join(outputs) if outputs else ""
+
+    def _get_tool_schemas(self) -> list[dict]:
+        if self._tool_registry is None:
+            return []
+        return self._tool_registry.get_schemas()
+
+    async def _execute_tool(self, tool_call):
+        if self._tool_registry is None:
+            from agentforge.core.base_tool import ToolResult
+
+            return ToolResult(
+                success=False,
+                output="",
+                error=f"Tool '{tool_call.name}' is unavailable",
+            )
+        return await self._tool_registry.execute(tool_call.name, tool_call.arguments)
+
+    @staticmethod
+    def _usage_tokens(usage: dict) -> int:
+        if "total_tokens" in usage:
+            return int(usage.get("total_tokens", 0) or 0)
+        return int(usage.get("prompt_tokens", 0) or 0) + int(usage.get("completion_tokens", 0) or 0)

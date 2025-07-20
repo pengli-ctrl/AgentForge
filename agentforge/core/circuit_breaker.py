@@ -40,6 +40,7 @@ from __future__ import annotations
 import enum
 import logging
 import time
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -81,10 +82,12 @@ class CircuitBreaker:
         failure_threshold: int = 5,
         recovery_timeout: float = 60.0,
         half_open_max_calls: int = 1,
+        clock: Callable[[], float] | None = None,
     ) -> None:
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
         self.half_open_max_calls = half_open_max_calls
+        self._clock = clock or time.monotonic
 
         self._state: CircuitState = CircuitState.CLOSED
         self._failure_count: int = 0
@@ -102,7 +105,7 @@ class CircuitBreaker:
             当前 CircuitState 枚举值。
         """
         if self._state == CircuitState.OPEN:
-            if time.monotonic() - self._last_failure_time >= self.recovery_timeout:
+            if self._clock() - self._last_failure_time >= self.recovery_timeout:
                 self._transition_to(CircuitState.HALF_OPEN)
                 logger.info(
                     "Circuit breaker transitioning OPEN -> HALF_OPEN " "(recovery timeout elapsed)"
@@ -163,7 +166,7 @@ class CircuitBreaker:
         """
         if self._state == CircuitState.CLOSED:
             self._failure_count += 1
-            self._last_failure_time = time.monotonic()
+            self._last_failure_time = self._clock()
 
             if self._failure_count >= self.failure_threshold:
                 logger.warning(
@@ -181,7 +184,7 @@ class CircuitBreaker:
 
         elif self._state == CircuitState.OPEN:
             # 已经在 OPEN 状态，更新失败时间（延长恢复等待）
-            self._last_failure_time = time.monotonic()
+            self._last_failure_time = self._clock()
 
     def reset(self) -> None:
         """重置熔断器到初始状态（CLOSED）。
@@ -209,7 +212,7 @@ class CircuitBreaker:
             self._half_open_calls = 0
             if old_state != CircuitState.OPEN:
                 # 仅在从其他状态转入 OPEN 时更新时间
-                self._last_failure_time = time.monotonic()
+                self._last_failure_time = self._clock()
         elif new_state == CircuitState.HALF_OPEN:
             self._half_open_calls = 0
             self._failure_count = 0

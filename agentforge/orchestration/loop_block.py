@@ -25,11 +25,11 @@ Integration:
     iteration for observability.
 """
 
-import time
 import asyncio
 import logging
-from typing import Callable, Optional, Any
+import time
 from dataclasses import dataclass, field
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -37,15 +37,16 @@ logger = logging.getLogger(__name__)
 @dataclass
 class LoopResult:
     """Result from a LoopBlock execution."""
+
     success: bool
     iterations_completed: int
     max_iterations: int
     final_output: dict = field(default_factory=dict)
-    exit_reason: str = ""             # "condition_met", "max_iterations", "error"
+    exit_reason: str = ""  # "condition_met", "max_iterations", "error"
     iteration_results: list[dict] = field(default_factory=list)
     total_cost: float = 0.0
     total_latency_ms: float = 0.0
-    converged: bool = False           # True if exit_condition was satisfied
+    converged: bool = False  # True if exit_condition was satisfied
 
 
 class LoopBlock:
@@ -88,7 +89,9 @@ class LoopBlock:
         if max_iterations > self.ABSOLUTE_MAX_ITERATIONS:
             logger.warning(
                 "LoopBlock[%s] max_iterations=%d exceeds hard limit of %d — capping",
-                name, max_iterations, self.ABSOLUTE_MAX_ITERATIONS,
+                name,
+                max_iterations,
+                self.ABSOLUTE_MAX_ITERATIONS,
             )
         self._max_iterations = min(max_iterations, self.ABSOLUTE_MAX_ITERATIONS)
         self._sub_dag = sub_dag
@@ -120,21 +123,12 @@ class LoopBlock:
         exit_reason = ""
 
         for iteration in range(1, self._max_iterations + 1):
-            iter_start = time.monotonic()
 
             # Inject iteration metadata into context
             # Agents can read this to know which iteration they're in
             await context.write("__loop_iteration__", iteration)
             await context.write("__loop_name__", self._name)
             await context.write("__loop_max__", self._max_iterations)
-
-            # Create LoopSpan for this iteration
-            span = None
-            if tracer:
-                from agentforge.observability.tracing import SpanType
-                # We need a trace reference — caller should pass it
-                # For now, create span attributes directly
-                pass
 
             try:
                 # Execute the sub-DAG for this iteration
@@ -157,33 +151,41 @@ class LoopBlock:
                 total_cost += iter_cost
                 final_output = sub_result.node_results
 
-                iteration_results.append({
-                    "iteration": iteration,
-                    "success": sub_result.success_rate > 0,
-                    "cost": iter_cost,
-                    "latency_ms": iter_latency,
-                    "output_keys": list(sub_result.node_results.keys()),
-                })
+                iteration_results.append(
+                    {
+                        "iteration": iteration,
+                        "success": sub_result.success_rate > 0,
+                        "cost": iter_cost,
+                        "latency_ms": iter_latency,
+                        "output_keys": list(sub_result.node_results.keys()),
+                    }
+                )
 
             except asyncio.TimeoutError:
-                iteration_results.append({
-                    "iteration": iteration,
-                    "success": False,
-                    "error": "Sub-DAG timeout",
-                })
+                iteration_results.append(
+                    {
+                        "iteration": iteration,
+                        "success": False,
+                        "error": "Sub-DAG timeout",
+                    }
+                )
                 exit_reason = "timeout"
                 break
 
             except Exception as e:
                 logger.warning(
                     "LoopBlock[%s] iteration %d failed: %s",
-                    self._name, iteration, str(e)[:200],
+                    self._name,
+                    iteration,
+                    str(e)[:200],
                 )
-                iteration_results.append({
-                    "iteration": iteration,
-                    "success": False,
-                    "error": str(e)[:200],
-                })
+                iteration_results.append(
+                    {
+                        "iteration": iteration,
+                        "success": False,
+                        "error": str(e)[:200],
+                    }
+                )
                 # Continue to next iteration unless it's the last
                 if iteration == self._max_iterations:
                     exit_reason = "error"
@@ -195,7 +197,8 @@ class LoopBlock:
             except Exception as e:
                 logger.warning(
                     "LoopBlock[%s] exit_condition raised: %s — stopping loop",
-                    self._name, str(e)[:200],
+                    self._name,
+                    str(e)[:200],
                 )
                 should_exit = True  # Stop on condition error to prevent infinite loop
 
@@ -204,7 +207,8 @@ class LoopBlock:
                 exit_reason = "condition_met"
                 logger.info(
                     "LoopBlock[%s] converged at iteration %d",
-                    self._name, iteration,
+                    self._name,
+                    iteration,
                 )
                 break
         else:
@@ -214,7 +218,8 @@ class LoopBlock:
                 logger.warning(
                     "LoopBlock[%s] reached max iterations (%d) without convergence — "
                     "marked as 'cannot auto-fix'",
-                    self._name, self._max_iterations,
+                    self._name,
+                    self._max_iterations,
                 )
 
         elapsed_ms = (time.monotonic() - start_time) * 1000

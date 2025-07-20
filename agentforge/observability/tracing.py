@@ -14,30 +14,32 @@ Design rationale:
     attributes dict for flexible metadata without rigid schema.
 """
 
-import uuid
-import time
 import asyncio
+import time
+import uuid
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
-from dataclasses import dataclass, field
 
 
 class SpanType(Enum):
     """Five span types covering the full request lifecycle."""
-    CACHE = "cache"            # Gateway layer: semantic cache lookup
-    ROUTE = "route"            # Gateway layer: model routing decision
-    INFERENCE = "inference"    # Gateway layer: actual LLM API call
-    AGENT = "agent"            # Runtime layer: Agent execution
-    LOOP = "loop"              # Orchestration layer: LoopBlock iteration
+
+    CACHE = "cache"  # Gateway layer: semantic cache lookup
+    ROUTE = "route"  # Gateway layer: model routing decision
+    INFERENCE = "inference"  # Gateway layer: actual LLM API call
+    AGENT = "agent"  # Runtime layer: Agent execution
+    LOOP = "loop"  # Orchestration layer: LoopBlock iteration
 
 
 class SpanStatus(Enum):
     """Span completion status."""
+
     OK = "ok"
     ERROR = "error"
     TIMEOUT = "timeout"
-    DEGRADED = "degraded"      # Completed with degradation applied
-    PARTIAL = "partial"        # Partial success (DAG-level)
+    DEGRADED = "degraded"  # Completed with degradation applied
+    PARTIAL = "partial"  # Partial success (DAG-level)
 
 
 @dataclass
@@ -48,10 +50,11 @@ class Span:
     Mirrors OpenTelemetry Span semantics but simplified for our use case.
     parent_span_id=None means this is a root span of its trace.
     """
+
     span_id: str
     parent_span_id: Optional[str]
     span_type: SpanType
-    start_time: float                           # time.monotonic() for precision
+    start_time: float  # time.monotonic() for precision
     end_time: Optional[float] = None
     status: SpanStatus = SpanStatus.OK
     attributes: dict = field(default_factory=dict)
@@ -92,6 +95,7 @@ class Trace:
     total_cost and total_latency are computed at trace end by aggregating
     all child spans — this avoids double-counting in nested spans.
     """
+
     trace_id: str
     correlation_id: str
     root_span: Optional[Span] = None
@@ -112,9 +116,7 @@ class Trace:
         Latency is computed from the root span duration.
         """
         self.total_cost = sum(
-            s.attributes.get("cost", 0.0)
-            for s in self.spans
-            if s.span_type == SpanType.INFERENCE
+            s.attributes.get("cost", 0.0) for s in self.spans if s.span_type == SpanType.INFERENCE
         )
         if self.end_time is not None:
             self.total_latency_ms = (self.end_time - self.start_time) * 1000
@@ -207,8 +209,10 @@ class Tracer:
         Returns:
             New Span with start_time already set.
         """
-        parent_id = parent_span.span_id if parent_span else (
-            trace.root_span.span_id if trace.root_span else None
+        parent_id = (
+            parent_span.span_id
+            if parent_span
+            else (trace.root_span.span_id if trace.root_span else None)
         )
 
         span = Span(
@@ -262,17 +266,10 @@ class Tracer:
         """Retrieve a trace by ID. Returns None if not found or evicted."""
         return self._traces.get(trace_id)
 
-    async def get_span_children(
-        self, trace: Trace, parent_span: Span
-    ) -> list[Span]:
+    async def get_span_children(self, trace: Trace, parent_span: Span) -> list[Span]:
         """Get all direct children of a span within a trace."""
-        return [
-            s for s in trace.spans
-            if s.parent_span_id == parent_span.span_id
-        ]
+        return [s for s in trace.spans if s.parent_span_id == parent_span.span_id]
 
-    async def get_spans_by_type(
-        self, trace: Trace, span_type: SpanType
-    ) -> list[Span]:
+    async def get_spans_by_type(self, trace: Trace, span_type: SpanType) -> list[Span]:
         """Filter spans by type. Useful for cost/latency aggregation."""
         return [s for s in trace.spans if s.span_type == span_type]

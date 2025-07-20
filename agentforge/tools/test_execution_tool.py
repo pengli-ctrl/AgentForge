@@ -35,6 +35,8 @@ class TestExecutionTool(BaseTool):
     def __init__(self, timeout: int = 300) -> None:
         self.timeout = timeout
 
+    __test__ = False
+
     @property
     def name(self) -> str:
         """工具唯一标识。"""

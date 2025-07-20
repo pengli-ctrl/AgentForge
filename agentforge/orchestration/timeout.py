@@ -58,9 +58,10 @@ class TimeoutConfig:
     This hierarchy ensures that inner timeouts fire before outer ones,
     enabling graceful degradation at each level.
     """
-    llm_timeout: float = 10.0       # L1: single LLM inference (P99 across 5 models)
-    agent_timeout: float = 30.0     # L2: full agent execution (3× LLM + tools + memory)
-    dag_timeout: float = 300.0      # L3: entire DAG pipeline (10 waves × 30s)
+
+    llm_timeout: float = 10.0  # L1: single LLM inference (P99 across 5 models)
+    agent_timeout: float = 30.0  # L2: full agent execution (3× LLM + tools + memory)
+    dag_timeout: float = 300.0  # L3: entire DAG pipeline (10 waves × 30s)
 
     def validate(self) -> None:
         """

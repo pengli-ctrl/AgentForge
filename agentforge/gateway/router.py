@@ -21,11 +21,10 @@ Circuit breaker:
     circuit opens for 15 minutes (skip model entirely).
 """
 
-import time
 import asyncio
 import logging
-from typing import Optional
 from dataclasses import dataclass, field
+from typing import Optional
 
 from agentforge.gateway.model_registry import ModelProfile, ModelRegistry
 
@@ -45,10 +44,13 @@ class ModelRouteDecision:
     with workflow/llm_router.py's RouteDecision, which handles YAML workflow
     routing (a different concern from model selection).
     """
+
     selected_model: str
-    scores_per_model: dict[str, float]   # model_name → weighted_score
+    scores_per_model: dict[str, float]  # model_name → weighted_score
     reason: str
-    scores_detail: dict[str, dict] = field(default_factory=dict)  # model → {capability, cost, latency}
+    scores_detail: dict[str, dict] = field(
+        default_factory=dict
+    )  # model → {capability, cost, latency}
 
 
 class SmartRouter:
@@ -135,9 +137,7 @@ class SmartRouter:
             scores_detail=details,
         )
 
-    def _score_capability(
-        self, model: ModelProfile, task_type: str, complexity: float
-    ) -> float:
+    def _score_capability(self, model: ModelProfile, task_type: str, complexity: float) -> float:
         """
         Capability score (0–10). Adjusted by task type and complexity.
 
@@ -190,9 +190,7 @@ class SmartRouter:
         normalized = 10.0 * (1.0 - (model.avg_latency_ms - min_lat) / (max_lat - min_lat))
         return normalized
 
-    def _weighted_sum(
-        self, capability: float, cost: float, latency: float
-    ) -> float:
+    def _weighted_sum(self, capability: float, cost: float, latency: float) -> float:
         """Compute weighted score from three dimensions."""
         return (
             self.WEIGHTS["capability"] * capability
@@ -222,7 +220,8 @@ class SmartRouter:
                 if failure_rate > 0.5:
                     logger.warning(
                         "Circuit breaker triggered for %s: %.0f%% failure rate over last 10 calls",
-                        model_name, failure_rate * 100,
+                        model_name,
+                        failure_rate * 100,
                     )
                     await self._registry.mark_unavailable(model_name, duration_seconds=900)
 
@@ -245,7 +244,10 @@ class SmartRouter:
     def get_preset_response(self) -> dict:
         """Last-resort preset response when all models are unavailable."""
         return {
-            "result": "Service temporarily unavailable. All models are experiencing issues. Please retry in a few minutes.",
+            "result": (
+                "Service temporarily unavailable. All models are experiencing issues. "
+                "Please retry in a few minutes."
+            ),
             "degraded": True,
             "fallback": "preset",
         }

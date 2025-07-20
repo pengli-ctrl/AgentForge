@@ -1,0 +1,46 @@
+import pytest
+from temporalio.testing import WorkflowEnvironment
+from temporalio.worker import Worker
+
+from agentforge.platform.runtime import build_memory_container, configure_container
+from agentforge.platform.workflows.support_ticket import (
+    SupportTicketWorkflow,
+    intake_ticket_activity,
+)
+
+
+@pytest.mark.asyncio
+@pytest.mark.slow
+async def test_temporal_workflow_reaches_waiting_review() -> None:
+    container = build_memory_container()
+    await container.knowledge_service.ingest_document(
+        tenant_id="tenant-1",
+        title="Product usage",
+        content="How to use this product: open the dashboard and follow the setup guide.",
+    )
+    configure_container(container)
+    env = await WorkflowEnvironment.start_time_skipping()
+    try:
+        worker = Worker(
+            env.client,
+            task_queue="support-copilot-test",
+            workflows=[SupportTicketWorkflow],
+            activities=[intake_ticket_activity],
+        )
+        async with worker:
+            handle = await env.client.start_workflow(
+                SupportTicketWorkflow.run,
+                {
+                    "tenant_id": "tenant-1",
+                    "source": "feishu",
+                    "message_id": "temporal-msg-1",
+                    "text": "How do I use this product?",
+                },
+                id="temporal-task-1",
+                task_queue="support-copilot-test",
+            )
+            result = await handle.result()
+            assert result["status"] == "waiting_review"
+            assert result["metadata"]["draft"]["citations"]
+    finally:
+        await env.shutdown()

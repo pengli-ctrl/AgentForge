@@ -1,0 +1,182 @@
+services:
+  kafka:
+    image: apache/kafka:4.1.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    ports:
+      - '9092:9092'
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: agentforge
+      POSTGRES_PASSWORD: agentforge
+      POSTGRES_DB: agentforge
+    ports:
+      - '5432:5432'
+    volumes:
+      - agentforge-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U agentforge -d agentforge']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    ports:
+      - '6379:6379'
+    command: ['valkey-server', '--appendonly', 'yes']
+    volumes:
+      - agentforge-valkey:/data
+
+  temporal:
+    image: temporalio/auto-setup:1.32.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: agentforge
+      POSTGRES_PWD: agentforge
+      POSTGRES_SEEDS: postgres
+    ports:
+      - '7233:7233'
+
+  temporal-ui:
+    image: temporalio/ui:2.42.0
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:8080
+    ports:
+      - '8080:8080'
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ':9001'
+    environment:
+      MINIO_ROOT_USER: agentforge
+      MINIO_ROOT_PASSWORD: agentforge
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - agentforge-minio:/data
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.138.0
+    command: ['--config=/etc/otelcol/config.yaml']
+    volumes:
+      - ./deploy/platform/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - '4317:4317'
+      - '4318:4318'
+
+  migrate:
+    build:
+      context: .
+      dockerfile: deploy/platform/Dockerfile.platform
+    environment:
+      AGENTFORGE_ENV: prod
+      AGENTFORGE_DATABASE_URL: postgresql+asyncpg://agentforge:agentforge@postgres:5432/agentforge
+    command: ['alembic', 'upgrade', 'head']
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: deploy/platform/Dockerfile.platform
+    environment:
+      AGENTFORGE_ENV: prod
+      AGENTFORGE_DATABASE_URL: postgresql+asyncpg://agentforge:agentforge@postgres:5432/agentforge
+      AGENTFORGE_TEMPORAL_ADDRESS: temporal:7233
+      AGENTFORGE_TEMPORAL_NAMESPACE: default
+      AGENTFORGE_VALKEY_URL: redis://valkey:6379/0
+      AGENTFORGE_OBJECT_STORE_ENDPOINT: http://minio:9000
+      AGENTFORGE_OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      AGENTFORGE_MONTHLY_MODEL_BUDGET: ${AGENTFORGE_MONTHLY_MODEL_BUDGET:-100}
+      AGENTFORGE_FEISHU_ENCRYPT_KEY: ${AGENTFORGE_FEISHU_ENCRYPT_KEY:-}
+      AGENTFORGE_FEISHU_VERIFICATION_TOKEN: ${AGENTFORGE_FEISHU_VERIFICATION_TOKEN:-}
+      AGENTFORGE_FEISHU_APP_ID: ${AGENTFORGE_FEISHU_APP_ID:-}
+      AGENTFORGE_FEISHU_APP_SECRET: ${AGENTFORGE_FEISHU_APP_SECRET:-}
+      AGENTFORGE_AUTH_ENABLED: ${AGENTFORGE_AUTH_ENABLED:-false}
+      AGENTFORGE_API_KEYS: ${AGENTFORGE_API_KEYS:-{}}
+      AGENTFORGE_ADMIN_API_KEY: ${AGENTFORGE_ADMIN_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    ports:
+      - '8000:8000'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      temporal:
+        condition: service_started
+      valkey:
+        condition: service_started
+      minio:
+        condition: service_started
+
+  worker:
+    build:
+      context: .
+      dockerfile: deploy/platform/Dockerfile.platform
+    environment:
+      AGENTFORGE_ENV: prod
+      AGENTFORGE_DATABASE_URL: postgresql+asyncpg://agentforge:agentforge@postgres:5432/agentforge
+      AGENTFORGE_TEMPORAL_ADDRESS: temporal:7233
+      AGENTFORGE_TEMPORAL_NAMESPACE: default
+      AGENTFORGE_VALKEY_URL: redis://valkey:6379/0
+      AGENTFORGE_OBJECT_STORE_ENDPOINT: http://minio:9000
+      AGENTFORGE_OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      AGENTFORGE_MONTHLY_MODEL_BUDGET: ${AGENTFORGE_MONTHLY_MODEL_BUDGET:-100}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    command: ['python', '-m', 'agentforge.platform.worker']
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      temporal:
+        condition: service_started
+      valkey:
+        condition: service_started
+
+  outbox-worker:
+    build:
+      context: .
+      dockerfile: deploy/platform/Dockerfile.platform
+    environment:
+      AGENTFORGE_ENV: prod
+      AGENTFORGE_DATABASE_URL: postgresql+asyncpg://agentforge:agentforge@postgres:5432/agentforge
+      AGENTFORGE_OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      AGENTFORGE_OUTBOX_POLL_INTERVAL_SECONDS: ${AGENTFORGE_OUTBOX_POLL_INTERVAL_SECONDS:-1}
+      AGENTFORGE_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      AGENTFORGE_KAFKA_TOPIC: agentforge.domain-events
+    command: ['python', '-m', 'agentforge.platform.outbox_worker']
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+volumes:
+  agentforge-postgres:
+  agentforge-valkey:
+  agentforge-minio:

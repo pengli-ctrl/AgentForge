@@ -23,8 +23,8 @@ Production tuning notes:
 
 import asyncio
 import logging
-from typing import Optional
 from dataclasses import dataclass, field
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -48,12 +48,13 @@ class ModelProfile:
         description: Human-readable model description for logging/debugging.
         specializations: Task types this model excels at (e.g., ["reasoning", "code_gen"]).
     """
+
     name: str
-    capability_score: float          # 0–10, higher = better quality
-    cost_per_1k_tokens: float       # USD per 1K tokens
-    avg_latency_ms: float           # Average response latency
+    capability_score: float  # 0–10, higher = better quality
+    cost_per_1k_tokens: float  # USD per 1K tokens
+    avg_latency_ms: float  # Average response latency
     max_context_length: int = 32000  # Max input tokens
-    is_available: bool = True        # Runtime: set False during circuit break
+    is_available: bool = True  # Runtime: set False during circuit break
     description: str = ""
     specializations: list[str] = field(default_factory=list)
 
@@ -176,9 +177,7 @@ class ModelRegistry:
                 model.is_available = False
                 logger.warning("Circuit breaker: %s unavailable for %.0fs", name, duration_seconds)
                 # Schedule automatic recovery
-                asyncio.get_event_loop().call_later(
-                    duration_seconds, self._recover_model, name
-                )
+                asyncio.get_event_loop().call_later(duration_seconds, self._recover_model, name)
 
     def _recover_model(self, name: str) -> None:
         """
@@ -202,8 +201,12 @@ class ModelRegistry:
             if profile.name in self._models:
                 logger.warning("Model '%s' already registered, overwriting", profile.name)
             self._models[profile.name] = profile
-            logger.info("Registered model: %s (capability=%.1f, cost=%.4f/1K)",
-                        profile.name, profile.capability_score, profile.cost_per_1k_tokens)
+            logger.info(
+                "Registered model: %s (capability=%.1f, cost=%.4f/1K)",
+                profile.name,
+                profile.capability_score,
+                profile.cost_per_1k_tokens,
+            )
 
     async def unregister_model(self, name: str) -> bool:
         """
@@ -252,8 +255,7 @@ class ModelRegistry:
             List of ModelProfile instances that list this specialization.
         """
         return [
-            m for m in self._models.values()
-            if m.is_available and task_type in m.specializations
+            m for m in self._models.values() if m.is_available and task_type in m.specializations
         ]
 
     def get_cheapest(self) -> Optional[ModelProfile]:

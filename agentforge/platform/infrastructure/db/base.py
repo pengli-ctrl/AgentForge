@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+def create_engine(database_url: str):
+    return create_async_engine(database_url, pool_pre_ping=True)
+
+
+def create_session_factory(database_url: str) -> async_sessionmaker[AsyncSession]:
+    return async_sessionmaker(create_engine(database_url), expire_on_commit=False)
+
+
+async def session_scope(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> AsyncIterator[AsyncSession]:
+    async with session_factory() as session:
+        yield session

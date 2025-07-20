@@ -8,3 +8,5 @@ flake8>=6.0.0
 mypy>=1.5.0
 fakeredis>=2.0.0
 httpx>=0.25.0
+
+aiosqlite>=0.22.0

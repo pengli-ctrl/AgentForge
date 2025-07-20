@@ -43,6 +43,7 @@ class TestExecutionAgent(Agent):
     """
 
     REQUIRED_CONTEXT_KEYS = ["code_path", "test_config"]
+    __test__ = False
 
     def __init__(
         self,

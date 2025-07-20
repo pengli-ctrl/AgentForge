@@ -17,48 +17,50 @@ Design rationale:
     P1 is urgent Slack message, P2 is tomorrow's standup topic, P3 is routine.
 """
 
-import time
 import asyncio
 import logging
+import time
+from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
-from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
 
 class AlertLevel(Enum):
     """Budget alert levels, from least to most severe."""
-    P3_DAILY = 3    # Routine daily report
+
+    P3_DAILY = 3  # Routine daily report
     P2_WARNING = 2  # Budget consumption accelerating
-    P1_ALERT = 1    # Budget nearly exhausted
+    P1_ALERT = 1  # Budget nearly exhausted
     P0_CRITICAL = 0  # Budget exhausted — stop service
 
 
 @dataclass
 class CostRecord:
     """Single cost record from one LLM call."""
+
     timestamp: float
     model_name: str
     token_count: int
     cost: float
-    correlation_id: str = ""    # Link to DAG execution
-    agent_name: str = ""        # Which agent made the call
-    span_id: str = ""           # Link to InferenceSpan
+    correlation_id: str = ""  # Link to DAG execution
+    agent_name: str = ""  # Which agent made the call
+    span_id: str = ""  # Link to InferenceSpan
 
 
 @dataclass
 class CostReport:
     """Daily cost report with breakdowns."""
+
     date: str
     total_cost: float
     total_tokens: int
     budget_limit: float
     budget_usage_pct: float
-    model_breakdown: dict[str, dict]     # model → {cost, tokens, calls}
-    agent_breakdown: dict[str, dict]     # agent → {cost, tokens, calls}
+    model_breakdown: dict[str, dict]  # model → {cost, tokens, calls}
+    agent_breakdown: dict[str, dict]  # agent → {cost, tokens, calls}
     alerts_triggered: list[str]
-    cache_hits_saved: float = 0.0        # Estimated savings from semantic cache
+    cache_hits_saved: float = 0.0  # Estimated savings from semantic cache
 
 
 class CostTracker:
@@ -73,9 +75,9 @@ class CostTracker:
     """
 
     # Budget thresholds (fraction of daily budget)
-    P0_THRESHOLD = 1.00   # Stop service
-    P1_THRESHOLD = 0.90   # Alert + throttle
-    P2_THRESHOLD = 0.70   # Warning
+    P0_THRESHOLD = 1.00  # Stop service
+    P1_THRESHOLD = 0.90  # Alert + throttle
+    P2_THRESHOLD = 0.70  # Warning
     # P3 is always active (daily report)
 
     def __init__(self, daily_budget: float = 100.0):
@@ -166,7 +168,10 @@ class CostTracker:
             alert = {
                 "level": AlertLevel.P0_CRITICAL,
                 "timestamp": time.time(),
-                "message": f"P0 CRITICAL: Budget 100% exhausted (${self._total_cost:.2f}/${self._daily_budget:.2f}). Stopping service.",
+                "message": (
+                    f"P0 CRITICAL: Budget 100% exhausted "
+                    f"(${self._total_cost:.2f}/${self._daily_budget:.2f}). Stopping service."
+                ),
             }
             self._alerts.append(alert)
             logger.critical(alert["message"])
@@ -177,7 +182,10 @@ class CostTracker:
                 alert = {
                     "level": AlertLevel.P1_ALERT,
                     "timestamp": time.time(),
-                    "message": f"P1 ALERT: Budget at {usage_pct:.0%} (${self._total_cost:.2f}/${self._daily_budget:.2f}). Throttling enabled.",
+                    "message": (
+                        f"P1 ALERT: Budget at {usage_pct:.0%} "
+                        f"(${self._total_cost:.2f}/${self._daily_budget:.2f}). Throttling enabled."
+                    ),
                 }
                 self._alerts.append(alert)
                 logger.warning(alert["message"])
@@ -187,7 +195,10 @@ class CostTracker:
                 alert = {
                     "level": AlertLevel.P2_WARNING,
                     "timestamp": time.time(),
-                    "message": f"P2 WARNING: Budget at {usage_pct:.0%} (${self._total_cost:.2f}/${self._daily_budget:.2f}). Review usage.",
+                    "message": (
+                        f"P2 WARNING: Budget at {usage_pct:.0%} "
+                        f"(${self._total_cost:.2f}/${self._daily_budget:.2f}). Review usage."
+                    ),
                 }
                 self._alerts.append(alert)
                 logger.info(alert["message"])
@@ -222,13 +233,11 @@ class CostTracker:
             budget_limit=self._daily_budget,
             budget_usage_pct=round(self.get_budget_usage(), 4),
             model_breakdown={
-                model: {k: round(v, 4) if isinstance(v, float) else v
-                        for k, v in data.items()}
+                model: {k: round(v, 4) if isinstance(v, float) else v for k, v in data.items()}
                 for model, data in self._model_totals.items()
             },
             agent_breakdown={
-                agent: {k: round(v, 4) if isinstance(v, float) else v
-                        for k, v in data.items()}
+                agent: {k: round(v, 4) if isinstance(v, float) else v for k, v in data.items()}
                 for agent, data in self._agent_totals.items()
             },
             alerts_triggered=[a["message"] for a in self._alerts],
@@ -264,6 +273,7 @@ class CostTracker:
     def _today_start() -> float:
         """Return timestamp for start of today (midnight)."""
         import datetime
+
         now = datetime.datetime.now()
         start = datetime.datetime(now.year, now.month, now.day)
         return start.timestamp()

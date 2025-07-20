@@ -179,13 +179,15 @@ class TestHalfOpenState:
         assert breaker.state == CircuitState.OPEN
 
     def test_half_open_with_multiple_allowed_calls(self) -> None:
+        now = [0.0]
         breaker = CircuitBreaker(
             failure_threshold=1,
             recovery_timeout=0.05,
             half_open_max_calls=3,
+            clock=lambda: now[0],
         )
         breaker.record_failure()
-        time.sleep(0.06)
+        now[0] = 0.06
 
         assert breaker.state == CircuitState.HALF_OPEN
         assert breaker.can_execute() is True

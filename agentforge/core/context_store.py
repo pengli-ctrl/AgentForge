@@ -114,12 +114,16 @@ class ContextStore:
                     ctx_key = ref[5:]  # Strip "$ctx."
                     resolved[target] = self._store.get(ctx_key)
                     if ctx_key not in self._store:
-                        logger.debug("ContextStore: $ctx.%s not found for param '%s'", ctx_key, target)
+                        logger.debug(
+                            "ContextStore: $ctx.%s not found for param '%s'", ctx_key, target
+                        )
                 elif ref.startswith("$input."):
                     input_key = ref[7:]  # Strip "$input."
                     resolved[target] = self._input.get(input_key)
                     if input_key not in self._input:
-                        logger.debug("ContextStore: $input.%s not found for param '%s'", input_key, target)
+                        logger.debug(
+                            "ContextStore: $input.%s not found for param '%s'", input_key, target
+                        )
                 else:
                     # Literal value pass-through
                     resolved[target] = ref
@@ -185,11 +189,13 @@ class ContextStore:
             keys_read: List of keys that were read.
         """
         async with self._lock:
-            self._access_log.append({
-                "node_id": node_id,
-                "keys_read": keys_read,
-                "store_size": len(self._store),
-            })
+            self._access_log.append(
+                {
+                    "node_id": node_id,
+                    "keys_read": keys_read,
+                    "store_size": len(self._store),
+                }
+            )
 
     async def get_access_log(self) -> list[dict]:
         """Get the full access log for tracing."""

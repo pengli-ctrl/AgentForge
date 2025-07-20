@@ -18,27 +18,29 @@ Design rationale:
     in a system that handles uncertainty.
 """
 
-import time
 import asyncio
 import logging
-from enum import Enum
-from typing import Optional, Any
+import time
 from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 class DegradationLevel(Enum):
     """Four degradation levels, from least to most severe."""
-    L1_MODEL = 1   # Single model failure — switch to another model
-    L2_NODE = 2    # Single node failure — retry or use fallback
-    L3_DAG = 3     # Multiple node failures — early termination
+
+    L1_MODEL = 1  # Single model failure — switch to another model
+    L2_NODE = 2  # Single node failure — retry or use fallback
+    L3_DAG = 3  # Multiple node failures — early termination
     L4_SYSTEM = 4  # Cascading failure — global degradation
 
 
 @dataclass
 class DegradationEvent:
     """Record of a degradation event for observability."""
+
     level: DegradationLevel
     timestamp: float
     description: str
@@ -65,7 +67,7 @@ class DegradationManager:
         self._lock = asyncio.Lock()
         # L1: per-model failure tracking for circuit breaker
         self._model_failures: dict[str, list[float]] = {}  # model → [failure_timestamps]
-        self._model_circuit_open: dict[str, float] = {}     # model → open_until_timestamp
+        self._model_circuit_open: dict[str, float] = {}  # model → open_until_timestamp
         # L2: per-node retry tracking
         self._node_retry_counts: dict[str, int] = {}
         # L3: DAG-level tracking
@@ -78,9 +80,7 @@ class DegradationManager:
 
     # ── L1: Model-level degradation ─────────────────────────────────────
 
-    async def handle_llm_failure(
-        self, model_name: str, error: Exception
-    ) -> dict:
+    async def handle_llm_failure(self, model_name: str, error: Exception) -> dict:
         """
         L1 degradation: single model failure.
 
@@ -139,8 +139,7 @@ class DegradationManager:
         all_models = ["Qwen3-Pro", "GLM-5", "DeepSeek-V3", "Kimi", "MiniMax"]
         now = time.time()
         available = [
-            m for m in all_models
-            if m != failed_model and self._model_circuit_open.get(m, 0) < now
+            m for m in all_models if m != failed_model and self._model_circuit_open.get(m, 0) < now
         ]
         return available
 
@@ -175,14 +174,19 @@ class DegradationManager:
                 action = "retry"
                 logger.info(
                     "Node[%s] failed, retrying (%d remaining): %s",
-                    node_id, remaining, str(error)[:100],
+                    node_id,
+                    remaining,
+                    str(error)[:100],
                 )
             else:
                 # Exhausted retries — use fallback or mark degraded
                 action = "fallback_default"
                 logger.warning(
                     "Node[%s] exhausted retries (%d/%d), using fallback: %s",
-                    node_id, current_retries, retry_count, str(error)[:100],
+                    node_id,
+                    current_retries,
+                    retry_count,
+                    str(error)[:100],
                 )
 
         event = DegradationEvent(
@@ -241,8 +245,10 @@ class DegradationManager:
             logger.warning(
                 "DAG degradation: %.0f%% nodes failed (%d/%d) > %.0f%% threshold — "
                 "early termination triggered",
-                failed_ratio * 100, self._current_dag_failures,
-                total_nodes, threshold * 100,
+                failed_ratio * 100,
+                self._current_dag_failures,
+                total_nodes,
+                threshold * 100,
             )
         else:
             action = "continue"
@@ -250,7 +256,10 @@ class DegradationManager:
         event = DegradationEvent(
             level=DegradationLevel.L3_DAG,
             timestamp=time.time(),
-            description=f"DAG failure ratio: {failed_ratio:.1%} ({self._current_dag_failures}/{total_nodes})",
+            description=(
+                f"DAG failure ratio: {failed_ratio:.1%} "
+                f"({self._current_dag_failures}/{total_nodes})"
+            ),
             action_taken=action,
             affected_component="dag",
             span_attributes={"failed_ratio": failed_ratio, "total_nodes": total_nodes},
