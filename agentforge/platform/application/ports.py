@@ -6,8 +6,14 @@ from agentforge.platform.domain.audit import AuditEvent
 from agentforge.platform.domain.cost import CostRecord
 from agentforge.platform.domain.evaluation import EvaluationSample
 from agentforge.platform.domain.events import EventEnvelope
-from agentforge.platform.domain.knowledge import KnowledgeChunk, KnowledgeDocument, RetrievedChunk
+from agentforge.platform.domain.knowledge import (
+    KnowledgeChunk,
+    KnowledgeDocument,
+    RetrievedChunk,
+    SearchMode,
+)
 from agentforge.platform.domain.model import ModelRequest, ModelResponse
+from agentforge.platform.domain.regression import GoldenItem, QualityReport, RegressionRun
 from agentforge.platform.domain.ticket import Ticket
 
 
@@ -37,7 +43,12 @@ class KnowledgeRepository(Protocol):
         tenant_id: str,
         query: str,
         limit: int = 5,
+        mode: SearchMode = "hybrid",
+        fts_weight: float = 0.5,
+        vector_weight: float = 0.5,
     ) -> list[RetrievedChunk]: ...
+
+    async def backfill_embeddings(self, tenant_id: str | None = None) -> int: ...
 
 
 class CostRepository(Protocol):
@@ -91,3 +102,23 @@ class EvaluationRepository(Protocol):
     ) -> list[EvaluationSample]: ...
 
     async def summary(self, tenant_id: str) -> dict: ...
+
+
+class RegressionRepository(Protocol):
+    """Golden Dataset 离线回归样本与运行记录的持久化仓库。"""
+
+    async def save_golden(self, item: GoldenItem) -> None: ...
+
+    async def list_golden(
+        self,
+        tenant_id: str,
+        limit: int = 100,
+    ) -> list[GoldenItem]: ...
+
+    async def save_run(self, run: RegressionRun) -> None: ...
+
+    async def save_report(self, report: QualityReport) -> None: ...
+
+    async def get_run(self, run_id: str) -> RegressionRun | None: ...
+
+    async def list_runs(self, tenant_id: str, limit: int = 100) -> list[RegressionRun]: ...

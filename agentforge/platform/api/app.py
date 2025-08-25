@@ -3,11 +3,14 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from agentforge.platform.api.audit_router import create_audit_router
+from agentforge.platform.api.connector_router import create_connector_router
 from agentforge.platform.api.cost_router import create_cost_router
 from agentforge.platform.api.evaluation_router import create_evaluation_router
 from agentforge.platform.api.feishu_router import create_feishu_router
 from agentforge.platform.api.knowledge_router import create_knowledge_router
 from agentforge.platform.api.outbox_router import create_outbox_router
+from agentforge.platform.api.regression_router import create_regression_router
+from agentforge.platform.api.release_router import create_release_router
 from agentforge.platform.api.security import ApiKeyAuthenticator
 from agentforge.platform.api.support_router import create_support_router
 from agentforge.platform.infrastructure.db.base import create_session_factory
@@ -59,6 +62,9 @@ def create_platform_app(
     app.include_router(create_audit_router(container))
     app.include_router(create_cost_router(container))
     app.include_router(create_evaluation_router(container))
+    app.include_router(create_release_router(container))
+    app.include_router(create_regression_router(container))
+    app.include_router(create_connector_router(container.connector_registry))
     app.include_router(
         create_feishu_router(
             container,

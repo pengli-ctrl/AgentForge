@@ -1,9 +1,16 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+# 检索模式：hybrid = FTS + 向量加权合并；keyword = 仅关键词（FTS/子串）；
+# vector = 仅向量。
+SearchMode = Literal["hybrid", "keyword", "vector"]
+
+DEFAULT_FTS_WEIGHT = 0.5
+DEFAULT_VECTOR_WEIGHT = 0.5
 
 
 class KnowledgeDocument(BaseModel):
@@ -28,6 +35,9 @@ class KnowledgeChunk(BaseModel):
     content: str
     position: int
     metadata: dict[str, Any] = Field(default_factory=dict)
+    embedding: list[float] | None = None
+    embedding_model: str | None = None
+    embedding_version: int | None = None
 
 
 class RetrievedChunk(BaseModel):
@@ -40,3 +50,6 @@ class RetrievedChunk(BaseModel):
     content: str
     score: float
     source_uri: str = ""
+    mode: str = "hybrid"
+    fts_score: float | None = None
+    vector_score: float | None = None

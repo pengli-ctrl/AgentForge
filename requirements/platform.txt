@@ -2,6 +2,7 @@
 pydantic-settings>=2.10.0
 sqlalchemy[asyncio]>=2.0.54
 asyncpg>=0.30.0
+pgvector>=0.4.0
 alembic>=1.16.0
 temporalio>=1.33.0
 litellm>=1.101.0

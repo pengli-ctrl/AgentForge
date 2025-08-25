@@ -2,8 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 
+from agentforge.platform.domain.knowledge import (
+    DEFAULT_FTS_WEIGHT,
+    DEFAULT_VECTOR_WEIGHT,
+    SearchMode,
+)
 from agentforge.platform.runtime import ServiceContainer
 
 
@@ -31,10 +36,27 @@ def create_knowledge_router(container: ServiceContainer) -> APIRouter:
         request: Request,
         tenant_id: str,
         query: str,
-        limit: int = 5,
+        limit: int = Query(default=5),
+        mode: SearchMode = Query(default="hybrid"),
+        fts_weight: float = Query(default=DEFAULT_FTS_WEIGHT),
+        vector_weight: float = Query(default=DEFAULT_VECTOR_WEIGHT),
+        rerank: bool = Query(default=False),
     ) -> dict[str, Any]:
         container.authenticator.authorize_tenant(request, tenant_id)
-        results = await container.knowledge_service.search(tenant_id, query, limit)
-        return {"results": [result.model_dump(mode="json") for result in results]}
+        results = await container.knowledge_service.search(
+            tenant_id,
+            query,
+            limit,
+            mode=mode,
+            fts_weight=fts_weight,
+            vector_weight=vector_weight,
+            rerank=rerank,
+        )
+        return {
+            "mode": mode,
+            "limit": limit,
+            "rerank": rerank,
+            "results": [result.model_dump(mode="json") for result in results],
+        }
 
     return router

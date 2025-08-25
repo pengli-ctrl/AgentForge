@@ -3,16 +3,28 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from agentforge.platform.api.security import ApiKeyAuthenticator
+from agentforge.platform.application.classification_evaluation_service import (
+    ClassificationEvaluationService,
+)
 from agentforge.platform.application.classifier import RuleBasedTicketClassifier
+from agentforge.platform.application.connector_registry import ConnectorRegistry
 from agentforge.platform.application.knowledge_service import KnowledgeService
 from agentforge.platform.application.model_router import ModelRouter
+from agentforge.platform.application.prompt_registry import PromptRegistry
+from agentforge.platform.application.quality_gate_service import QualityGateService
 from agentforge.platform.application.quota_service import QuotaAwareModelGateway
+from agentforge.platform.application.regression_runner import RegressionRunner
 from agentforge.platform.application.reply_draft_service import ReplyDraftService
+from agentforge.platform.application.reranker import HybridReranker
+from agentforge.platform.application.retrieval_evaluation_service import (
+    RetrievalEvaluationService,
+)
 from agentforge.platform.application.routing_model_gateway import RoutingModelGateway
 from agentforge.platform.application.support_ticket_processing_service import (
     SupportTicketProcessingService,
 )
 from agentforge.platform.application.support_ticket_service import SupportTicketService
+from agentforge.platform.application.version_registry import ModelVersionRegistry
 from agentforge.platform.domain.model import ModelProfile
 from agentforge.platform.infrastructure.llm.litellm_gateway import LiteLLMModelGateway
 from agentforge.platform.infrastructure.llm.static_gateway import StaticModelGateway
@@ -22,6 +34,9 @@ from agentforge.platform.infrastructure.memory_evaluation_repository import (
     MemoryEvaluationRepository,
 )
 from agentforge.platform.infrastructure.memory_knowledge_repository import MemoryKnowledgeRepository
+from agentforge.platform.infrastructure.memory_regression_repository import (
+    MemoryRegressionRepository,
+)
 from agentforge.platform.infrastructure.memory_reply_connector import MemoryReplyConnector
 from agentforge.platform.infrastructure.memory_ticket_repository import MemoryTicketRepository
 from agentforge.platform.infrastructure.outbox_store import SQLAlchemyOutboxStore
@@ -32,6 +47,9 @@ from agentforge.platform.infrastructure.sqlalchemy_evaluation_repository import 
 )
 from agentforge.platform.infrastructure.sqlalchemy_knowledge_repository import (
     SQLAlchemyKnowledgeRepository,
+)
+from agentforge.platform.infrastructure.sqlalchemy_regression_repository import (
+    SQLAlchemyRegressionRepository,
 )
 from agentforge.platform.infrastructure.sqlalchemy_ticket_repository import (
     SQLAlchemyTicketRepository,
@@ -74,6 +92,8 @@ class ServiceContainer:
         audit_repository=None,
         authenticator: ApiKeyAuthenticator | None = None,
         evaluation_repository=None,
+        regression_repository=None,
+        connector_registry=None,
     ) -> None:
         self.repository = repository
         self.classifier = classifier
@@ -86,6 +106,12 @@ class ServiceContainer:
         self.audit_repository = audit_repository
         self.authenticator = authenticator or ApiKeyAuthenticator(enabled=False)
         self.evaluation_repository = evaluation_repository
+        if regression_repository is None:
+            regression_repository = MemoryRegressionRepository()
+        self.regression_repository = regression_repository
+        if connector_registry is None:
+            connector_registry = ConnectorRegistry()
+        self.connector_registry = connector_registry
         self.ticket_service = SupportTicketService(
             repository,
             classifier,
@@ -93,7 +119,25 @@ class ServiceContainer:
             audit_repository,
             evaluation_repository,
         )
-        self.knowledge_service = KnowledgeService(knowledge_repository)
+        self.reranker = HybridReranker()
+        self.knowledge_service = KnowledgeService(
+            knowledge_repository,
+            reranker=self.reranker,
+        )
+        self.retrieval_evaluation_service = RetrievalEvaluationService(
+            knowledge_repository,
+            self.reranker,
+        )
+        self.classification_evaluation_service = ClassificationEvaluationService(classifier)
+        self.quality_gate_service = QualityGateService()
+        self.prompt_registry = PromptRegistry()
+        self.model_version_registry = ModelVersionRegistry()
+        self.regression_runner = RegressionRunner(
+            regression_repository,
+            self.retrieval_evaluation_service,
+            self.classification_evaluation_service,
+            self.quality_gate_service,
+        )
         self.reply_draft_service = ReplyDraftService(model_gateway)
         self.processing_service = SupportTicketProcessingService(
             self.ticket_service,
@@ -146,6 +190,7 @@ def build_sqlalchemy_container(
     cost_repository = SQLAlchemyCostRepository(session_factory)
     audit_repository = SQLAlchemyAuditRepository(session_factory)
     evaluation_repository = SQLAlchemyEvaluationRepository(session_factory)
+    regression_repository = SQLAlchemyRegressionRepository(session_factory)
     return ServiceContainer(
         SQLAlchemyTicketRepository(session_factory),
         RuleBasedTicketClassifier(),
@@ -158,6 +203,7 @@ def build_sqlalchemy_container(
         audit_repository,
         authenticator,
         evaluation_repository,
+        regression_repository,
     )
 
 

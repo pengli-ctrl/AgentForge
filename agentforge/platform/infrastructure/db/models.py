@@ -2,11 +2,18 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import JSON, DateTime, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
+from agentforge.platform.application.knowledge_embedder import EMBEDDING_DIM
 from agentforge.platform.domain.audit import AuditEvent
 from agentforge.platform.domain.evaluation import EvaluationSample
+from agentforge.platform.domain.regression import (
+    GoldenItem,
+    RegressionRun,
+    RegressionRunStatus,
+)
 from agentforge.platform.domain.ticket import RiskLevel, Ticket, TicketPriority, TicketStatus
 from agentforge.platform.infrastructure.db.base import Base
 
@@ -148,6 +155,9 @@ class KnowledgeChunkRecord(Base):
     content: Mapped[str] = mapped_column(Text())
     position: Mapped[int] = mapped_column()
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
+    embedding_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    embedding_version: Mapped[int | None] = mapped_column(nullable=True)
 
 
 class CostRecordRecord(Base):
@@ -269,5 +279,100 @@ class EvaluationSampleRecord(Base):
             model_name=self.model_name,
             provider=self.provider,
             trace_id=self.trace_id,
+            created_at=self.created_at,
+        )
+
+
+class GoldenItemRecord(Base):
+    __tablename__ = "golden_items"
+
+    item_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), index=True)
+    query: Mapped[str] = mapped_column(Text())
+    expected_chunk_ids: Mapped[list] = mapped_column(JSON(), default=list)
+    expected_citations: Mapped[list] = mapped_column(JSON(), default=list)
+    expected_intent: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    expected_priority: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    expected_risk_level: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    @classmethod
+    def from_domain(cls, item: GoldenItem) -> "GoldenItemRecord":
+        return cls(
+            item_id=item.item_id,
+            tenant_id=item.tenant_id,
+            query=item.query,
+            expected_chunk_ids=item.expected_chunk_ids,
+            expected_citations=item.expected_citations,
+            expected_intent=item.expected_intent,
+            expected_priority=item.expected_priority,
+            expected_risk_level=item.expected_risk_level,
+            created_at=item.created_at,
+        )
+
+    def to_domain(self) -> GoldenItem:
+        return GoldenItem(
+            item_id=self.item_id,
+            tenant_id=self.tenant_id,
+            query=self.query,
+            expected_chunk_ids=list(self.expected_chunk_ids or []),
+            expected_citations=list(self.expected_citations or []),
+            expected_intent=self.expected_intent,
+            expected_priority=self.expected_priority,
+            expected_risk_level=self.expected_risk_level,
+            created_at=self.created_at,
+        )
+
+
+class RegressionRunRecord(Base):
+    __tablename__ = "regression_runs"
+
+    run_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), index=True)
+    candidate_id: Mapped[str] = mapped_column(String(128))
+    status: Mapped[str] = mapped_column(String(16))
+    recall_at_k: Mapped[float] = mapped_column(default=0.0)
+    citation_accuracy: Mapped[float] = mapped_column(default=0.0)
+    classification_accuracy: Mapped[float] = mapped_column(default=0.0)
+    priority_accuracy: Mapped[float] = mapped_column(default=0.0)
+    structured_output_rate: Mapped[float] = mapped_column(default=0.0)
+    high_risk_miss_rate: Mapped[float] = mapped_column(default=0.0)
+    verdict: Mapped[str] = mapped_column(String(16), default="block")
+    report: Mapped[dict] = mapped_column(JSON(), default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    @classmethod
+    def from_domain(
+        cls, run: RegressionRun, report_dict: dict | None = None
+    ) -> "RegressionRunRecord":
+        return cls(
+            run_id=run.run_id,
+            tenant_id=run.tenant_id,
+            candidate_id=run.candidate_id,
+            status=run.status.value,
+            recall_at_k=run.recall_at_k,
+            citation_accuracy=run.citation_accuracy,
+            classification_accuracy=run.classification_accuracy,
+            priority_accuracy=run.priority_accuracy,
+            structured_output_rate=run.structured_output_rate,
+            high_risk_miss_rate=run.high_risk_miss_rate,
+            verdict=run.verdict,
+            report=report_dict or {},
+            created_at=run.created_at,
+        )
+
+    def to_domain(self) -> RegressionRun:
+        return RegressionRun(
+            run_id=self.run_id,
+            tenant_id=self.tenant_id,
+            candidate_id=self.candidate_id,
+            status=RegressionRunStatus(self.status),
+            recall_at_k=self.recall_at_k,
+            citation_accuracy=self.citation_accuracy,
+            classification_accuracy=self.classification_accuracy,
+            priority_accuracy=self.priority_accuracy,
+            structured_output_rate=self.structured_output_rate,
+            high_risk_miss_rate=self.high_risk_miss_rate,
+            verdict=self.verdict,
             created_at=self.created_at,
         )
