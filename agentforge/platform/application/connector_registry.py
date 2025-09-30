@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
+from typing import Any
 
 from agentforge.platform.domain.connector import (
     ConnectorContext,
@@ -80,6 +82,30 @@ class ConnectorRegistry:
 
     def get_adapter(self, connector_id: str) -> Connector | None:
         return self._adapters.get(connector_id)
+
+    def set_adapter(self, connector_id: str, adapter: Connector) -> None:
+        """Bind (or rebind) an adapter to an already-registered spec's id."""
+        self._adapters[connector_id] = adapter
+
+    async def load_from_repository(
+        self,
+        repository: Any,
+        adapter_factory: Callable[[ConnectorSpec], Connector] | None = None,
+    ) -> int:
+        """Load persisted specs into the registry and rebind adapters.
+
+        repository must implement list_specs(). adapters are created lazily by
+        adapter_factory when provided; otherwise specs are stored without an
+        adapter (adapter can be bound later via set_adapter). Returns the number
+        of specs loaded.
+        """
+        loaded = 0
+        for spec in await repository.list_specs():
+            self._specs[spec.connector_id] = spec
+            if adapter_factory is not None:
+                self._adapters[spec.connector_id] = adapter_factory(spec)
+            loaded += 1
+        return loaded
 
     async def health(self, connector_id: str) -> ConnectorHealth | None:
         adapter = self._adapters.get(connector_id)

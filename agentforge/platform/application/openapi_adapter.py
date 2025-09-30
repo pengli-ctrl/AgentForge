@@ -9,6 +9,7 @@ from agentforge.platform.domain.connector import (
     ConnectorContext,
     ConnectorHealth,
     ConnectorInvocationResult,
+    ConnectorSpec,
 )
 
 RequestFn = Callable[..., Awaitable[Any]]
@@ -180,3 +181,25 @@ class OpenAPIAdapter(Connector):
             )
         except Exception:  # noqa: BLE001 - never let audit break the call
             pass
+
+
+def build_openapi_adapter(
+    spec: ConnectorSpec,
+    auth_value_provider: Callable[[], str] | None = None,
+) -> OpenAPIAdapter:
+    """Reconstruct an OpenAPIAdapter from a persisted ConnectorSpec."""
+    config = spec.config or {}
+    if auth_value_provider is None:
+        static_value = config.get("auth_value")
+        if static_value:
+            auth_value_provider = lambda: str(static_value)  # noqa: E731
+    return OpenAPIAdapter(
+        spec.endpoint or "",
+        headers=dict(config.get("headers") or {}),
+        auth_header=config.get("auth_header"),
+        auth_value_provider=auth_value_provider,
+        timeout_seconds=float(config.get("timeout_seconds") or 30.0),
+        max_retries=int(config.get("max_retries") or 2),
+        retry_backoff_seconds=float(config.get("retry_backoff_seconds") or 0.05),
+        rate_per_second=float(config["rate_per_second"]) if config.get("rate_per_second") else None,
+    )

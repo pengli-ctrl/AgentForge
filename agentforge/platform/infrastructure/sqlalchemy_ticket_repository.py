@@ -44,3 +44,22 @@ class SQLAlchemyTicketRepository:
             )
             record = (await session.execute(statement)).scalar_one_or_none()
             return record.to_domain() if record is not None else None
+
+    async def list(
+        self,
+        tenant_id: str,
+        status: str | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> tuple[list[Ticket], str | None]:
+        async with self._session_factory() as session:
+            statement = select(TicketRecord).where(TicketRecord.tenant_id == tenant_id)
+            if status is not None:
+                statement = statement.where(TicketRecord.status == status)
+            statement = statement.order_by(TicketRecord.created_at.asc())
+            start = int(cursor) if (cursor is not None and cursor.isdigit()) else 0
+            rows = (await session.execute(statement.offset(start).limit(limit + 1))).scalars().all()
+            has_more = len(rows) > limit
+            page = rows[:limit]
+            next_cursor = str(start + len(page)) if has_more else None
+            return [r.to_domain() for r in page], next_cursor

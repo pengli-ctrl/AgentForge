@@ -3,17 +3,31 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, DateTime, String, Text, UniqueConstraint
+from sqlalchemy import JSON, DateTime, Float, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from agentforge.platform.application.knowledge_embedder import EMBEDDING_DIM
 from agentforge.platform.domain.audit import AuditEvent
+from agentforge.platform.domain.connector import (
+    ConnectorKind,
+    ConnectorRiskLevel,
+    ConnectorSpec,
+    CredentialReference,
+)
 from agentforge.platform.domain.evaluation import EvaluationSample
+from agentforge.platform.domain.rbac import Permission, Role, RoleAssignment
 from agentforge.platform.domain.regression import (
     GoldenItem,
     RegressionRun,
     RegressionRunStatus,
 )
+from agentforge.platform.domain.reporting import (
+    ReportFormat,
+    ReportRun,
+    ReportType,
+    ScheduledReport,
+)
+from agentforge.platform.domain.tenant_quota import TenantQuota
 from agentforge.platform.domain.ticket import RiskLevel, Ticket, TicketPriority, TicketStatus
 from agentforge.platform.infrastructure.db.base import Base
 
@@ -375,4 +389,254 @@ class RegressionRunRecord(Base):
             high_risk_miss_rate=self.high_risk_miss_rate,
             verdict=self.verdict,
             created_at=self.created_at,
+        )
+
+
+class ConnectorSpecRecord(Base):
+    __tablename__ = "connector_specs"
+
+    connector_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), index=True)
+    name: Mapped[str] = mapped_column(String(64))
+    kind: Mapped[str] = mapped_column(String(16))
+    version: Mapped[str] = mapped_column(String(32), default="1.0")
+    risk_level: Mapped[str] = mapped_column(String(16), default="low")
+    endpoint: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    allowed_actions: Mapped[list] = mapped_column(JSON(), default=list)
+    credential: Mapped[dict | None] = mapped_column(JSON(), nullable=True)
+    config: Mapped[dict] = mapped_column(JSON(), default=dict)
+    enabled: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    @classmethod
+    def from_domain(cls, spec: ConnectorSpec) -> "ConnectorSpecRecord":
+        return cls(
+            connector_id=spec.connector_id,
+            tenant_id=spec.tenant_id,
+            name=spec.name,
+            kind=spec.kind.value,
+            version=spec.version,
+            risk_level=spec.risk_level.value,
+            endpoint=spec.endpoint,
+            allowed_actions=list(spec.allowed_actions),
+            credential=(
+                spec.credential.model_dump(mode="json") if spec.credential is not None else None
+            ),
+            config=spec.config,
+            enabled=spec.enabled,
+            created_at=spec.created_at,
+        )
+
+    def to_domain(self) -> ConnectorSpec:
+        created_at = self.created_at
+        if created_at is not None and created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        return ConnectorSpec(
+            connector_id=self.connector_id,
+            tenant_id=self.tenant_id,
+            name=self.name,
+            kind=ConnectorKind(self.kind),
+            version=self.version,
+            risk_level=ConnectorRiskLevel(self.risk_level),
+            endpoint=self.endpoint,
+            allowed_actions=list(self.allowed_actions or []),
+            credential=(
+                CredentialReference.model_validate(self.credential) if self.credential else None
+            ),
+            config=self.config,
+            enabled=self.enabled,
+            created_at=created_at,
+        )
+
+
+class RoleRecord(Base):
+    __tablename__ = "rbac_roles"
+
+    role_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), index=True)
+    name: Mapped[str] = mapped_column(String(64))
+    description: Mapped[str] = mapped_column(Text, default="")
+    permissions: Mapped[list] = mapped_column(JSON, default=list)
+    built_in: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    @classmethod
+    def from_domain(cls, role: Role) -> "RoleRecord":
+        return cls(
+            role_id=role.role_id,
+            tenant_id=role.tenant_id,
+            name=role.name,
+            description=role.description,
+            permissions=[p.value for p in role.permissions],
+            built_in=role.built_in,
+            created_at=role.created_at,
+        )
+
+    def to_domain(self) -> Role:
+        created_at = self.created_at
+        if created_at is not None and created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        return Role(
+            role_id=self.role_id,
+            tenant_id=self.tenant_id,
+            name=self.name,
+            description=self.description,
+            permissions=[Permission(p) for p in (self.permissions or [])],
+            built_in=self.built_in,
+            created_at=created_at,
+        )
+
+
+class RoleAssignmentRecord(Base):
+    __tablename__ = "rbac_role_assignments"
+
+    assignment_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), index=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    role_id: Mapped[str] = mapped_column(String(64))
+    granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    @classmethod
+    def from_domain(cls, assignment: RoleAssignment) -> "RoleAssignmentRecord":
+        return cls(
+            assignment_id=assignment.assignment_id,
+            tenant_id=assignment.tenant_id,
+            user_id=assignment.user_id,
+            role_id=assignment.role_id,
+            granted_at=assignment.granted_at,
+        )
+
+    def to_domain(self) -> RoleAssignment:
+        granted_at = self.granted_at
+        if granted_at is not None and granted_at.tzinfo is None:
+            granted_at = granted_at.replace(tzinfo=timezone.utc)
+        return RoleAssignment(
+            assignment_id=self.assignment_id,
+            tenant_id=self.tenant_id,
+            user_id=self.user_id,
+            role_id=self.role_id,
+            granted_at=granted_at,
+        )
+
+
+class TenantQuotaRecord(Base):
+    __tablename__ = "tenant_quotas"
+
+    tenant_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    monthly_limit: Mapped[float] = mapped_column(Float, default=0.0)
+    warning_threshold: Mapped[float] = mapped_column(Float, default=0.8)
+    hard_limit: Mapped[float] = mapped_column(Float, default=1.0)
+    enabled: Mapped[bool] = mapped_column(default=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    @classmethod
+    def from_domain(cls, quota: TenantQuota) -> "TenantQuotaRecord":
+        return cls(
+            tenant_id=quota.tenant_id,
+            monthly_limit=quota.monthly_limit,
+            warning_threshold=quota.warning_threshold,
+            hard_limit=quota.hard_limit,
+            enabled=quota.enabled,
+            updated_at=quota.updated_at,
+        )
+
+    def to_domain(self) -> TenantQuota:
+        updated_at = self.updated_at
+        if updated_at is not None and updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=timezone.utc)
+        return TenantQuota(
+            tenant_id=self.tenant_id,
+            monthly_limit=self.monthly_limit,
+            warning_threshold=self.warning_threshold,
+            hard_limit=self.hard_limit,
+            enabled=self.enabled,
+            updated_at=updated_at,
+        )
+
+
+class ScheduledReportRecord(Base):
+    __tablename__ = "scheduled_reports"
+
+    report_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), index=True)
+    report_type: Mapped[str] = mapped_column(String(16))
+    cadence: Mapped[str] = mapped_column(String(16), default="daily")
+    enabled: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    @classmethod
+    def from_domain(cls, report: ScheduledReport) -> "ScheduledReportRecord":
+        return cls(
+            report_id=report.report_id,
+            tenant_id=report.tenant_id,
+            report_type=report.report_type.value,
+            cadence=report.cadence,
+            enabled=report.enabled,
+            created_at=report.created_at,
+            last_run_at=report.last_run_at,
+            next_run_at=report.next_run_at,
+        )
+
+    def to_domain(self) -> ScheduledReport:
+        def _utc(value: datetime | None) -> datetime | None:
+            if value is None:
+                return None
+            if value.tzinfo is None:
+                return value.replace(tzinfo=timezone.utc)
+            return value
+
+        return ScheduledReport(
+            report_id=self.report_id,
+            tenant_id=self.tenant_id,
+            report_type=ReportType(self.report_type),
+            cadence=self.cadence,
+            enabled=self.enabled,
+            created_at=_utc(self.created_at) or utc_now(),
+            last_run_at=_utc(self.last_run_at),
+            next_run_at=_utc(self.next_run_at) or utc_now(),
+        )
+
+
+class ReportRunRecord(Base):
+    __tablename__ = "report_runs"
+
+    run_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), index=True)
+    report_type: Mapped[str] = mapped_column(String(16), index=True)
+    format: Mapped[str] = mapped_column(String(8), default="json")
+    rows: Mapped[list] = mapped_column(JSON(), default=list)
+    summary: Mapped[dict] = mapped_column(JSON(), default=dict)
+    scheduled_report_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    generated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, index=True
+    )
+
+    @classmethod
+    def from_domain(cls, run: ReportRun) -> "ReportRunRecord":
+        return cls(
+            run_id=run.run_id,
+            tenant_id=run.tenant_id,
+            report_type=run.report_type.value,
+            format=run.format.value,
+            rows=list(run.rows),
+            summary=run.summary,
+            scheduled_report_id=run.scheduled_report_id,
+            generated_at=run.generated_at,
+        )
+
+    def to_domain(self) -> ReportRun:
+        generated_at = self.generated_at
+        if generated_at is not None and generated_at.tzinfo is None:
+            generated_at = generated_at.replace(tzinfo=timezone.utc)
+        return ReportRun(
+            run_id=self.run_id,
+            tenant_id=self.tenant_id,
+            report_type=ReportType(self.report_type),
+            format=ReportFormat(self.format),
+            rows=list(self.rows or []),
+            summary=dict(self.summary or {}),
+            generated_at=generated_at or utc_now(),
+            scheduled_report_id=self.scheduled_report_id,
         )

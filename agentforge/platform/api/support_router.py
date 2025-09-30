@@ -116,6 +116,31 @@ def create_support_router(container: ServiceContainer) -> APIRouter:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return ticket.model_dump(mode="json")
 
+    @router.post("/tickets/{ticket_id}/writeback")
+    async def writeback_ticket(
+        request: Request,
+        ticket_id: str,
+        body: dict[str, Any],
+    ) -> dict[str, Any]:
+        tenant_id = body.get("tenant_id")
+        if not isinstance(tenant_id, str) or not tenant_id:
+            raise HTTPException(status_code=422, detail="tenant_id is required")
+        container.authenticator.authorize_tenant(request, tenant_id)
+        ticket = await container.repository.get(tenant_id, ticket_id)
+        if ticket is None:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+        action = body.get("action") or "ticket.writeback"
+        actor = body.get("actor") or "support-writeback"
+        try:
+            data = await container.ticket_writeback_service.write_back(ticket, action, actor=actor)
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return {"ticket_id": ticket_id, "ok": True, "data": data}
+
     return router
 
 

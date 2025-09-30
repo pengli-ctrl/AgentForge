@@ -29,3 +29,21 @@ class MemoryTicketRepository:
         if ticket_id is None:
             return None
         return self._by_id.get((tenant_id, ticket_id))
+
+    async def list(
+        self,
+        tenant_id: str,
+        status: str | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> tuple[list[Ticket], str | None]:
+        tickets = [
+            t
+            for (t_tenant, _t_id), t in self._by_id.items()
+            if t_tenant == tenant_id and (status is None or t.status == status)
+        ]
+        tickets.sort(key=lambda t: t.created_at)
+        start = int(cursor) if (cursor is not None and cursor.isdigit()) else 0
+        bucket = tickets[start : start + limit]
+        next_cursor = str(start + len(bucket)) if start + len(bucket) < len(tickets) else None
+        return bucket, next_cursor

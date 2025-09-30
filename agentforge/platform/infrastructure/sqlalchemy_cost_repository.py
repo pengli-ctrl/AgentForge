@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -33,6 +35,42 @@ class SQLAlchemyCostRepository:
                 CostRecordRecord.tenant_id == tenant_id
             )
             return float((await session.execute(statement)).scalar_one())
+
+    async def list_tenants(self) -> list[str]:
+        async with self._session_factory() as session:
+            statement = select(CostRecordRecord.tenant_id).distinct()
+            return list((await session.execute(statement)).scalars().all())
+
+    async def daily_summary(self, tenant_id: str, days: int = 30) -> list[dict]:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        statement = (
+            select(CostRecordRecord)
+            .where(
+                CostRecordRecord.tenant_id == tenant_id,
+                CostRecordRecord.created_at >= cutoff,
+            )
+            .order_by(CostRecordRecord.created_at.asc())
+        )
+        async with self._session_factory() as session:
+            records = (await session.execute(statement)).scalars().all()
+        bucket: dict[str, dict] = {}
+        for record in records:
+            day = record.created_at.date().isoformat()
+            entry = bucket.setdefault(
+                day,
+                {
+                    "date": day,
+                    "request_count": 0,
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "amount": 0.0,
+                },
+            )
+            entry["request_count"] += 1
+            entry["input_tokens"] += record.input_tokens
+            entry["output_tokens"] += record.output_tokens
+            entry["amount"] += record.amount
+        return [bucket[key] for key in sorted(bucket)]
 
     async def summary_for_tenant(self, tenant_id: str) -> dict:
         statement = (

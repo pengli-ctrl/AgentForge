@@ -65,5 +65,5 @@ def test_admin_key_can_manage_outbox_but_tenant_key_cannot() -> None:
             "/v1/outbox/failed",
             headers={"X-API-Key": "admin-key"},
         ).status_code
-        == 503
+        == 200
     )

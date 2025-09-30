@@ -52,7 +52,15 @@
 14. 结构化分类、版本与质量门禁：`ClassificationResult` 结构化字段与结构化输出校验、分类质量评估（分类准确率/优先级准确率/结构化合法率/高风险漏报率）、版本化 `PromptRegistry`（注册/激活/回退/解析）与 `ModelVersionRegistry`（选型+回退）、基于检索与分类评估的发布质量门禁（PASS/HOLD/BLOCK，高风险漏报一票否决）。详见第 8 节增量 3 记录。
 15. 离线回归运行器与 Golden Dataset：`GoldenItem`/`RegressionRun`/`QualityReport` 领域模型、`RegressionRepository`（memory/sqlalchemy 双实现，`golden_items` 与 `regression_runs` 表 + Alembic `0008`）、`RegressionRunner` 离线回归（加载 Golden→召回+分类评估→质量门禁→报告持久化）、`/v1/regression/*` API（Golden 维护 + 触发回归 + 运行记录查询）。详见第 8 节增量 4 记录。
 16. Connector SDK 与企业连接起点：`Connector` ABC（health/invoke/compensate）与 `ConnectorRegistry`（内存注册、租户隔离、动作白名单、disabled 校验）、`ConnectorContext`（幂等键/任务/追踪/操作者）、`CredentialReference` 凭据引用模型（只存 vault 引用不落机密）、通用签名 `WebhookSignatureVerifier` + `WebhookAdapter`（HMAC-SHA256、泛化事件规范化 `WebhookDelivery`→`to_ticket_event`）、`OpenAPIAdapter`（HTTP 调用带幂等键头、有界重试退避、令牌桶限流、审计回调）、`/v1/connectors/*` API。不引入新迁移（注册表内存态，与 PromptRegistry 一致）。详见第 8 节增量 1（阶段 C）记录。
-17. 全仓测试基线，目前 `572 passed`（`tests/platform` 106 项）。
+17. 连接器注册持久化与工单写回闭环：`ConnectorRepository` Protocol（memory/sqlalchemy 双实现 + `connector_specs` 表与 Alembic `0009`）、注册表 `ConnectorRegistry` 支持从仓储装载（`load_from_repository`/`set_adapter`）、`OpenAPIAdapter` 持久化重建工厂 `build_openapi_adapter`、`TicketWritebackService`（已审批/已发布工单按幂等键 `wb-{ticket_id}` 写回 CRM/工单系统，含审计、连接器解析与失败报错）、`POST /v1/connectors` 注册、`DELETE /v1/connectors/{id}`、`POST /v1/tickets/{id}/writeback` 写回接口。打通“读取→AI→审批→写回”闭环。详见第 8 节增量 2（阶段 C）记录。
+18. 全仓测试基线，目前 `652 passed`（`tests/platform` 186 项）。
+19. **RBAC + Policy Engine（阶段 C 增量 3）**：`Role`/`RoleAssignment`/`Permission` 领域模型（tenant 隔离、built-in 角色）、`ActionPolicy` 声明式动作策略（fail-closed、风险级、审批要求、角色/权限 allow-list），`PolicyEngine` 组合角色权限 + 动作策略 + OpenFGA 式关系检查给出决策（allowed / denied / requires_approval）；`OpenFGAClient` 提供内存态关系 tuple CRUD + check（可替换真实 OpenFGA 服务）；`RbacRepository` memory/sqlalchemy 双实现 + `rbac_roles`/`rbac_role_assignments` 表（Alembic `0010`）；`/v1/rbac/*` 接口（角色 CRUD、权限设置、用户-角色赋值、`/authorize` 授权检查）。
+20. **租户配额管理（阶段 C 增量 4）**：`TenantQuota` 领域模型（月度预算/告警阈值/硬上限/enabled 开关）+ `TenantQuotaRepository` Protocol（memory/sqlalchemy 双实现）+ `tenant_quotas` 表（Alembic `0011`）；`QuotaAwareModelGateway` 扩展逐租户配额覆盖（`_resolve_budget` 返回 budget+enforce，禁用配额即不强制）；`/v1/quotas/*` 配额管理接口（PUT/GET/list/DELETE）与 `/v1/console/overview` 管理控制台聚合概览（配额+成本+DLQ 失败数+审计事件）。
+21. **高风险动作审计闭环 + 人工授权边界（阶段 C 增量 5）**：`AuthorizationDecision` 授权审计记录（principal/action/outcome/reasons/approval_ref）+ `HighRiskActionAuthorizer` 授权门禁——解析调用者角色/权限、经 `PolicyEngine` 求值、强制执行"高风险动作须人工审批"边界（工单未到 READY_TO_PUBLISH/未获批 → DENIED），并把每次授权（放行与拒绝）写入审计事件（`{action}.authorization`，含 outcome/reasons/approval_ref/actor），回答"谁执行/为何允许"；`PolicyEngine` 修正为先验权限后验审批（无权限者无法借已审批工单绕过）；写回端点接入门禁（`PermissionError`→403）+ `POST /v1/authorize` 显式授权审计接口。
+22. **管理控制台基础页面接口（阶段 D 增量 1）**：`TicketRepository` 新增 `list(tenant_id, status, limit, cursor)`（memory/sqlalchemy 双实现，支持状态过滤 + 游标分页、按 `created_at` 排序）；`/v1/console/tickets` 客服工作台按状态分页列工单、`/v1/console/inbox` 审批收件箱（仅 `waiting_approval`）并带风险级、`/v1/console/overview` 增加任务状态计数（tasks，按状态统计且租户隔离）；`CostRepository` 新增 `list_tenants()`（memory/sqlalchemy），`/v1/console/costs` 管理员多租户成本/配额总览（并集 cost 租户 + quota 租户、跨租户聚合）；DLQ 管理沿用 `/v1/outbox/failed`+`/replay`。
+23. **Outbox/DLQ/任务状态、重试与故障操作维护（阶段 D 增量 2）**：`SQLAlchemyOutboxStore` 新增 `list_events(tenant_id|None, status|None, limit, cursor)`、`get_event(tenant_id|None, event_id)`、`count_events(tenant_id|None)`（pending/published/failed/discarded 分状态计数）、`discard(tenant_id|None, event_id)`（置 `status="discarded"`）；新增 `MemoryOutboxStore` 提供与 SQLAlchemy 相同的 outbox 管理表面（enqueue/fetch_pending/mark_published/mark_failed/list_failed/list_events/get_event/count_events/discard/replay），并在 `build_memory_container` 装配；`outbox_router` 新增 `GET /v1/outbox/events`（状态过滤 + 游标分页）、`GET /v1/outbox/events/count`、`GET /v1/outbox/events/{event_id}`、`POST /v1/outbox/events/{event_id}/discard`（admin-global 访问，detail/discard 以 `tenant_id=None` 免租户过滤）。
+24. **成本/配额/模型分布/质量指标看板接口（阶段 D 增量 3）**：`CostRepository` 新增 `daily_summary(tenant_id, days)`（按天聚合 request/input
+25. **审计查询、租户配置与连接器管理页面接口（阶段 D 增量 4）**：`AuditRepository` 新增 `query_events(tenant_id|None, action|None, actor_id|None, resource_id|None, resource_type|None, limit, cursor)`（过滤 + offset 游标分页，`tenant_id=None` 为 admin-global 多租户查询；memory/sqlalchemy 双实现）；`/v1/audit` 支持 action/actor_id/resource_type 过滤与游标分页，`tenant_id` 可选（缺省走 `authorize_admin`）；`/v1/console/tenants`（admin 多租户 quota 配置 + used + enabled）、`/v1/console/audit`（admin 审计查询）、`/v1/console/connectors`（admin 连接器全量列表 + registry health）与 `POST /v1/console/connectors/{id}/enabled`（启用/停用连接器，经 connector_repository 持久化）。以上 console 管理端点均经 `authorize_admin` 鉴权，服务未装配时 503。/output/amount，memory/sqlalchemy 双实现）；新增 `application/dashboard_service.py` `DashboardService`（组合 cost/quota/regression 仓储）提供 `cost_trend`（日趋势 + 汇总）、`model_distribution`（按模型聚合，按 cost 降序 + 占比 share）、`quota_snapshot`、`quality_metrics`（回归 run 序列 + 平均指标）；`console_router` 新增 `GET /v1/console/cost-trend`、`/v1/console/model-distribution`、`/v1/console/quality`、`/v1/console/dashboard`（聚合四块）；`runtime` 装配 `dashboard_service`，`app.py` 注入 console router。
 
 ## 4. 当前验证命令
 
@@ -64,7 +72,7 @@ python -m pytest tests/platform -q
 python -m black --check --line-length 100 agentforge tests alembic
 python -m isort --check-only --profile black agentforge tests alembic
 python -m flake8 --max-line-length=100 --extend-ignore=E203,W503 agentforge tests alembic
-python -m mypy agentforge/platform/application/reranker.py agentforge/platform/application/retrieval_metrics.py agentforge/platform/application/retrieval_evaluation_service.py agentforge/platform/application/classification_evaluation_service.py agentforge/platform/application/quality_gate_service.py agentforge/platform/application/prompt_registry.py agentforge/platform/application/version_registry.py agentforge/platform/application/regression_runner.py agentforge/platform/application/connector_registry.py agentforge/platform/application/webhook_adapter.py agentforge/platform/application/openapi_adapter.py agentforge/platform/domain/retrieval.py agentforge/platform/domain/quality.py agentforge/platform/domain/regression.py agentforge/platform/domain/connector.py agentforge/platform/domain/knowledge.py agentforge/platform/application/knowledge_service.py agentforge/platform/application/ports.py agentforge/platform/api/evaluation_router.py agentforge/platform/api/release_router.py agentforge/platform/api/regression_router.py agentforge/platform/api/connector_router.py agentforge/platform/api/knowledge_router.py agentforge/platform/infrastructure/memory_regression_repository.py agentforge/platform/infrastructure/sqlalchemy_regression_repository.py agentforge/platform/infrastructure/db/models.py agentforge/platform/runtime.py
+python -m mypy agentforge/platform/application/reranker.py agentforge/platform/application/retrieval_metrics.py agentforge/platform/application/retrieval_evaluation_service.py agentforge/platform/application/classification_evaluation_service.py agentforge/platform/application/quality_gate_service.py agentforge/platform/application/prompt_registry.py agentforge/platform/application/version_registry.py agentforge/platform/application/regression_runner.py agentforge/platform/application/connector_registry.py agentforge/platform/application/webhook_adapter.py agentforge/platform/application/openapi_adapter.py agentforge/platform/application/ticket_writeback.py agentforge/platform/application/quota_service.py agentforge/platform/domain/retrieval.py agentforge/platform/domain/quality.py agentforge/platform/domain/regression.py agentforge/platform/domain/connector.py agentforge/platform/domain/knowledge.py agentforge/platform/domain/tenant_quota.py agentforge/platform/application/knowledge_service.py agentforge/platform/application/ports.py agentforge/platform/api/evaluation_router.py agentforge/platform/api/release_router.py agentforge/platform/api/regression_router.py agentforge/platform/api/connector_router.py agentforge/platform/api/knowledge_router.py agentforge/platform/api/support_router.py agentforge/platform/api/rbac_router.py agentforge/platform/api/quota_router.py agentforge/platform/api/console_router.py agentforge/platform/infrastructure/memory_regression_repository.py agentforge/platform/infrastructure/sqlalchemy_regression_repository.py agentforge/platform/infrastructure/memory_connector_repository.py agentforge/platform/infrastructure/sqlalchemy_connector_repository.py agentforge/platform/infrastructure/memory_rbac_repository.py agentforge/platform/infrastructure/sqlalchemy_rbac_repository.py agentforge/platform/infrastructure/memory_tenant_quota_repository.py agentforge/platform/infrastructure/sqlalchemy_tenant_quota_repository.py agentforge/platform/domain/rbac.py agentforge/platform/domain/policy.py agentforge/platform/application/policy_engine.py agentforge/platform/application/openfga_adapter.py agentforge/platform/application/builtin_policies.py agentforge/platform/infrastructure/db/models.py agentforge/platform/runtime.py agentforge/platform/domain/authorization.py agentforge/platform/application/high_risk_authorizer.py agentforge/platform/api/authorization_router.py agentforge/platform/infrastructure/memory_ticket_repository.py agentforge/platform/infrastructure/sqlalchemy_ticket_repository.py agentforge/platform/infrastructure/memory_cost_repository.py agentforge/platform/infrastructure/sqlalchemy_cost_repository.py agentforge/platform/infrastructure/outbox_store.py agentforge/platform/infrastructure/memory_outbox_store.py agentforge/platform/api/outbox_router.py agentforge/platform/application/dashboard_service.py agentforge/platform/infrastructure/memory_audit_repository.py agentforge/platform/infrastructure/sqlalchemy_audit_repository.py agentforge/platform/api/audit_router.py agentforge/platform/domain/reporting.py agentforge/platform/application/report_service.py agentforge/platform/infrastructure/memory_scheduled_report_repository.py agentforge/platform/infrastructure/sqlalchemy_scheduled_report_repository.py agentforge/platform/infrastructure/memory_report_run_repository.py agentforge/platform/infrastructure/sqlalchemy_report_run_repository.py
 python -m alembic upgrade head --sql
 ```
 
@@ -91,9 +99,10 @@ python -m alembic upgrade head --sql
 
 - 重排器与召回评估（Recall@K/引用正确率）已上线基础版本（见第 8 节增量 2、增量 4 记录）；增量 4 已引入持久化的离线回归运行器（`RegressionRunner` + `golden_items`/`regression_runs` 表），可触发离线回归并回查质量报告。
 - PostgreSQL FTS + pgvector 的 SQL 路径已通过方言编译与离线迁移验证，但本地无 Docker，尚未对真实 PostgreSQL 做端到端跑通。
-- Connector SDK、通用签名 Webhook Adapter 与 OpenAPI Adapter 已上线（见第 8 节阶段 C 增量 1 记录），但连接器注册表为进程内存态（进程重启即空），且尚无 CRM、工单系统或业务数据库的专有写回连接器实现。
-- 缺少 RBAC、策略引擎、OpenFGA、用户级权限和管理员权限矩阵。
-- 缺少客服工作台、审批收件箱、DLQ 管理页面和运营成本/质量看板。
+- Connector SDK、通用签名 Webhook Adapter 与 OpenAPI Adapter 已上线（见第 8 节阶段 C 增量 1 记录）；阶段 C 增量 2 已将连接器注册持久化（`ConnectorRepository` + `connector_specs` 表 + Alembic `0009`）并落地了基于 `TicketWritebackService` 的 CRM/工单写回闭环。但写回连接器仍是面向 HTTP/OpenAPI 的通用实现，尚无真实 CRM（Salesforce 等）、工单系统（Zendesk 等）或具体业务数据库的原生适配器，凭据仍只存引用、无真实 vault/密钥后端。
+- 已有 RBAC（角色/权限/赋值）、Policy Engine（动作策略/风险/审批要求）、内存态 OpenFGA 式关系检查（阶段 C 增量 3）与高风险动作授权审计闭环 + 人工授权边界（`HighRiskActionAuthorizer` + `POST /v1/authorize` + 写回门禁 403，阶段 C 增量 5）；弹租户配额管理（`TenantQuota` + `/v1/quotas`）与管理控制台聚合概览（`/v1/console/overview`，含配额/成本/DLQ/审计，见第 8 节阶段 C 增量 4 记录）。但仍缺真实 OpenFGA 服务、企业级身份/身份提供方对接、管理员权限矩阵和策略热加载/审计策略变更。
+- 配额 enforce 为进程内估算（基于模型元数据 estimated_cost，达到上限后拒绝新调用）；成本估算与 DLQ/审计统计均基于进程内存态仓储/事件，尚无真实 CRM 集成、真实 DB 聚合查询或近实时运营看板。API Key 仍为静态映射（见下）。
+- 管理控制台基础页面接口已落地（阶段 D 增量 1：客服工作台 `/v1/console/tickets`、审批收件箱 `/v1/console/inbox`、运营成本总览 `/v1/console/costs`、任务状态计数、DLQ 管理 `/v1/outbox/*`）；阶段 D 增量 2 已落地 Outbox/DLQ/任务状态的列表、详情、计数与丢弃操作（`/v1/outbox/events`、`/events/count`、`/events/{event_id}`、`/events/{event_id}/discard`，同时支持 memory/sqlalchemy 双实现）；阶段 D 增量 3 已落地成本/配额/模型分布/质量指标看板接口（`/v1/console/cost-trend`、`/model-distribution`、`/quality`、`/dashboard`）；阶段 D 增量 4 已落地审计查询（`/v1/audit` 过滤/分页 + `/v1/console/audit` admin 多租户）、租户配置（`/v1/console/tenants`）与连接器管理（`/v1/console/connectors` + `/connectors/{id}/enabled` 启停）；阶段 D 增量 5 已落地运营报表导出与定时化（`/v1/console/reports/export` JSON/CSV 即时导出 + `/reports/schedule`、`/reports/schedules`、`/reports/run-due` 排程，`ScheduledReportRepository` + `scheduled_reports` 表 Alembic `0012`）；阶段 D 增量 6 已落地运营报表产物持久化与历史查询（`/v1/console/reports/runs` 历史列表 + `/reports/runs/{run_id}` 按需取回 JSON/CSV，`ReportRunRepository` + `report_runs` 表 Alembic `0013`）。仍缺前端页面实现、审批收件箱决策详情页、成本/质量指标看板可视化与按日/按模型趋势图，以及 cron 表达式排程与 run 保留/清理策略。
 - 缺少数据集版本（Golden Dataset 的版本化快照）与跨进程一致的发布历史；Prompt/模型版本当前为进程内存注册表（进程重启即清空），未落库、未有跨进程一致性（见第 8 节增量 3、增量 4 记录）。
 - 缺少 PostgreSQL、Kafka、Temporal 的真实端到端集成测试和故障演练。
 - 缺少生产部署、Helm、Terraform、备份、升级、回滚和灾备方案。
@@ -129,19 +138,19 @@ python -m alembic upgrade head --sql
 共 5 个增量：
 
 1. Connector SDK、Webhook Adapter、OpenAPI Adapter。⚠️ 已完成（见第 8 节增量完成记录）。
-2. CRM、工单系统或业务数据库连接器。
-3. RBAC、Policy Engine、OpenFGA 和权限模型。
-4. 密钥管理、租户隔离、限流、幂等写回和对账。
-5. 高风险动作审计闭环和人工授权边界。
+2. CRM、工单系统或业务数据库连接器。⚠️ 已完成（见第 8 节增量完成记录）。
+3. RBAC、Policy Engine、OpenFGA 和权限模型。⚠️ 已完成（见第 8 节增量完成记录）。
+4. 密钥管理、租户隔离、限流、幂等写回和对账。（租户配额管理与管理控制台聚合概览已部分落地，见第 8 节增量 4 记录；密钥管理/分布式限流/对账仍缺口）
+5. 高风险动作审计闭环和人工授权边界。⚠️ 已完成（见第 8 节增量完成记录）。
 
 ### 阶段 D：管理控制台与运营
 
 共 4 个增量：
 
-1. 工单列表、详情、审批收件箱和人工编辑界面。
-2. Outbox、DLQ、任务状态、重试和故障操作页面。
-3. 成本、配额、模型分布和质量指标看板。
-4. 审计查询、租户配置和连接器管理页面。
+1. 工单列表、详情、审批收件箱和人工编辑界面。（基础接口接口已落地：`/v1/console/tickets`、`/v1/console/inbox`，见第 8 节阶段 D 增量 1 记录；详情/编辑页面与前端待做）
+2. Outbox、DLQ、任务状态、重试和故障操作页面。⚠️ 已落地后端接口（`/v1/outbox/events`、`/events/count`、`/events/{event_id}`、`/events/{event_id}/discard`，见第 8 节阶段 D 增量 2 记录；重试沿用 `/v1/outbox/{id}/replay`、`/replay-failed`；前端页面待做）
+3. 成本、配额、模型分布和质量指标看板。⚠️ 已落地后端聚合接口（`/v1/console/cost-trend`、`/model-distribution`、`/quality`、`/dashboard`，见第 8 节阶段 D 增量 3 记录；前端可视化待做）
+4. 审计查询、租户配置和连接器管理页面。⚠️ 已落地后端接口（`/v1/audit` 过滤/分页、`/v1/console/audit`、`/v1/console/tenants`、`/v1/console/connectors`、`POST /v1/console/connectors/{id}/enabled`，见第 8 节阶段 D 增量 4 记录；前端待做）
 
 ### 阶段 E：真实试点与效果优化
 
@@ -164,15 +173,183 @@ python -m alembic upgrade head --sql
 5. 稳定版本、兼容策略、Connector SDK 和行业模板。
 6. 开源核心与企业控制面、许可和企业支持方案。
 
-阶段 A 与阶段 B 已完成（阶段 B 全 4 个增量均已完成，见第 8 节增量完成记录）。阶段 C 已启动并完成第 1 个增量（Connector SDK + Webhook/OpenAPI Adapter），后续剩余 4 个阶段半程，共 19 个建议增量。每个增量应控制在 0.5 到 2 天内可完成、可测试、可提交的范围内。
+阶段 A 与阶段 B 已完成（阶段 B 全 4 个增量均已完成，见第 8 节增量完成记录）。阶段 C 全 5 个增量已完成（增量 1 Connector 适配、增量 2 连接器注册持久化 + 工单写回闭环、增量 3 RBAC/Policy/OpenFGA 权限模型、增量 4 租户配额 + 管理控制台概览、增量 5 高风险动作审计闭环 + 人工授权边界）。阶段 D 增量 1（管理控制台基础页面接口）、增量 2（Outbox/DLQ/任务状态维护接口）、增量 3（成本/配额/模型分布/质量指标看板接口）、增量 4（审计查询、租户配置与连接器管理页面接口）与增量 5（运营报表导出与定时化）已完成；后续剩余 2 个建议增量。每个增量应控制在 0.5 到 2 天内可完成、可测试、可提交的范围内。
 
 ## 8. 增量完成记录
 
-阶段 A（7 个增量）、阶段 B（4 个增量）均已完成；阶段 C 已启动并完成第 1 个增量。阶段 B 增量 1-4 与阶段 C 增量 1 的完成记录如下；下一步进入阶段 C 增量 2（CRM/工单系统/业务数据库连接器）。
+阶段 A（7 个增量）、阶段 B（4 个增量）、阶段 C（5 个增量）均已完成；阶段 D 增量 1（管理控制台基础页面接口）、增量 2（Outbox/DLQ/任务状态/重试与故障操作接口）、增量 3（成本/配额/模型分布/质量指标看板接口）、增量 4（审计查询、租户配置与连接器管理页面接口）、增量 5（运营报表导出与定时化）与增量 6（运营报表产物持久化与历史查询）已完成。阶段 B 增量 1-4、阶段 C 增量 1-5、阶段 D 增量 1-6 的完成记录如下；下一步进入阶段 D 增量 7（cron 表达式排程、run 保留/清理策略，或剩余管理页面收尾）。
+
+### 阶段 D 增量 4 完成记录（2026-09-18）
+
+- 范围：审计查询、租户配置与连接器管理页面接口（配合管理控制台，供审计查询、租户配额配置与连接器运维页面）。
+- 端口：`application/ports.py` `AuditRepository` 新增 `query_events(tenant_id=None, action=None, actor_id=None, resource_id=None, resource_type=None, limit, cursor) -> tuple[list[AuditEvent], str|None]`（过滤 + offset 游标分页；`tenant_id=None` 为 admin-global 多租户查询）。
+- 仓储实现：`memory_audit_repository.py` 遍历内存事件按过滤条件筛出并 offset 分页；`sqlalchemy_audit_repository.py` 逐条件 `where` + `.offset(start).limit(limit+1)` 计算 has_more 与 next_cursor。
+- 接口：
+  - `api/audit_router.py` `/v1/audit` 扩展：`tenant_id` 改为可选（缺省走 `authorize_admin`），新增 `action`/`actor_id`/`resource_type` 过滤与 `cursor` 分页；返回 `{"events", "next_cursor"}`。
+  - `api/console_router.py` 新增 admin 管理端点（均经 `_authorize_admin` 鉴权，拆分为 `_authorize_admin(authenticator, request)` helper；`authenticator` 作为新参数注入）：
+    - `GET /v1/console/tenants`：admin 多租户配置（quota + used + usage_status + enabled；租户集为 cost 租户 ∪ quota 租户）。
+    - `GET /v1/console/audit`：admin 审计查询（action/actor_id/resource_id/resource_type 过滤 + 游标分页），`tenant_id` 可选。
+    - `GET /v1/console/connectors`：admin 连接器全量列表（经 connector_repository 持久化 spec）+ 每个连接器经 registry.health 附加健康状态。
+    - `POST /v1/console/connectors/{connector_id}/enabled`：启用/停用连接器，经 connector_repository `get_spec`+`save_spec` 持久化（404 兜底）。
+- 装配：`app.py` 把 `connector_registry`/`connector_repository`/`authenticator` 注入 console router；`audit_router` 复用 `container.audit_repository` 与 `container.authenticator`。
+- 验证：`tests/platform` 170 passed（净 +9）、全仓 636 passed（净 +9）、Black/isort/Flake8 通过、增量相关源文件 mypy 通过（`Success: no issues found`，仅 `workflows/support_ticket.py:57` 为阶段 A 存量 Temporal overload）；新增 `tests/platform/test_increment4_admin.py`（9 项：memory 审计过滤/过滤条件/admin-global/游标分页、sqlalchemy 审计过滤/分页、`/v1/audit` 过滤与 admin-global 与分页端到端、`/v1/console/audit` admin 多租户、`/v1/console/tenants` admin 列表、连接器列表与启停 toggle 与 404）。`alembic heads` 仍为 `20260918_0011`（本增量复用 `audit_events`/`connector_specs` 表，无新迁移）。
+- 剩余风险：审计 `query_events` 的时间过滤、按风险等级/事件类型过滤暂未提供（如需可按需扩展）；`/v1/console/connectors` 的健康状态依赖 registry 中已绑定 adapter，持久化 spec 但进程重启后 registry adapter 重建（health 可能为空）；admin 管理端点鉴权依赖 admin key，无独立操作者级 RBAC 细分；真实 PostgreSQL 上的多租户审计聚合查询未在 Docker 端到端跑通。
+- 下一步：阶段 D 增量 5（运营报表导出与定时化、或剩余管理页面收尾）。
+
+### 阶段 D 增量 5 完成记录（2026-09-18）
+
+- 范围：运营报表导出与定时化——把成本/审计/质量聚合为行式报表（JSON/CSV）即时导出，并支持按 cadence（daily/weekly/monthly）定时生成。
+- 领域模型：新增 `domain/reporting.py`（`ReportType` cost/audit/quality、`ReportFormat` json/csv、`OperationsReport` 含 rows/summary/generated_at/to_json()/to_csv()、`ScheduledReport` 含 report_id/tenant_id/report_type/cadence/enabled/last_run_at/next_run_at 及各字段默认值）。
+- 端口：`application/ports.py` 新增 `ScheduledReportRepository` Protocol（`save`/`get`/`list_schedules`/`delete`/`list_due`）。方法命名 `list_schedules`（而非 `list`）避免类内 `list` 方法遮蔽内建 `list` 类型触发 mypy valid-type 报错。
+- 仓储实现（memory + sqlalchemy 双实现）：
+  - `memory_scheduled_report_repository.py`：内存 dict，`list_due` 过滤 `enabled and next_run_at <= before`。
+  - `sqlalchemy_scheduled_report_repository.py`：`scheduled_reports` 表对应 `ScheduledReportRecord`（`models.py` 新增 `from_domain`/`to_domain`，时区缺失自动补 UTC）`merge` upsert、`list_due` 走 `where(enabled.is_(True)).where(next_run_at <= now)`。
+- 迁移：`alembic/versions/20260918_0012_scheduled_reports.py`（down_revision=`20260918_0011`）建 `scheduled_reports` 表（report_id PK / tenant_id idx / report_type / cadence / enabled / created_at / last_run_at nullable / next_run_at）。`alembic heads` 推进到 `20260918_0012`。
+- 应用：新增 `application/report_service.py` `ReportService(cost_repository, audit_repository, regression_repository, schedule_repository)`：
+  - `generate(type, tenant_id, fmt, days)`：聚合成本（daily_summary 行）、审计（query_events 行）、质量（regression list_runs 行）为行式报表，支持 JSON/CSV 序列化。
+  - `schedule`/`list_schedules`/`delete_schedule`：排程 CRUD。
+  - `run_due()`：`list_due` 取出到期排程逐一 `generate`，写 `last_run_at` 并推进 `next_run_at`（daily +1d / weekly +7d / monthly +30d），幂等（已推进则不会重复生成）。
+- 接口（`api/console_router.py`，均经 `_authorize_admin` 鉴权）：
+  - `GET /v1/console/reports/export?report_type&tenant_id&format=json&days`：即时导出，JSON 返回 `application/json`，CSV 返回 `text/csv` + `Content-Disposition`。
+  - `POST /v1/console/reports/schedule`：创建排程（body: tenant_id/report_type/cadence）。
+  - `GET /v1/console/reports/schedules?tenant_id`：排程列表。
+  - `DELETE /v1/console/reports/schedule/{report_id}`：删除排程。
+  - `POST /v1/console/reports/run-due`：跑到期排程。
+- 装配：`runtime.py` `ServiceContainer` 新增 `scheduled_report_repository`（缺省 memory）与 `report_service`，两个 builder（memory/sqlalchemy）均注入相应仓储；`app.py` 把 `container.report_service` 注入 console router。
+- 验证：`tests/platform` 181 passed（净 +11）、全仓 647 passed（净 +11）、Black/isort/Flake8 通过、增量相关源文件 mypy 通过（`Success: no issues found`）；新增 `tests/platform/test_reports.py`（11 项：memory 排程仓储 CRUD/到期、sqlalchemy 排程仓储 CRUD/到期、ReportService JSON/CSV 成本、审计报表、调度+run_due 幂等、导出 JSON/CSV/非法类型、排程生命周期列表过滤、run-due 端点、删除排程）。`alembic heads` 为 `20260918_0012`。
+- 剩余风险：`run_due` 为同步执行（调用触发器逐条生成），未接入 Temporal/worker 异步任务；无排程产物落盘/历史归档（只返回运行摘要）；cadence 用简化标签（daily/weekly/monthly 固定步长），未支持 cron 表达式；真实 PostgreSQL 上定时生成与到期检测未在 Docker 端到端跑通。
+- 下一步：阶段 D 增量 6（运营报表产物持久化/历史查询、cron 表达式排程，或剩余管理页面收尾）。
+
+### 阶段 D 增量 6 完成记录（2026-09-18）
+
+- 范围：运营报表产物持久化与历史查询——把每次生成的报表（rows+summary+format）落盘为不可变 run，提供历史列表与按需取回（JSON/CSV）接口，使排程/导出产物可追溯复用，无需重新聚合。
+- 领域模型：`domain/reporting.py` 新增 `ReportRun`（run_id/tenant_id/report_type/format/rows/summary/generated_at/scheduled_report_id，含 `from_operations()`、`to_json()`/`to_csv()`），作为 `OperationsReport` 的持久化快照。
+- 端口：`application/ports.py` 新增 `ReportRunRepository` Protocol（`save`/`get`/`list(tenant_id?, report_type?, limit)`）。
+- 仓储实现（memory + sqlalchemy 双实现，遵循既有 Protocol 模式）：
+  - `memory_report_run_repository.py`：内存 dict，`list` 按 `generated_at` 倒序。
+  - `sqlalchemy_report_run_repository.py`：`report_runs` 表对应 `ReportRunRecord`（`models.py` 新增 `from_domain`/`to_domain`，时区缺失自动补 UTC），`list` 走 `where` 过滤 + `order_by(generated_at.desc())`。
+- 迁移：`alembic/versions/20260918_0013_report_runs.py`（down_revision=`20260918_0012`）建 `report_runs` 表（run_id PK / tenant_id / report_type / format / rows JSONB / summary JSONB / scheduled_report_id nullable / generated_at，含 4 个索引）。`alembic heads` 推进到 `20260918_0013`。
+- 应用：`application/report_service.py` `ReportService` 构造参数新增 `run_repository`；`generate()` 完成后经 `_persist()` 把产物落为 `ReportRun`；新增 `list_runs(tenant_id?, report_type?, limit)`（返回元信息）与 `get_run(run_id)`（含 `to_json()`/`to_csv()`）。
+- 接口（`api/console_router.py`，均经 `_authorize_admin` 鉴权）：
+  - `GET /v1/console/reports/runs?tenant_id&report_type&limit`：历史报表列表（最新在前）。
+  - `GET /v1/console/reports/runs/{run_id}?format=json`：取回单次产物，JSON 返回 `application/json`、CSV 返回 `text/csv` + `Content-Disposition`；run 不存在返回 404。
+- 装配：`runtime.py` `ServiceContainer` 新增 `run_repository`（缺省 memory `MemoryReportRunRepository`）并注入 `report_service`；memory builder 用 `MemoryReportRunRepository`、sqlalchemy builder 用 `SQLAlchemyReportRunRepository(session_factory)`。
+- 验证：`tests/platform` 186 passed（净 +5）、全仓 652 passed（净 +5）、Black/isort/Flake8 通过、增量相关源文件 mypy 通过（`Success: no issues found`）；新增 5 项到 `tests/platform/test_reports.py`（memory run 仓储 CRUD/列表、sqlalchemy run 仓储 CRUD/列表、ReportService 落盘+历史列表、`/reports/runs` 历史与按需取回 JSON/CSV、`/reports/runs` 过滤与 404）。`alembic heads` 为 `20260918_0013`。
+- 剩余风险：`run_due` 仍为同步执行，未接入 Temporal/worker 异步任务；排程 run 无清理/保留策略（run 不断累积）；cadence 仍为简化标签（daily/weekly/monthly），未支持 cron 表达式；真实 PostgreSQL 上 `report_runs` 写入与历史查询未在 Docker 端到端跑通。
+- 下一步：阶段 D 增量 7（cron 表达式排程、run 保留/清理策略，或剩余管理页面收尾）。
+
+### 阶段 D 增量 3 完成记录（2026-09-18）
+
+- 范围：成本/配额/模型分布/质量指标看板接口（配合管理控制台，供运营看板聚合数据）。
+- 端口：`application/ports.py` `CostRepository` 新增 `daily_summary(tenant_id, days) -> list[dict]`（按天聚合 request_count/input_tokens/output_tokens/amount，按日期升序，跳过超出 days 窗口与跨租户记录）。
+- 仓储实现：`memory_cost_repository.py` 直接遍历记录按 `created_at.date()` 分桶；`sqlalchemy_cost_repository.py` 按窗口查询后 Python 分桶（避免跨方言日期函数差异）。
+- 应用：新增 `application/dashboard_service.py` `DashboardService(cost_repository, quota_repository, regression_repository)`，只读聚合方法：
+  - `cost_trend(tenant_id, days)`：日趋势 + days/total_amount/total_requests 汇总。
+  - `model_distribution(tenant_id)`：按模型聚合（复用 summary 的 by_model），按 cost 降序并补充 `share`（模型金额占比）。
+  - `quota_snapshot(tenant_id)`：配额配置 + 用量 + usage_status（configured 与否）。
+  - `quality_metrics(tenant_id, limit)`：回归 run 序列（run_id/candidate/status/verdict/recall/citation/classification/priority/structured/high_risk_miss）+ recent + 平均指标（averages）。
+- 接口（`api/console_router.py`）新增（tenant 维度，service 未装配时 503）：
+  - `GET /v1/console/cost-trend?tenant_id=&days=`（days 夹紧 1-365）。
+  - `GET /v1/console/model-distribution?tenant_id=`。
+  - `GET /v1/console/quality?tenant_id=&limit=`。
+  - `GET /v1/console/dashboard?tenant_id=`（聚合 cost_trend/model_distribution/quota/quality 四块）。
+- 装配：`runtime.py` `ServiceContainer` 新增 `dashboard_service`；`build_memory_container`/`build_sqlalchemy_container` 自动装配（复用 cost/quota/regression 仓储）；`app.py` 把 `container.dashboard_service` 注入 console router。
+- 验证：`tests/platform` 161 passed（净 +4）、全仓 627 passed（净 +4）、Black/isort/Flake8 通过、增量相关源文件 mypy 通过（`Success: no issues found`，仅 `workflows/support_ticket.py:57` 为阶段 A 存量 Temporal overload 错误非本增量）；新增 `tests/platform/test_dashboard.py`（4 项：memory 日趋势分桶/过滤、DashboardService 四块聚合、sqlalchemy 日趋势、内存端点）。`alembic heads` 仍为 `20260918_0011`（本增量复用 `cost_records`/`regression_runs` 表，无新迁移）。
+- 剩余风险：成本/质量统计基于进程内存态仓储/记录，费用于管理看板为历史快照非近实时；`daily_summary` 为 Python 分桶（非 DB 原生 date_trunc），大数据量下应改为 SQL 按日聚合；质量指标仅来自回归 run（未含线上抽样 Recall/置信度）；真实 PostgreSQL 端到端看板查询未在 Docker 跑通。
+- 下一步：阶段 D 增量 5（运营报表导出与定时化，或剩余管理页面收尾）。
+
+### 阶段 D 增量 2 完成记录（2026-09-18）
+
+- 范围：Outbox/DLQ/任务状态的列表、详情、计数与丢弃维护接口（配合既有 replay/replay-failed 重试能力，支撑 DLQ 管理与故障操作页面）。
+- 仓储扩展（`infrastructure/outbox_store.py` `SQLAlchemyOutboxStore`）：
+  - `list_events(tenant_id=None, status=None, limit, cursor)`：按租户/状态过滤、`created_at` 升序、`limit+1` 判断 has_more 的游标分页。
+  - `get_event(tenant_id|None, event_id)`：按主键取详情，`tenant_id=None` 为 admin-global。
+  - `count_events(tenant_id=None)`：按状态分组计数，返回 pending/published/failed/discarded 四态。
+  - `discard(tenant_id|None, event_id)`：把事件置为 `status="discarded"`（补 `last_error="discarded by operator"`）。
+- 双实现（新增 `infrastructure/memory_outbox_store.py`）：`MemoryOutboxStore` 提供与 SQLAlchemy 相同的 outbox 管理表面（enqueue/fetch_pending/mark_published/mark_failed/list_failed/list_events/get_event/count_events/discard/replay），使本地/无库运行也可用虚拟机故障操作。
+- 接口（`api/outbox_router.py`）新增（均为 admin 鉴权）：
+  - `GET /v1/outbox/events`：状态过滤 + limit/cursor 分页列事件。
+  - `GET /v1/outbox/events/count`：四态计数。
+  - `GET /v1/outbox/events/{event_id}`：事件详情。
+  - `POST /v1/outbox/events/{event_id}/discard`：置为 discarded。
+  - 保留 `/v1/outbox/failed`、`/v1/outbox/{id}/replay`、`/v1/outbox/replay-failed` 重试能力。
+  - 关键点：admin-global 的 detail/discard 必须传 `tenant_id=None`（store 中 `tenant_id is not None` 视为租户过滤；传 `""` 会被当成租户 ID 导致匹配失败返回 404）。
+- 装配：`runtime.py` `build_memory_container` 装配 `MemoryOutboxStore()` 作 `outbox_store`，使内存容器也具备 outbox 管理表面。
+- 测试：`tests/platform` 157 passed（净 +4）、全仓 623 passed（净 +4）、Black/isort/Flake8 通过、增量相关源文件 mypy 通过（仅 `workflows/support_ticket.py:57` 为阶段 A 存量 Temporal overload 错误，非本增量）；新增 `tests/platform/test_outbox_operations.py`（SQLAlchemy list/detail/discard/count + Memory store surface + 双容器 admin 端点）；`test_api_auth.py` 中"tenant 访问 outbox 401、admin 访问 200"断言随内存容器装配 `outbox_store` 从 503（未配置）调整为 200（已配置）。
+- 本增量无新增库表、无 Alembic 变更（discard 复用 `status` 字段，`discarded` 为既有枚举外的操作态字符串）。
+- 剩余风险：`discarded` 状态仅为操作标记，未被消费者/重放器排除（需在 worker/publisher 索引时显式跳过 `discarded`）；真实 PostgreSQL 端到端 outbox 操作未在 Docker 跑通；replay 与 discard 未做并发（乐观锁）；admin-global 访问依赖 `authorize_admin`，无独立 per-tenant operator 权限面。
+- 下一步：阶段 D 增量 5（运营报表导出与定时化，或剩余管理页面收尾）。
+
+### 阶段 D 增量 1 完成记录（2026-09-18）
+
+- 范围：管理控制台基础页面接口（客服工作台、审批收件箱、任务状态计数、运营成本/配额总览、DLQ），驱动阶段 D 页面。
+- 领域/端口：`application/ports.py` 的 `TicketRepository` 新增 `list(tenant_id, status, limit, cursor) -> tuple[list[Ticket], str|None]`；`CostRepository` 新增 `list_tenants()`。
+- 仓储实现：`memory_ticket_repository.py` 与 `sqlalchemy_ticket_repository.py` 实现 `list`（按状态过滤、`created_at` 升序、游标分页，SQLAlchemy 用 `offset/limit+1` 判断 has_more）；`memory_cost_repository.py` 与 `sqlalchemy_cost_repository.py` 实现 `list_tenants`（`.distinct()` 租户）。
+- 接口（`api/console_router.py`）：
+  - `GET /v1/console/tickets` 客服工作台：按 `status` 过滤、`limit`/`cursor` 分页列工单（含状态/优先级/意图/风险级/置信度/时间）。
+  - `GET /v1/console/inbox` 审批收件箱：列 `waiting_approval` 待审批工单（带风险级），供审批动作（`approve`/`reject` 沿用 `/v1/tickets/{id}/approve`）支撑。
+  - `GET /v1/console/overview` 增加 `tasks` 任务状态计数（遍历 9 种状态计数，租户隔离）。
+  - `GET /v1/console/costs` 管理员多租户成本/配额总览：并集 cost 租户 + quota 租户，逐租户用量/配额状态，`total_cost` 全量聚合。
+  - DLQ 沿用现有 `/v1/outbox/failed`、`/v1/outbox/{id}/replay`。
+- 装配：`api/app.py` 向 `create_console_router` 传入 `ticket_repository = container.repository`。
+- 验证：`tests/platform` 153 passed（净 +7）、全仓 619 passed（净 +7）、Black/isort/Flake8 通过、增量相关源文件 mypy 通过（0 error）；新增 `test_console_tickets.py`（端点 + 游标分页 + 租户隔离）与 `test_sqlalchemy_console_list.py`（SQLAlchemy `list` 过滤/分页 + `list_tenants`）。
+- 本增量无新增库表，无 Alembic 变更（复用 `tickets`/`costs` 表）。
+- 剩余风险：`_list_tenant_ids` 依赖 `cost_repository.list_tenants()` 与 `quota_repository.list()`；`TicketRepository.list` 为内存/SQLite 验证，真实 PostgreSQL 未端到端跑通；`/v1/console/costs` 与多租户接口当前未在 app 层做管理员鉴权（`_IncludedRouter` 惰性注册条件下构造无异常，鉴权由各端点/外层负责）。
+- 下一步：阶段 D 增量 5（运营报表导出与定时化，或剩余管理页面收尾）。
+
+### 阶段 C 增量 5 完成记录（2026-09-18）
+
+- 范围：高风险动作审计闭环 + 人工授权边界（回答"谁执行、为何允许"，并强制高风险动作未经审批不得执行）。
+- 领域：`domain/authorization.py`（`AuthorizationDecision`：authorization_id/tenant_id/action/resource/principal/outcome/reasons/approval_ref/decided_at，作为授权审计记录）。
+- 应用：`application/high_risk_authorizer.py`（`HighRiskActionAuthorizer` 组合 rbac_repository + policy_engine + audit_repository）：解析调用者角色/权限 → `PolicyEngine.authorize` 求值 → 强制执行人工审批边界（工单未到 `READY_TO_PUBLISH` 或缺失已批准审批元数据 → `DENIED`，拒绝执行）→ 把每次授权（放行 allowed / 拒绝 denied / 待审批）写入审计事件 `{action}.authorization`（含 outcome/reasons/approval_ref/actor）；`execute_guarded` 封装"先授权后执行"，记录主体与结果。
+- 授权边界修正：`application/policy_engine.py` 改为**先校验角色/权限、后校验审批**（原先审批检查在权限检查之前，会让"已审批工单 + 无权限调用者"被绕过放行）；approval 检查仅在已具备权限后触发，未批返回 `requires_approval`。
+- 集成：`TicketWritebackService.write_back` 接收可选 `high_risk_authorizer`（注入即启用门禁），`write_back` 前先 `authorize_and_trace`；`support_router` 写回端点传 actor 并在 `PermissionError` 时映射为 `403`；新增 `api/authorization_router.py`（`POST /v1/authorize` 显式授权审计查询，挂载于 app）。
+- 验证：`tests/platform` 146 passed（净 +11）、全仓 612 passed（净 +11）、Black/isort/Flake8 通过、增量相关源文件 mypy 通过（0 error）；`test_high_risk_authorizer.py`（授权决策 allowed/denied/审批边界/审计/execute_guarded）与 `test_authorization_api.py`（写回门禁 403、authorize 接口）。
+- 本增量无新增库表，不涉及 Alembic 变更。
+- 剩余风险：审批状态仍存于 ticket 元数据（无独立审批单仓储，无法跨票根或因票查询）；授权/审计仍走进程内存态 audit 仓储；`PermissionError` 与 RBAC 依赖在装配时默认 `Memory` 仓储；真实 OpenFGA/身份提供方（IdP）未接入。
+- 下一步：阶段 D 增量 2（Outbox/DLQ/任务状态/重试与故障操作页面）。
+
+### 阶段 C 增量 4 完成记录（2026-09-18）
+
+- 范围：租户配额管理 + 管理控制台聚合概览。
+- 领域：`domain/tenant_quota.py`（`TenantQuota`：tenant_id/monthly_limit/warning_threshold/hard_limit/enabled/updated_at + `usage_status(used)` 返回 active/warning/blocked 状态与 used/limit/ratio）。
+- 仓储与库表：`TenantQuotaRepository` Protocol（memory/sqlalchemy 双实现）+ `TenantQuotaRecord` + `tenant_quotas` 表（Alembic `0011`）
+- 应用：`application/quota_service.py` 扩展 `QuotaAwareModelGateway` 支持逐租户配额覆盖（`_resolve_budget(tenant_id)` 返回 `(budget, enforce)`，启用且未超限才 enforce budget；`enabled=False` 或未配置则回退默认 monthly_budget / 不强制），`complete()` 仅在 enforce 时按 `used + estimated > budget` 拦截。
+- 接口：`api/quota_router.py`（`/v1/quotas`：PUT/GET/list/DELETE，GET 返回 `configured`+`usage`）；`api/console_router.py`（`/v1/console/overview`：聚合配额（含 configured/usage）+成本（used）+DLQ（outbox 失败数）+审计（近期事件））。`runtime.py` 装配 `tenant_quota_repository` 并经 `_wrap_gateway` 传入 gateway，`app.py` 挂载 quota+console router。
+- 验证：`tests/platform` 135 passed（净 +9）、全仓 601 passed（净 +9）、Black/isort/Flake8 通过、增量相关源文件 mypy 通过（`Success: no issues found`，增量 4 新增/改动文件全部 0 error）、`alembic heads` 为 `20260918_0011`、`alembic upgrade 0010:0011 --sql` 生成 `tenant_quotas` 建表。
+- 剩余风险：配额 enforce 为进程内估算（基于模型元数据 estimated_cost，达到上限后拒绝新调用），非持久账本、非近实时、未按真实计费；成本/DLQ/审计统计基于进程内存态仓储/事件；尚无完整客服工作台/审批收件箱/DLQ 页/运营看板（仅聚合概览落地）；真实 PostgreSQL/Kafka/Temporal 集成未在 Docker 跑通。
+- 下一步：阶段 D 增量 2（Outbox/DLQ/任务状态/重试与故障操作页面）。
+
+### 阶段 C 增量 3 完成记录（2026-09-18）
+
+- 范围：RBAC（角色/权限/赋值）+ Policy Engine（动作策略/风险/审批）+ OpenFGA 式关系权限模型。
+- 领域：`domain/rbac.py`（`Permission` 枚举、`Role`、`RoleAssignment`、内置角色权限矩阵 `role_permissions`）、`domain/policy.py`（`ActionPolicy`、`PolicyDecision` 含 `allowed`/`denied`/`requires_approval`、`RelationTuple`）。
+- 应用：`application/policy_engine.py`（fail-closed 评估：未知/禁用动作拒绝、可选 OpenFGA 关系检查门禁资源访问、需审批高风险动作返回 requires_approval、角色/权限 allow-list）、`application/openfga_adapter.py`（内存态 OpenFGA 式关系 tuple CRUD + check，可替换真实服务）、`application/builtin_policies.py`（默认 `ticket.writeback`（high、需审批）、`ticket.view` 策略 + 内置角色 seed）。
+- 仓储与库表：`RbacRepository` Protocol（memory/sqlalchemy 双实现）+ `RoleRecord`/`RoleAssignmentRecord` + `rbac_roles`/`rbac_role_assignments` 表（Alembic `0010`）。
+- 接口：`api/rbac_router.py`（`POST /v1/rbac/roles`、`GET /v1/rbac/roles`、`POST /v1/rbac/roles/{id}/permissions`、`POST /v1/rbac/assignments`、`GET /v1/rbac/assignments`、`POST /v1/rbac/authorize`），已挂载 `app.py`，`runtime.py` 装配 rbac_repository/policy_engine/openfga_client。
+- 提交：见 `git log` 阶段 C 增量3 提交（当前 HEAD）。
+- 验证：`tests/platform` 126 passed、全仓 592 passed、Black/isort/Flake8 通过、增量相关源文件 mypy 通过（`Success: no issues found`）、`alembic heads` 为 `20260918_0010`、`alembic upgrade head --sql` 生成 `rbac_roles`/`rbac_role_assignments` 建表 + 租户索引。
+- 剩余风险：OpenFGA 为内存实现，未接真实 OpenFGA 服务；策略静态声明（无热加载/审计策略变更）；尚未与企业级身份提供方对接，API Key 仍为静态映射；admin 权限矩阵未落库为动态可配置。
+- 下一步：阶段 C 增量 4 管理控制台（任务状态、失败重试与 DLQ、审批收件箱、成本/配额、审计查询）+ 租户配额强化。
+
+### 阶段 C 增量 2 完成记录（2026-09-18）
+
+- 提交：见 `git log` 阶段 C 增量2 提交（当前 HEAD）。
+- 改动：
+  - `ports.py` 新增 `ConnectorRepository` Protocol（`save_spec`/`get_spec`/`list_specs`/`delete_spec`），对齐 Repository 双实现模式。
+  - 新增 `infrastructure/memory_connector_repository.py`（内存 dict）与 `sqlalchemy_connector_repository.py`（async SQLAlchemy，merge 保存、created_at 降序、租户过滤、delete）；`models.py` 新增 `ConnectorSpecRecord` ORM 模型（`connector_specs` 表，含 tenant_id 索引、allowed_actions/config/credential JSON、enabled、created_at）；Alembic `0009` 建 `connector_specs` 表。修复 sqlite naive datetime 往返时区（`to_domain` 补 UTC）。
+  - `connector_registry.py` 新增 `set_adapter`（绑定/重绑 adapter）与 `load_from_repository`（从仓储装载 spec，可选 adapter_factory 懒重建 adapter）。
+  - `openapi_adapter.py` 新增 `build_openapi_adapter(spec, auth_value_provider)` 从持久化 spec 重建 adapter（headers/auth_header/超时/重试/限流从 config 读取）。
+  - 新增 `application/ticket_writeback.py`：`TicketWritebackService` 把已发布工单写回外部系统——按租户解析连接器（支持注入 `connector_resolver`，否则取租户第一个 enabled 且 allowed_actions 含 `writeback` 或为空集的连接器）、构建 POST /tickets payload（含 ticket/conversation/customer/subject/reply/draft/status/priority/intent）、用幂等键 `wb-{ticket_id}` 调用 registry.invoke（含租户/动作/disabled 校验）、写审计事件（结果/错误/幂等键）、写回失败抛 `RuntimeError`、无连接器抛 `ValueError`。
+  - `connector_router.py` 新增持久化注册：`POST /v1/connectors`（保存 spec 到 registry + repository，用 adapter_factory 建 adapter）、`DELETE /v1/connectors/{id}`；`support_router.py` 新增 `POST /v1/tickets/{id}/writeback`（校验租户/工单、调 `TicketWritebackService.write_back`，ValueError→409、RuntimeError→502）。`runtime.py` 装配 `connector_repository`（memory/sqlalchemy 各自实现）与 `ticket_writeback_service`，`app.py` 挂载写回接口并把 repository+adapter_factory 注入 connector router。
+  - 新增 `tests/platform/test_connector_repository.py`（5 项：memory 往返/删除、sqlalchemy 往返与租户隔离）与 `tests/platform/test_ticket_writeback.py`（5 项：写回成功+审计、无连接器抛错、失败抛错+审计失败、连接器解析器注入）。
+- 验证：`tests/platform` 112 passed、全仓 578 passed、Black/isort/Flake8 通过、增量相关源文件 mypy 通过（`Success: no issues found`）、`alembic heads` 为 `20260918_0009`、`alembic upgrade head --sql` 生成 `connector_specs` 建表 + 租户索引。
+- 剩余风险：写回仍是面向 HTTP/OpenAPI 的通用适配，尚无真实 CRM/工单系统原生适配器；凭据只存引用、无真实 vault/密钥后端（认证值依赖 `auth_value`/注入 provider）；写回为同步调用，失败仅抛错未做消息队列重试/补偿编排；真实 PostgreSQL 端到端写回未在 Docker 跑通。
+- 下一步：阶段 C 增量 3 RBAC、Policy Engine、OpenFGA 和权限模型。
 
 ### 阶段 C 增量 1 完成记录（2026-09-18）
 
-- 提交：见本记录末尾（阶段 C 增量1 提交 hash）。
+- 提交：`aa8c899`（阶段 C 增量 1）。
 - 改动：
   - 新增 `agentforge/platform/domain/connector.py`：`ConnectorKind`、`ConnectorRiskLevel`、`CredentialReference`（凭据只存 vault 引用、不落机密，对齐 SC-303）、`ConnectorContext`（tenant_id/task_id/idempotency_key/trace_id/actor）、`ConnectorSpec`（租户/名称/类型/版本/风险级/端点/动作白名单/凭据引用/开关）、`ConnectorHealth`、`ConnectorInvocationResult`、`WebhookDelivery`（入站事件规范化 + `to_ticket_event()` 转 `SupportTicketService` 入站形状）。
   - 新增 `agentforge/platform/application/connector_registry.py`：Connector SDK 契约 `Connector` ABC（`health`/`invoke`/`compensate`，对齐工程书 5.11/6.10）与 `ConnectorRegistry`（内存注册、按 connector_id 查 spec/adapter、租户隔离校验、动作白名单、disabled 拦截、批量健康聚合、带幂等/租户/动作约束的 `invoke`）。
@@ -259,7 +436,7 @@ python -m alembic upgrade head --sql
 工程书：C:/Users/HP/Documents/Codex/2026-09-17/mu/outputs/AgentForge-Million-Scale-Engineering-Spec.md
 场景基线：C:/Users/HP/Documents/Codex/2026-09-17/mu/outputs/AgentForge-MVP-Customer-Service-Scenario.md
 
-先完整阅读仓库内交接文档和外部规划文档，再检查当前分支、提交记录、测试和代码结构。当前阶段 A 与阶段 B 已完成（FTS+pgvector 混合检索、重排与召回评估、结构化分类/Prompt/模型版本与质量门禁、离线回归运行器与 Golden Dataset 均已落地），阶段 C 已启动并完成第 1 个增量（Connector SDK、通用签名 Webhook Adapter、OpenAPI Adapter）。下一步从阶段 C 的第 2 个增量开始：CRM、工单系统或业务数据库连接器。
+先完整阅读仓库内交接文档和外部规划文档，再检查当前分支、提交记录、测试和代码结构。当前阶段 A、阶段 B 与阶段 C 均已完成（FTS+pgvector 混合检索、重排与召回评估、结构化分类/Prompt/模型版本与质量门禁、离线回归运行器与 Golden Dataset、Connector 适配与写回闭环、RBAC/Policy/OpenFGA、租户配额 + 管理控制台、高风险动作审计闭环 + 人工授权边界）；阶段 D 增量 1（管理控制台基础页面接口：客服工作台/审批收件箱/成本配额总览/任务计数/DLQ）、增量 2（Outbox/DLQ/任务状态列表详情计数与丢弃维护接口）、增量 3（成本/配额/模型分布/质量指标看板接口）、增量 4（审计查询、租户配置与连接器管理页面接口）、增量 5（运营报表导出与定时化）与增量 6（运营报表产物持久化与历史查询）已完成。下一步从阶段 D 增量 7 开始：cron 表达式排程、run 保留/清理策略，或剩余管理页面收尾。
 
 要求：
 1. 不要回退已有提交。

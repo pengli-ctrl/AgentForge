@@ -3,12 +3,16 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from agentforge.platform.api.audit_router import create_audit_router
+from agentforge.platform.api.authorization_router import create_authorization_router
 from agentforge.platform.api.connector_router import create_connector_router
+from agentforge.platform.api.console_router import create_console_router
 from agentforge.platform.api.cost_router import create_cost_router
 from agentforge.platform.api.evaluation_router import create_evaluation_router
 from agentforge.platform.api.feishu_router import create_feishu_router
 from agentforge.platform.api.knowledge_router import create_knowledge_router
 from agentforge.platform.api.outbox_router import create_outbox_router
+from agentforge.platform.api.quota_router import create_quota_router
+from agentforge.platform.api.rbac_router import create_rbac_router
 from agentforge.platform.api.regression_router import create_regression_router
 from agentforge.platform.api.release_router import create_release_router
 from agentforge.platform.api.security import ApiKeyAuthenticator
@@ -57,6 +61,7 @@ def create_platform_app(
 
     app = FastAPI(title="AgentForge Platform", version="0.5.0")
     app.include_router(create_support_router(container))
+    app.include_router(create_authorization_router(container))
     app.include_router(create_knowledge_router(container))
     app.include_router(create_outbox_router(container))
     app.include_router(create_audit_router(container))
@@ -64,7 +69,39 @@ def create_platform_app(
     app.include_router(create_evaluation_router(container))
     app.include_router(create_release_router(container))
     app.include_router(create_regression_router(container))
-    app.include_router(create_connector_router(container.connector_registry))
+    app.include_router(
+        create_rbac_router(
+            rbac_repository=container.rbac_repository,
+            policy_engine=container.policy_engine,
+        )
+    )
+    app.include_router(
+        create_quota_router(
+            quota_repository=container.tenant_quota_repository,
+            cost_repository=container.cost_repository,
+        )
+    )
+    app.include_router(
+        create_console_router(
+            quota_repository=container.tenant_quota_repository,
+            cost_repository=container.cost_repository,
+            outbox_store=getattr(container, "outbox_store", None),
+            audit_repository=getattr(container, "audit_repository", None),
+            ticket_repository=getattr(container, "repository", None),
+            dashboard_service=getattr(container, "dashboard_service", None),
+            connector_registry=getattr(container, "connector_registry", None),
+            connector_repository=getattr(container, "connector_repository", None),
+            authenticator=authenticator,
+            report_service=getattr(container, "report_service", None),
+        )
+    )
+    app.include_router(
+        create_connector_router(
+            container.connector_registry,
+            repository=container.connector_repository,
+            adapter_factory=container.adapter_factory,
+        )
+    )
     app.include_router(
         create_feishu_router(
             container,

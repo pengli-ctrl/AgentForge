@@ -16,6 +16,40 @@ def create_outbox_router(container: ServiceContainer) -> APIRouter:
         events = await container.outbox_store.list_failed(limit=limit)
         return {"events": events}
 
+    @router.get("/events/count")
+    async def count_events(request: Request, tenant_id: str | None = None) -> dict:
+        container.authenticator.authorize_admin(request)
+        if container.outbox_store is None:
+            raise HTTPException(status_code=503, detail="Outbox store is not configured")
+        return await container.outbox_store.count_events(tenant_id=tenant_id)
+
+    @router.get("/events")
+    async def list_events(
+        request: Request,
+        status: str | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> dict:
+        container.authenticator.authorize_admin(request)
+        if container.outbox_store is None:
+            raise HTTPException(status_code=503, detail="Outbox store is not configured")
+        events, next_cursor = await container.outbox_store.list_events(
+            status=status,
+            limit=limit,
+            cursor=cursor,
+        )
+        return {"events": events, "next_cursor": next_cursor}
+
+    @router.get("/events/{event_id}")
+    async def event_detail(request: Request, event_id: str) -> dict:
+        container.authenticator.authorize_admin(request)
+        if container.outbox_store is None:
+            raise HTTPException(status_code=503, detail="Outbox store is not configured")
+        event = await container.outbox_store.get_event(None, event_id)
+        if event is None:
+            raise HTTPException(status_code=404, detail="Outbox event not found")
+        return {"event": event}
+
     @router.post("/{event_id}/replay")
     async def replay(request: Request, event_id: str) -> dict:
         container.authenticator.authorize_admin(request)
@@ -24,6 +58,15 @@ def create_outbox_router(container: ServiceContainer) -> APIRouter:
         if not await container.outbox_store.replay(event_id):
             raise HTTPException(status_code=404, detail="Outbox event not found")
         return {"replayed": True, "event_id": event_id}
+
+    @router.post("/{event_id}/discard")
+    async def discard(request: Request, event_id: str) -> dict:
+        container.authenticator.authorize_admin(request)
+        if container.outbox_store is None:
+            raise HTTPException(status_code=503, detail="Outbox store is not configured")
+        if not await container.outbox_store.discard(None, event_id):
+            raise HTTPException(status_code=404, detail="Outbox event not found")
+        return {"discarded": True, "event_id": event_id}
 
     @router.post("/replay-failed")
     async def replay_failed(request: Request, limit: int = 100) -> dict:
