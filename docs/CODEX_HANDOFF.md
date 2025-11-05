@@ -53,7 +53,7 @@
 15. 离线回归运行器与 Golden Dataset：`GoldenItem`/`RegressionRun`/`QualityReport` 领域模型、`RegressionRepository`（memory/sqlalchemy 双实现，`golden_items` 与 `regression_runs` 表 + Alembic `0008`）、`RegressionRunner` 离线回归（加载 Golden→召回+分类评估→质量门禁→报告持久化）、`/v1/regression/*` API（Golden 维护 + 触发回归 + 运行记录查询）。详见第 8 节增量 4 记录。
 16. Connector SDK 与企业连接起点：`Connector` ABC（health/invoke/compensate）与 `ConnectorRegistry`（内存注册、租户隔离、动作白名单、disabled 校验）、`ConnectorContext`（幂等键/任务/追踪/操作者）、`CredentialReference` 凭据引用模型（只存 vault 引用不落机密）、通用签名 `WebhookSignatureVerifier` + `WebhookAdapter`（HMAC-SHA256、泛化事件规范化 `WebhookDelivery`→`to_ticket_event`）、`OpenAPIAdapter`（HTTP 调用带幂等键头、有界重试退避、令牌桶限流、审计回调）、`/v1/connectors/*` API。不引入新迁移（注册表内存态，与 PromptRegistry 一致）。详见第 8 节增量 1（阶段 C）记录。
 17. 连接器注册持久化与工单写回闭环：`ConnectorRepository` Protocol（memory/sqlalchemy 双实现 + `connector_specs` 表与 Alembic `0009`）、注册表 `ConnectorRegistry` 支持从仓储装载（`load_from_repository`/`set_adapter`）、`OpenAPIAdapter` 持久化重建工厂 `build_openapi_adapter`、`TicketWritebackService`（已审批/已发布工单按幂等键 `wb-{ticket_id}` 写回 CRM/工单系统，含审计、连接器解析与失败报错）、`POST /v1/connectors` 注册、`DELETE /v1/connectors/{id}`、`POST /v1/tickets/{id}/writeback` 写回接口。打通“读取→AI→审批→写回”闭环。详见第 8 节增量 2（阶段 C）记录。
-18. 全仓测试基线，目前 `652 passed`（`tests/platform` 186 项）。
+18. 全仓测试基线，目前 `693 passed`（`tests/platform` 227 项）。
 19. **RBAC + Policy Engine（阶段 C 增量 3）**：`Role`/`RoleAssignment`/`Permission` 领域模型（tenant 隔离、built-in 角色）、`ActionPolicy` 声明式动作策略（fail-closed、风险级、审批要求、角色/权限 allow-list），`PolicyEngine` 组合角色权限 + 动作策略 + OpenFGA 式关系检查给出决策（allowed / denied / requires_approval）；`OpenFGAClient` 提供内存态关系 tuple CRUD + check（可替换真实 OpenFGA 服务）；`RbacRepository` memory/sqlalchemy 双实现 + `rbac_roles`/`rbac_role_assignments` 表（Alembic `0010`）；`/v1/rbac/*` 接口（角色 CRUD、权限设置、用户-角色赋值、`/authorize` 授权检查）。
 20. **租户配额管理（阶段 C 增量 4）**：`TenantQuota` 领域模型（月度预算/告警阈值/硬上限/enabled 开关）+ `TenantQuotaRepository` Protocol（memory/sqlalchemy 双实现）+ `tenant_quotas` 表（Alembic `0011`）；`QuotaAwareModelGateway` 扩展逐租户配额覆盖（`_resolve_budget` 返回 budget+enforce，禁用配额即不强制）；`/v1/quotas/*` 配额管理接口（PUT/GET/list/DELETE）与 `/v1/console/overview` 管理控制台聚合概览（配额+成本+DLQ 失败数+审计事件）。
 21. **高风险动作审计闭环 + 人工授权边界（阶段 C 增量 5）**：`AuthorizationDecision` 授权审计记录（principal/action/outcome/reasons/approval_ref）+ `HighRiskActionAuthorizer` 授权门禁——解析调用者角色/权限、经 `PolicyEngine` 求值、强制执行"高风险动作须人工审批"边界（工单未到 READY_TO_PUBLISH/未获批 → DENIED），并把每次授权（放行与拒绝）写入审计事件（`{action}.authorization`，含 outcome/reasons/approval_ref/actor），回答"谁执行/为何允许"；`PolicyEngine` 修正为先验权限后验审批（无权限者无法借已审批工单绕过）；写回端点接入门禁（`PermissionError`→403）+ `POST /v1/authorize` 显式授权审计接口。
@@ -72,7 +72,7 @@ python -m pytest tests/platform -q
 python -m black --check --line-length 100 agentforge tests alembic
 python -m isort --check-only --profile black agentforge tests alembic
 python -m flake8 --max-line-length=100 --extend-ignore=E203,W503 agentforge tests alembic
-python -m mypy agentforge/platform/application/reranker.py agentforge/platform/application/retrieval_metrics.py agentforge/platform/application/retrieval_evaluation_service.py agentforge/platform/application/classification_evaluation_service.py agentforge/platform/application/quality_gate_service.py agentforge/platform/application/prompt_registry.py agentforge/platform/application/version_registry.py agentforge/platform/application/regression_runner.py agentforge/platform/application/connector_registry.py agentforge/platform/application/webhook_adapter.py agentforge/platform/application/openapi_adapter.py agentforge/platform/application/ticket_writeback.py agentforge/platform/application/quota_service.py agentforge/platform/domain/retrieval.py agentforge/platform/domain/quality.py agentforge/platform/domain/regression.py agentforge/platform/domain/connector.py agentforge/platform/domain/knowledge.py agentforge/platform/domain/tenant_quota.py agentforge/platform/application/knowledge_service.py agentforge/platform/application/ports.py agentforge/platform/api/evaluation_router.py agentforge/platform/api/release_router.py agentforge/platform/api/regression_router.py agentforge/platform/api/connector_router.py agentforge/platform/api/knowledge_router.py agentforge/platform/api/support_router.py agentforge/platform/api/rbac_router.py agentforge/platform/api/quota_router.py agentforge/platform/api/console_router.py agentforge/platform/infrastructure/memory_regression_repository.py agentforge/platform/infrastructure/sqlalchemy_regression_repository.py agentforge/platform/infrastructure/memory_connector_repository.py agentforge/platform/infrastructure/sqlalchemy_connector_repository.py agentforge/platform/infrastructure/memory_rbac_repository.py agentforge/platform/infrastructure/sqlalchemy_rbac_repository.py agentforge/platform/infrastructure/memory_tenant_quota_repository.py agentforge/platform/infrastructure/sqlalchemy_tenant_quota_repository.py agentforge/platform/domain/rbac.py agentforge/platform/domain/policy.py agentforge/platform/application/policy_engine.py agentforge/platform/application/openfga_adapter.py agentforge/platform/application/builtin_policies.py agentforge/platform/infrastructure/db/models.py agentforge/platform/runtime.py agentforge/platform/domain/authorization.py agentforge/platform/application/high_risk_authorizer.py agentforge/platform/api/authorization_router.py agentforge/platform/infrastructure/memory_ticket_repository.py agentforge/platform/infrastructure/sqlalchemy_ticket_repository.py agentforge/platform/infrastructure/memory_cost_repository.py agentforge/platform/infrastructure/sqlalchemy_cost_repository.py agentforge/platform/infrastructure/outbox_store.py agentforge/platform/infrastructure/memory_outbox_store.py agentforge/platform/api/outbox_router.py agentforge/platform/application/dashboard_service.py agentforge/platform/infrastructure/memory_audit_repository.py agentforge/platform/infrastructure/sqlalchemy_audit_repository.py agentforge/platform/api/audit_router.py agentforge/platform/domain/reporting.py agentforge/platform/application/report_service.py agentforge/platform/infrastructure/memory_scheduled_report_repository.py agentforge/platform/infrastructure/sqlalchemy_scheduled_report_repository.py agentforge/platform/infrastructure/memory_report_run_repository.py agentforge/platform/infrastructure/sqlalchemy_report_run_repository.py
+python -m mypy agentforge/platform/application/reranker.py agentforge/platform/application/retrieval_metrics.py agentforge/platform/application/retrieval_evaluation_service.py agentforge/platform/application/classification_evaluation_service.py agentforge/platform/application/quality_gate_service.py agentforge/platform/application/prompt_registry.py agentforge/platform/application/version_registry.py agentforge/platform/application/regression_runner.py agentforge/platform/application/connector_registry.py agentforge/platform/application/webhook_adapter.py agentforge/platform/application/openapi_adapter.py agentforge/platform/application/ticket_writeback.py agentforge/platform/application/quota_service.py agentforge/platform/domain/retrieval.py agentforge/platform/domain/quality.py agentforge/platform/domain/regression.py agentforge/platform/domain/connector.py agentforge/platform/domain/knowledge.py agentforge/platform/domain/tenant_quota.py agentforge/platform/application/knowledge_service.py agentforge/platform/application/ports.py agentforge/platform/api/evaluation_router.py agentforge/platform/api/release_router.py agentforge/platform/api/regression_router.py agentforge/platform/api/connector_router.py agentforge/platform/api/knowledge_router.py agentforge/platform/api/support_router.py agentforge/platform/api/rbac_router.py agentforge/platform/api/quota_router.py agentforge/platform/api/console_router.py agentforge/platform/infrastructure/memory_regression_repository.py agentforge/platform/infrastructure/sqlalchemy_regression_repository.py agentforge/platform/infrastructure/memory_connector_repository.py agentforge/platform/infrastructure/sqlalchemy_connector_repository.py agentforge/platform/infrastructure/memory_rbac_repository.py agentforge/platform/infrastructure/sqlalchemy_rbac_repository.py agentforge/platform/infrastructure/memory_tenant_quota_repository.py agentforge/platform/infrastructure/sqlalchemy_tenant_quota_repository.py agentforge/platform/domain/rbac.py agentforge/platform/domain/policy.py agentforge/platform/application/policy_engine.py agentforge/platform/application/openfga_adapter.py agentforge/platform/application/builtin_policies.py agentforge/platform/infrastructure/db/models.py agentforge/platform/runtime.py agentforge/platform/domain/authorization.py agentforge/platform/application/high_risk_authorizer.py agentforge/platform/api/authorization_router.py agentforge/platform/infrastructure/memory_ticket_repository.py agentforge/platform/infrastructure/sqlalchemy_ticket_repository.py agentforge/platform/infrastructure/memory_cost_repository.py agentforge/platform/infrastructure/sqlalchemy_cost_repository.py agentforge/platform/infrastructure/outbox_store.py agentforge/platform/infrastructure/memory_outbox_store.py agentforge/platform/api/outbox_router.py agentforge/platform/application/dashboard_service.py agentforge/platform/infrastructure/memory_audit_repository.py agentforge/platform/infrastructure/sqlalchemy_audit_repository.py agentforge/platform/api/audit_router.py agentforge/platform/domain/reporting.py agentforge/platform/domain/cron.py agentforge/platform/application/report_service.py agentforge/platform/infrastructure/memory_scheduled_report_repository.py agentforge/platform/infrastructure/sqlalchemy_scheduled_report_repository.py agentforge/platform/infrastructure/memory_report_run_repository.py agentforge/platform/infrastructure/sqlalchemy_report_run_repository.py
 python -m alembic upgrade head --sql
 ```
 
@@ -102,7 +102,7 @@ python -m alembic upgrade head --sql
 - Connector SDK、通用签名 Webhook Adapter 与 OpenAPI Adapter 已上线（见第 8 节阶段 C 增量 1 记录）；阶段 C 增量 2 已将连接器注册持久化（`ConnectorRepository` + `connector_specs` 表 + Alembic `0009`）并落地了基于 `TicketWritebackService` 的 CRM/工单写回闭环。但写回连接器仍是面向 HTTP/OpenAPI 的通用实现，尚无真实 CRM（Salesforce 等）、工单系统（Zendesk 等）或具体业务数据库的原生适配器，凭据仍只存引用、无真实 vault/密钥后端。
 - 已有 RBAC（角色/权限/赋值）、Policy Engine（动作策略/风险/审批要求）、内存态 OpenFGA 式关系检查（阶段 C 增量 3）与高风险动作授权审计闭环 + 人工授权边界（`HighRiskActionAuthorizer` + `POST /v1/authorize` + 写回门禁 403，阶段 C 增量 5）；弹租户配额管理（`TenantQuota` + `/v1/quotas`）与管理控制台聚合概览（`/v1/console/overview`，含配额/成本/DLQ/审计，见第 8 节阶段 C 增量 4 记录）。但仍缺真实 OpenFGA 服务、企业级身份/身份提供方对接、管理员权限矩阵和策略热加载/审计策略变更。
 - 配额 enforce 为进程内估算（基于模型元数据 estimated_cost，达到上限后拒绝新调用）；成本估算与 DLQ/审计统计均基于进程内存态仓储/事件，尚无真实 CRM 集成、真实 DB 聚合查询或近实时运营看板。API Key 仍为静态映射（见下）。
-- 管理控制台基础页面接口已落地（阶段 D 增量 1：客服工作台 `/v1/console/tickets`、审批收件箱 `/v1/console/inbox`、运营成本总览 `/v1/console/costs`、任务状态计数、DLQ 管理 `/v1/outbox/*`）；阶段 D 增量 2 已落地 Outbox/DLQ/任务状态的列表、详情、计数与丢弃操作（`/v1/outbox/events`、`/events/count`、`/events/{event_id}`、`/events/{event_id}/discard`，同时支持 memory/sqlalchemy 双实现）；阶段 D 增量 3 已落地成本/配额/模型分布/质量指标看板接口（`/v1/console/cost-trend`、`/model-distribution`、`/quality`、`/dashboard`）；阶段 D 增量 4 已落地审计查询（`/v1/audit` 过滤/分页 + `/v1/console/audit` admin 多租户）、租户配置（`/v1/console/tenants`）与连接器管理（`/v1/console/connectors` + `/connectors/{id}/enabled` 启停）；阶段 D 增量 5 已落地运营报表导出与定时化（`/v1/console/reports/export` JSON/CSV 即时导出 + `/reports/schedule`、`/reports/schedules`、`/reports/run-due` 排程，`ScheduledReportRepository` + `scheduled_reports` 表 Alembic `0012`）；阶段 D 增量 6 已落地运营报表产物持久化与历史查询（`/v1/console/reports/runs` 历史列表 + `/reports/runs/{run_id}` 按需取回 JSON/CSV，`ReportRunRepository` + `report_runs` 表 Alembic `0013`）。仍缺前端页面实现、审批收件箱决策详情页、成本/质量指标看板可视化与按日/按模型趋势图，以及 cron 表达式排程与 run 保留/清理策略。
+- 管理控制台基础页面接口已落地（阶段 D 增量 1：客服工作台 `/v1/console/tickets`、审批收件箱 `/v1/console/inbox`、运营成本总览 `/v1/console/costs`、任务状态计数、DLQ 管理 `/v1/outbox/*`）；阶段 D 增量 2 已落地 Outbox/DLQ/任务状态的列表、详情、计数与丢弃操作（`/v1/outbox/events`、`/events/count`、`/events/{event_id}`、`/events/{event_id}/discard`，同时支持 memory/sqlalchemy 双实现）；阶段 D 增量 3 已落地成本/配额/模型分布/质量指标看板接口（`/v1/console/cost-trend`、`/model-distribution`、`/quality`、`/dashboard`）；阶段 D 增量 4 已落地审计查询（`/v1/audit` 过滤/分页 + `/v1/console/audit` admin 多租户）、租户配置（`/v1/console/tenants`）与连接器管理（`/v1/console/connectors` + `/connectors/{id}/enabled` 启停）；阶段 D 增量 5 已落地运营报表导出与定时化（`/v1/console/reports/export` JSON/CSV 即时导出 + `/reports/schedule`、`/reports/schedules`、`/reports/run-due` 排程，`ScheduledReportRepository` + `scheduled_reports` 表 Alembic `0012`）；阶段 D 增量 6 已落地运营报表产物持久化与历史查询（`/v1/console/reports/runs` 历史列表 + `/reports/runs/{run_id}` 按需取回 JSON/CSV，`ReportRunRepository` + `report_runs` 表 Alembic `0013`）；阶段 D 增量 7 已落地报表 run 保留/清理策略（`/v1/console/reports/runs/prune` 按保留天数清理，`ReportRunRepository.delete_older_than` 双实现）；阶段 D 增量 8 已落地排程保留策略配置持久化与 `run_due` 自动联动清理（`ScheduledReport.retention_days` + `scheduled_reports.retention_days` Alembic `0014`）；阶段 D 增量 9 已落地排程暂停/恢复（`POST /v1/console/reports/schedule/{report_id}/enabled`）与全局默认保留策略（`run_due` 对未显式配置保留的排程按全局默认清理，环境变量 `AGENTFORGE_REPORT_DEFAULT_RETENTION_DAYS`）；阶段 D 增量 10 已落地 cron 表达式排程（`domain/cron.py` 自研 5 段解析器，`cadence` 支持 cron 表达式或 daily/weekly/monthly 标签）。仍缺前端页面实现、审批收件箱决策详情页、成本/质量指标看板可视化与按日/按模型趋势图，以及 `run_due` 异步化（接入 Temporal/worker）。
 - 缺少数据集版本（Golden Dataset 的版本化快照）与跨进程一致的发布历史；Prompt/模型版本当前为进程内存注册表（进程重启即清空），未落库、未有跨进程一致性（见第 8 节增量 3、增量 4 记录）。
 - 缺少 PostgreSQL、Kafka、Temporal 的真实端到端集成测试和故障演练。
 - 缺少生产部署、Helm、Terraform、备份、升级、回滚和灾备方案。
@@ -177,7 +177,7 @@ python -m alembic upgrade head --sql
 
 ## 8. 增量完成记录
 
-阶段 A（7 个增量）、阶段 B（4 个增量）、阶段 C（5 个增量）均已完成；阶段 D 增量 1（管理控制台基础页面接口）、增量 2（Outbox/DLQ/任务状态/重试与故障操作接口）、增量 3（成本/配额/模型分布/质量指标看板接口）、增量 4（审计查询、租户配置与连接器管理页面接口）、增量 5（运营报表导出与定时化）与增量 6（运营报表产物持久化与历史查询）已完成。阶段 B 增量 1-4、阶段 C 增量 1-5、阶段 D 增量 1-6 的完成记录如下；下一步进入阶段 D 增量 7（cron 表达式排程、run 保留/清理策略，或剩余管理页面收尾）。
+阶段 A（7 个增量）、阶段 B（4 个增量）、阶段 C（5 个增量）均已完成；阶段 D 增量 1（管理控制台基础页面接口）、增量 2（Outbox/DLQ/任务状态/重试与故障操作接口）、增量 3（成本/配额/模型分布/质量指标看板接口）、增量 4（审计查询、租户配置与连接器管理页面接口）、增量 5（运营报表导出与定时化）、增量 6（运营报表产物持久化与历史查询）、增量 7（报表 run 保留/清理策略）、增量 8（排程保留策略持久化 + `run_due` 自动联动清理）、增量 9（排程暂停/恢复 + 全局默认保留策略）、增量 10（cron 表达式排程）、增量 11（报表 run 归档 + 批量 ZIP 归档导出）、增量 12（归档与保留清理联动）、增量 13（报表管理操作审计日志接入）、增量 14（ZIP 归档导出流式化）与增量 15（报表 run 列表游标分页）已完成。阶段 B 增量 1-4、阶段 C 增量 1-5、阶段 D 增量 1-15 的完成记录如下；下一步进入阶段 D 增量 16（`run_due` 移入 worker 异步化，或剩余管理页面收尾）。
 
 ### 阶段 D 增量 4 完成记录（2026-09-18）
 
@@ -237,6 +237,130 @@ python -m alembic upgrade head --sql
 - 验证：`tests/platform` 186 passed（净 +5）、全仓 652 passed（净 +5）、Black/isort/Flake8 通过、增量相关源文件 mypy 通过（`Success: no issues found`）；新增 5 项到 `tests/platform/test_reports.py`（memory run 仓储 CRUD/列表、sqlalchemy run 仓储 CRUD/列表、ReportService 落盘+历史列表、`/reports/runs` 历史与按需取回 JSON/CSV、`/reports/runs` 过滤与 404）。`alembic heads` 为 `20260918_0013`。
 - 剩余风险：`run_due` 仍为同步执行，未接入 Temporal/worker 异步任务；排程 run 无清理/保留策略（run 不断累积）；cadence 仍为简化标签（daily/weekly/monthly），未支持 cron 表达式；真实 PostgreSQL 上 `report_runs` 写入与历史查询未在 Docker 端到端跑通。
 - 下一步：阶段 D 增量 7（cron 表达式排程、run 保留/清理策略，或剩余管理页面收尾）。
+
+### 阶段 D 增量 7 完成记录（2026-09-18）
+
+- 范围：报表 run 保留/清理策略——提供按保留天数清理历史报表 run 的能力，避免持久化 run 无限累积；支持全局或按租户清理。
+- 端口：`application/ports.py` `ReportRunRepository` Protocol 新增 `delete_older_than(cutoff, tenant_id=None) -> int`（删除 `generated_at < cutoff` 的 run，`tenant_id` 可选则全局清理）。
+- 仓储实现（memory + sqlalchemy 双实现）：
+  - `memory_report_run_repository.py`：过滤 `generated_at < cutoff`（可按 tenant）后从内存 dict 移除，返回删除数。
+  - `sqlalchemy_report_run_repository.py`：先 `select(run_id)` 统计匹配行，再按同条件 `delete`，`commit` 后返回删除行数（避免依赖 `CursorResult.rowcount` 类型）。
+- 应用：`application/report_service.py` `ReportService` 新增 `prune_runs(retention_days, tenant_id=None)`，计算 `cutoff = now - retention_days` 调用 `delete_older_than`，返回 `{retention_days, cutoff, tenant_id, removed}` 摘要。
+- 接口（`api/console_router.py`，`_authorize_admin` 鉴权）：`POST /v1/console/reports/runs/prune`（body: `retention_days` 默认 30、`tenant_id` 可选）。
+- 验证：`tests/platform` 190 passed（净 +4）、全仓 656 passed（净 +4）、Black/isort/Flake8 通过、增量相关源文件 mypy 通过（`Success: no issues found`）；新增 4 项到 `tests/platform/test_reports.py`（memory `delete_older_than` 全局/按租户、sqlalchemy `delete_older_than`、`ReportService.prune_runs`、`/reports/runs/prune` 端到端）。本增量无 schema 变更，`alembic heads` 保持 `20260918_0013`。
+- 剩余风险：`run_due` 仍为同步执行，未接入 Temporal/worker 异步任务；cadence 仍为简化标签（daily/weekly/monthly），未支持 cron 表达式；保留策略是显式按需清理（未与运行频次自动联动、无保留策略配置持久化）；真实 PostgreSQL 上清理删除未在 Docker 端到端跑通。
+- 下一步：阶段 D 增量 8（cron 表达式排程、保留策略配置持久化，或剩余管理页面收尾）。
+
+### 阶段 D 增量 8 完成记录（2026-09-18）
+
+- 范围：排程保留策略配置持久化 + `run_due` 自动联动清理——为每个排程配置 `retention_days` 并持久化，运行到期排程后按策略自动清理该租户过期报表 run，避免历史 run 无限累积。
+- 领域模型：`domain/reporting.py` `ScheduledReport` 新增 `retention_days: int | None = None`（None 表示该排程生成后不自动清理）。
+- ORM/迁移：`models.py` `ScheduledReportRecord` 新增 `retention_days` 列（`Integer` nullable），补 `from_domain`/`to_domain` 双向映射；`alembic/versions/20260918_0014_scheduled_report_retention.py`（down_revision=`20260918_0013`）`op.add_column`（downgrade `op.drop_column`）。`alembic heads` 推进到 `20260918_0014`。
+- 应用：`application/report_service.py`：
+  - `schedule(..., retention_days=None)` 接受并持久化保留策略。
+  - `run_due()` 对到期排程生成后，按该排程 `retention_days` 调用 `prune_runs` 清理该租户过期 run（同租户多排程取最严格/最小 retention；返回新增 `pruned` 计数字段）。
+- 接口：`api/console_router.py` `POST /v1/console/reports/schedule` body 支持 `retention_days`（非法值返回 400）。
+- 验证：`tests/platform` 194 passed（净 +4）、全仓 660 passed（净 +4）、Black/isort/Flake8 通过、增量相关源文件 mypy 通过（`Success: no issues found`）；新增 4 项到 `tests/platform/test_reports.py`（memory/sqlalchemy 排程仓库 `retention_days` 持久化往返、`ReportService.run_due` 按保留策略自动清理旧 run、`/reports/schedule` 支持保留天数与非法值 400）。`alembic heads` 为 `20260918_0014`。
+- 剩余风险：`run_due` 仍为同步执行，未接入 Temporal/worker 异步任务；cadence 仍为简化标签，未支持 cron 表达式；保留策略已随排程持久化但无全局默认值配置（未设置 `retention_days` 的排程不自动清理）；真实 PostgreSQL 上 `scheduled_reports.retention_days` 加列迁移与自动清理未在 Docker 端到端跑通。
+- 下一步：阶段 D 增量 9（cron 表达式排程、全局保留策略默认值，或剩余管理页面收尾）。
+
+### 阶段 D 增量 9 完成记录（2026-09-18）
+
+- 范围：排程暂停/恢复开关 + 全局默认保留策略——为排程管理补齐「暂停而不删除」能力，并为未显式设置 `retention_days` 的到期排程提供平台级默认保留窗口，让 `run_due` 自动清理对所有排程兜底，杜绝历史 run 无限累积。
+- 应用：`application/report_service.py`：
+  - `ReportService.__init__` 新增 `default_retention_days: int | None = None` 构造注入。
+  - `run_due(fmt=..., default_retention_days=None)` 对每个到期排程先取显式 `retention_days`，为空则回退到本次调用覆盖值或服务级全局默认；同租户多排程仍取最严格（最小）保留。
+  - 新增 `set_schedule_enabled(report_id, enabled)`——复用 `get`+`save` 切换 `enabled`（memory/sqlalchemy 双实现均支持；`list_due` 已按 `enabled` 过滤，暂停后不再生成 run，但配置保留）。缺失排程抛 `KeyError`。
+- 接口：`api/console_router.py` 新增 `POST /v1/console/reports/schedule/{report_id}/enabled`（body `{"enabled": bool}`，缺失排程 404）；`POST /v1/console/reports/run-due` 支持 body `{"default_retention_days": N}`（非法值 400）。
+- 装配：`runtime.py` `ServiceContainer` 新增 `default_report_retention_days` 注入；`build_memory_container`/`build_sqlalchemy_container` 从环境变量 `AGENTFORGE_REPORT_DEFAULT_RETENTION_DAYS` 读取全局默认保留天数（缺失/非法则关闭兜底）。
+- 验证：`tests/platform` 199 passed（净 +5）、全仓 665 passed（净 +5）、Black/isort/Flake8 通过、增量相关源文件 mypy 通过（`Success: no issues found`）；新增 5 项到 `tests/platform/test_reports.py`（memory 排程暂停/恢复且暂停不再入 `list_due`、缺失排程暂停抛 `KeyError`、`run_due` 全局默认保留清理旧 run、`/reports/schedule/{id}/enabled` 端点启停与 404、`/reports/run-due` 默认保留天数覆盖与非法值 400）。`alembic heads` 保持 `20260918_0014`（本增量无 schema 变更）。
+- 剩余风险：`run_due` 仍为同步执行，未接入 Temporal/worker 异步任务；cadence 仍为简化标签，未支持 cron 表达式；全局默认保留策略仅在创建时未显式设置 `retention_days` 的排程上生效（不覆盖已显式配置的排程），且依赖环境变量注入；真实 PostgreSQL 上自动清理未在 Docker 端到端跑通。
+- 下一步：阶段 D 增量 10（cron 表达式排程、报表产物归档/导出下载页收尾，或剩余管理页面收尾）。
+
+### 阶段 D 增量 10 完成记录（2026-09-18）
+
+- 范围：cron 表达式排程——让报表排程的 cadence 支持标准 5 段 cron 表达式（如 `0 2 * * *`、`*/15 * * * *`），同时保持简化标签（daily/weekly/monthly）兼容；`run_due` 按 cron 计算准确的 next_run，替代原来的固定标签推进。
+- 领域：新增 `agentforge/platform/domain/cron.py`：
+  - `CronField.parse` 支持 `*`、`*/step`、`a-b`、`a,b`、单值，非法值（越界/空/步进非正）抛 `CronExpressionError`。
+  - `CronSchedule` 解析 5 字段（minute/hour/day-of-month/month/day-of-week），day-of-week 0-7（0 和 7 均为周日）；当日与周字段同时受限时按经典 cron OR 规则匹配，仅一方受限时按该方匹配；`matches(dt)` 判断给定时刻是否命中，`next_after(dt)` 带 5 年有界前向扫描返回严格晚于 dt 的下一次命中。
+  - `is_cron_cadence(cadence)` 判断字符串是否形如 5 段 cron 表达式。
+- 应用：`application/report_service.py` `_advance_next_run(cadence, last_run)`（取代原 `_next_run_for`）——若 cadence 为 cron 表达式则用 `CronSchedule.next_run_from` 计算下一次命中，否则沿用 daily/weekly/monthly 标签推进；`run_due` 调用处同步更新。
+- 接口：`api/console_router.py` `POST /v1/console/reports/schedule` 校验 cadence：cron 表达式非法（解析失败）返回 400，非 daily/weekly/monthly 且非 cron 的标签也返回 400。
+- 验证：`tests/platform` 206 passed（净 +7）、全仓 680 passed（净 +7；一次全仓 run 出现 1 个既有 circuit_breaker 计时类偶发失败，重跑通过，属 pre-existing flaky）、Black/isort/Flake8 通过、增量相关源文件 mypy 通过（`Success: no issues found`）；新增 7 项到 `tests/platform/test_reports.py`（cron 解析与 next、非法表达式、`is_cron_cadence`、service 用 cron cadence 推进 next_run、`/reports/schedule` cron cadence 接受与非法 400、工作日受限与 OR 规则语义）。`alembic heads` 保持 `20260918_0014`（本增量无 schema 变更，`cadence` 字段已是 str）。
+- 剩余风险：`run_due` 仍为同步执行，未接入 Temporal/worker 异步任务；cron 计算为自研轻量实现（未被第三方 cron 库交叉验证，5 年有界扫描）；未支持秒级/年字段（`@reboot` 等宏未实现）；真实 PostgreSQL 上排程运行未在 Docker 端到端跑通。
+- 下一步：阶段 D 增量 12（`run_due` 移入 worker 异步化、归档与保留联动，或剩余管理页面收尾）。
+
+### 阶段 D 增量 11 完成记录（2026-09-18）
+
+- 范围：报表产物归档状态 + 批量 ZIP 归档导出——为持久化的报表 run 增加 `archived` 标记（可从默认活跃列表隐藏/恢复），并提供把多个 run 打包为 ZIP 的归档导出能力，完善运营报表生命周期管理。
+- 领域：`domain/reporting.py` `ReportRun` 增加 `archived: bool = False`（默认非归档）。
+- 持久化：`infrastructure/db/models.py` `ReportRunRecord` 增加 `archived` 列（`Boolean`, nullable=False, default False）+ `from_domain`/`to_domain` 映射；新增 `alembic/versions/20260918_0015_report_run_archive.py` 加列迁移（0014 -> 0015）。
+- 端口：`application/ports.py` `ReportRunRepository` 增加 `set_archived(run_id, archived)`，`list` 增加 `archived: bool | None` 过滤参数。
+- 仓储：`memory_report_run_repository.py` 直接更新内存记录；`sqlalchemy_report_run_repository.py` 以 UPDATE 语句切换 archived 位、`list` 按 archived 过滤（沿用 select + scalars 模式）。
+- 应用：`application/report_service.py` `list_runs` 支持 `archived` 过滤；新增 `archive_run(run_id, archived)`（缺失抛 `KeyError`）与 `export_archive(tenant_id, limit) -> (bytes, info)`，用 `zipfile`（标准库，无新依赖）把每个 run 按其原生格式（json/csv）写入 `run_{run_id}.{ext}` 并返回 ZIP 字节 + ArchiveInfo 清单。
+- 接口：`api/console_router.py` `POST /v1/console/reports/runs/{run_id}/archive`（body `{"archived": bool}`，缺失 404）、`GET /v1/console/reports/runs` 增加 `archived` 过滤参数、`GET /v1/console/reports/runs/archive` 返回 `application/zip`；`/runs/archive` 字面路径注册在 `/{run_id}` 之前避免路径抢占。
+- 验证：`tests/platform` 210 passed（净 +4）、全仓 680 passed（净 +4）、Black/isort/Flake8 通过、7 个相关源文件 mypy 通过（`Success: no issues found`）；新增 4 项到 `tests/platform/test_reports.py`（service archive_run 归档/恢复/缺失、export_archive 的 ZIP 内容与清单、内存/sqlalchemy 仓储 set_archived 与 list 过滤、`/reports/runs/{id}/archive` 与 `/reports/runs/archive` 端点）。
+- alembic head 现在为 `20260918_0015`。
+- 剩余风险：`/reports/runs/archive` 一次性打包到内存（大数据量 run 需流式/对象存储）；`run_due` 仍同步；归档仅为标记，未与保留清理（prune）联动（已归档 run 仍会按 retention 被清理）；真实 PostgreSQL 端到端未验证。
+- 下一步：阶段 D 增量 12（`run_due` 移入 worker 异步化、归档与保留联动、或剩余管理页面收尾）。
+### 阶段 D 增量 12 完成记录（2026-09-18）
+
+- 范围：归档与保留清理联动——保留策略清理（prune / `run_due` 自动清理）默认跳过已归档的报表 run，使"归档"真正成为合规长期保留的保护；同时暴露 `include_archived=True` 显式强制清理已归档 run 的选项。
+- 端口：`application/ports.py` `ReportRunRepository.delete_older_than` 增加 `include_archived: bool = False` 参数，默认 False（仅删未归档）。
+- 仓储：`memory_report_run_repository.py` 过滤 `(include_archived or not r.archived)`；`sqlalchemy_report_run_repository.py` 在 select_ids 与 DELETE 语句上对 `not include_archived` 追加 `ReportRunRecord.archived.is_(False)`（沿用 count-then-delete 模式）。
+- 应用：`application/report_service.py` `prune_runs(retention_days, tenant_id=None, include_archived=False)` 透传参数并在返回中带 `include_archived`；`run_due` 内部调用的自动清理不传该参数，从而默认保护已归档 run。
+- 接口：`api/console_router.py` `POST /v1/console/reports/runs/prune` 支持 body `include_archived`（bool，默认 False）。
+- 验证：`tests/platform` 214 passed（净 +4）、全仓 680 passed（净 +4）、Black/isort/Flake8 通过、5 个相关源文件 mypy 通过（`Success: no issues found`）；新增 4 项到 `tests/platform/test_reports.py`：默认 prune 跳过已归档 run 且在强 `include_archived` 下删除、memory 仓储默认/强制清理行为、sqlalchemy 仓储默认/强制清理行为、`/reports/runs/prune` 端点默认保留与强制清理。
+- alembic head 保持为 `20260918_0015`（本增量无 schema 变更）。
+- 剩余风险：已归档 run 与保留清理解耦完成，但不影响显式 `include_archived` 手动兜底清理；`run_due` 仍同步；真实 PostgreSQL 端到端未验证。
+- 下一步：阶段 D 增量 13（`run_due` 移入 worker 异步化、或剩余管理页面收尾）。
+
+### 阶段 D 增量 13 完成记录（2026-09-18）
+
+- 范围：报表关键管理操作审计日志接入——为报表模块的变更型管理操作（生成、排程创建/删除/启停、run 归档/恢复、run 清理、归档导出、run_due 批量执行）统一写入审计事件，满足横切审计与合规追溯需求（纯后端、可独立闭环；`run_due` 异步化需外部 worker，前端管理页超出后端范围，均不在本增量）。
+- 应用：`application/report_service.py` 新增私有辅助 `_record_audit(tenant_id, action, resource_type="report", resource_id="", risk_level=RiskLevel.LOW, payload=None)`，复用 `AuditEvent`/`RiskLevel`，统一 `actor_type="admin"`/`actor_id="console"`（对 `self._audit` 为 None 时静默跳过，保持无审计仓储可装配）。
+- 接入点（action 分类）：
+  - `generate` → `report.generate`（payload: report_type/format/rows/scheduled_report_id）
+  - `schedule` → `report.schedule.create`（payload: report_type/cadence/retention_days；resource_id=report_id）
+  - `delete_schedule` → `report.schedule.delete`（resource_id=report_id；先取 sched 以得 tenant_id，缺失则 "system"）
+  - `set_schedule_enabled` → `report.schedule.enable` / `report.schedule.disable`（payload: enabled）
+  - `archive_run` → `report.run.archive` / `report.run.unarchive`（payload: archived）
+  - `prune_runs` → `report.runs.prune`（RiskLevel.MEDIUM；payload: retention_days/cutoff/include_archived/removed）
+  - `export_archive` → `report.archive.export`（payload: count/tenant_id/limit）
+  - `run_due` → `report.run_due`（tenant_id=None 汇总；payload: generated/pruned）
+- 验证：`tests/platform` 221 passed（净 +7）、全仓 687 passed（净 +7）、Black/isort/Flake8 通过、增量相关源文件 mypy 通过（`Success: no issues found`）；新增 8 项到 `tests/platform/test_reports.py`：schedule 创建/删除/启停、generate、archive/unarchive、prune、run_due 写审计及 action 分类与 payload/risk_level/actor 断言。
+- alembic head 保持为 `20260918_0015`（本增量无 schema 变更）。
+- 剩余风险：`run_due` 仍同步；报表 ZIP 导出一次性加载到内存；审计事件真实性依赖审计仓储装配（服务层对 None 静默跳过）；真实 PostgreSQL 端到端未验证。
+- 下一步：阶段 D 增量 14（`run_due` 移入 worker 异步化、或剩余管理页面收尾）。
+
+
+### 阶段 D 增量 14 完成记录（2026-09-18）
+
+- 范围：报表 ZIP 归档导出流式化——把报表 run 打包 ZIP 归档由"整包 bytes 缓冲到内存后一次性返回"改为"写入临时文件后经 `StreamingResponse` 分块流式下发"，消除大归档常驻内存的剩余风险（纯后端、可独立闭环）。
+- 应用：`application/report_service.py` 把原 `export_archive` 的 ZIP 构建逻辑抽取为私有 `_write_archive(sink, tenant_id, limit)`，写入任意可写二进制 sink 并返回 ArchiveInfo JSON：
+  - `export_archive(...)`：兼容包装，写入 `io.BytesIO` 并返回 `(bytes, info)`（保留既有调用与测试）。
+  - 新增 `export_archive_to(sink, tenant_id, limit)`：将 ZIP 增量写入调用方提供的 sink（如临时文件），返回 info——供流式路径使用，整包不驻留内存。
+- 接口：`api/console_router.py` `GET /v1/console/reports/runs/archive` 改为 `tempfile.mkstemp` 落盘 → `report_service.export_archive_to(sink, ...)` → 用 `StreamingResponse` 以 64KiB 分块回读下发，`_iter_zip` 生成器 `finally` 中删除临时文件；新增 imports `os/tempfile/Iterator/StreamingResponse`。Content-Type 仍为 application/zip，Content-Disposition 保持 attachment。
+- 验证：`tests/platform` 223 passed（净 +2）、全仓 689 passed（净 +2）、Black/isort/Flake8 通过、增量相关源文件 mypy 通过（`Success: no issues found`）；新增 2 项到 `tests/platform/test_reports.py`（`export_archive_to` 写入磁盘后 ZIP 内文件数与格式有效、`/reports/runs/archive` 端点流式返回可解压 JSON/CSV 且 content-type/disposition 正确）。
+- alembic head 保持为 `20260918_0015`（本增量无 schema 变更）。
+- 剩余风险：`run_due` 仍同步（未接 worker）；流式路径依赖临时文件落盘（磁盘 I/O 与生命周期由路由器管理，异常时 `finally` 清理）；真实 PostgreSQL 端到端未验证。
+- 下一步：阶段 D 增量 15（`run_due` 移入 worker 异步化、或剩余管理页面收尾）。
+
+
+### 阶段 D 增量 15 完成记录（2026-09-18）
+
+- 范围：报表 run 列表游标分页——为管理控制台报表 run 列表增加 cursor 分页，贴合既有的 cursor 分页模式（类 ticket/audit 的 `(items, next_cursor)`），支持大历史集合分批遍历（纯后端、可独立闭环）。
+- 端口：`application/ports.py` `ReportRunRepository` 新增 `list_page(tenant_id, report_type, limit, archived, cursor) -> tuple[list[ReportRun], str | None]`（`list` 保持兼容返回 `list[ReportRun]`）。
+- 仓储：
+  - `memory_report_run_repository.py`：`list_page` 复用 `list` 的过滤/排序（`generated_at desc`），按 offset（`int(cursor)`）切片，返回 `(bucket, next_cursor)`。
+  - `sqlalchemy_report_run_repository.py`：`list_page` 复用 `list` 的过滤与排序，`offset(start).limit(limit+1)` 探测是否有下一页（limit+1 技巧），返回 `(page, next_cursor)`。
+  - 两文件与 ports 均显式 `import builtins`，用 `builtins.list[...]` 规避 mypy 陷阱（`list_page` 定义在 `list` 方法之后，裸 `list` 注解会被解析成方法而非内建类型）。
+- 应用：`application/report_service.py` 新增 `list_runs_paginated(...) -> tuple[list[dict], str | None]`（透传 cursor，复用 `_run_meta`；`list_runs` 保留向后兼容）。
+- 接口：`api/console_router.py` `GET /v1/console/reports/runs` 新增 `cursor` 查询参数，返回 `{"runs": [...], "next_cursor": ...}`。
+- 验证：`tests/platform` 227 passed（净 +4）、全仓 693 passed（净 +4）、Black/isort/Flake8 通过、增量相关源文件 mypy 通过（`Success: no issues found`）；新增 4 项到 `tests/platform/test_reports.py`（memory `list_page` 2/2/1 不重叠、sqlalchemy `list_page` 3/2、service `list_runs_paginated`、`/reports/runs` 端点 cursor 遍历且两页无重叠）。
+- alembic head 保持为 `20260918_0015`（本增量无 schema 变更）。
+- 剩余风险：`run_due` 仍同步（未接 worker）；游标为 offset 语义（非 keyset，服务端无"页间数据增删导致偏移漂移"的加固）；真实 PostgreSQL 端到端未验证。
+- 下一步：阶段 D 增量 16（`run_due` 移入 worker 异步化、或剩余管理页面收尾）。
 
 ### 阶段 D 增量 3 完成记录（2026-09-18）
 
@@ -436,7 +560,7 @@ python -m alembic upgrade head --sql
 工程书：C:/Users/HP/Documents/Codex/2026-09-17/mu/outputs/AgentForge-Million-Scale-Engineering-Spec.md
 场景基线：C:/Users/HP/Documents/Codex/2026-09-17/mu/outputs/AgentForge-MVP-Customer-Service-Scenario.md
 
-先完整阅读仓库内交接文档和外部规划文档，再检查当前分支、提交记录、测试和代码结构。当前阶段 A、阶段 B 与阶段 C 均已完成（FTS+pgvector 混合检索、重排与召回评估、结构化分类/Prompt/模型版本与质量门禁、离线回归运行器与 Golden Dataset、Connector 适配与写回闭环、RBAC/Policy/OpenFGA、租户配额 + 管理控制台、高风险动作审计闭环 + 人工授权边界）；阶段 D 增量 1（管理控制台基础页面接口：客服工作台/审批收件箱/成本配额总览/任务计数/DLQ）、增量 2（Outbox/DLQ/任务状态列表详情计数与丢弃维护接口）、增量 3（成本/配额/模型分布/质量指标看板接口）、增量 4（审计查询、租户配置与连接器管理页面接口）、增量 5（运营报表导出与定时化）与增量 6（运营报表产物持久化与历史查询）已完成。下一步从阶段 D 增量 7 开始：cron 表达式排程、run 保留/清理策略，或剩余管理页面收尾。
+先完整阅读仓库内交接文档和外部规划文档，再检查当前分支、提交记录、测试和代码结构。当前阶段 A、阶段 B 与阶段 C 均已完成（FTS+pgvector 混合检索、重排与召回评估、结构化分类/Prompt/模型版本与质量门禁、离线回归运行器与 Golden Dataset、Connector 适配与写回闭环、RBAC/Policy/OpenFGA、租户配额 + 管理控制台、高风险动作审计闭环 + 人工授权边界）；阶段 D 增量 1（管理控制台基础页面接口：客服工作台/审批收件箱/成本配额总览/任务计数/DLQ）、增量 2（Outbox/DLQ/任务状态列表详情计数与丢弃维护接口）、增量 3（成本/配额/模型分布/质量指标看板接口）、增量 4（审计查询、租户配置与连接器管理页面接口）、增量 5（运营报表导出与定时化）、增量 6（运营报表产物持久化与历史查询）、增量 7（报表 run 保留/清理策略）、增量 8（排程保留策略持久化 + `run_due` 自动联动清理）、增量 9（排程暂停/恢复 + 全局默认保留策略）与增量 10（cron 表达式排程）已完成。下一步从阶段 D 增量 13 开始：`run_due` 移入 worker 异步化，或剩余管理页面收尾。
 
 要求：
 1. 不要回退已有提交。

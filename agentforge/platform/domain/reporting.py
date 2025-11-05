@@ -89,6 +89,7 @@ class ScheduledReport(BaseModel):
     report_type: ReportType
     cadence: str = "daily"  # daily | weekly | monthly (simple label)
     enabled: bool = True
+    retention_days: int | None = None  # None = no auto-prune on run
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_run_at: datetime | None = None
     next_run_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -112,6 +113,7 @@ class ReportRun(BaseModel):
     summary: dict[str, Any] = Field(default_factory=dict)
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     scheduled_report_id: str | None = None
+    archived: bool = False
 
     @classmethod
     def from_operations(

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, DateTime, Float, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, Float, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from agentforge.platform.application.knowledge_embedder import EMBEDDING_DIM
@@ -562,6 +562,7 @@ class ScheduledReportRecord(Base):
     report_type: Mapped[str] = mapped_column(String(16))
     cadence: Mapped[str] = mapped_column(String(16), default="daily")
     enabled: Mapped[bool] = mapped_column(default=True)
+    retention_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     next_run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
@@ -574,6 +575,7 @@ class ScheduledReportRecord(Base):
             report_type=report.report_type.value,
             cadence=report.cadence,
             enabled=report.enabled,
+            retention_days=report.retention_days,
             created_at=report.created_at,
             last_run_at=report.last_run_at,
             next_run_at=report.next_run_at,
@@ -593,6 +595,7 @@ class ScheduledReportRecord(Base):
             report_type=ReportType(self.report_type),
             cadence=self.cadence,
             enabled=self.enabled,
+            retention_days=self.retention_days,
             created_at=_utc(self.created_at) or utc_now(),
             last_run_at=_utc(self.last_run_at),
             next_run_at=_utc(self.next_run_at) or utc_now(),
@@ -612,6 +615,7 @@ class ReportRunRecord(Base):
     generated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, index=True
     )
+    archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     @classmethod
     def from_domain(cls, run: ReportRun) -> "ReportRunRecord":
@@ -624,6 +628,7 @@ class ReportRunRecord(Base):
             summary=run.summary,
             scheduled_report_id=run.scheduled_report_id,
             generated_at=run.generated_at,
+            archived=run.archived,
         )
 
     def to_domain(self) -> ReportRun:
@@ -639,4 +644,5 @@ class ReportRunRecord(Base):
             summary=dict(self.summary or {}),
             generated_at=generated_at or utc_now(),
             scheduled_report_id=self.scheduled_report_id,
+            archived=self.archived,
         )

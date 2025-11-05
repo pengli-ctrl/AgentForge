@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import os
+import tempfile
+from collections.abc import Iterator
+
 from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
 
 from agentforge.platform.application.ports import CostRepository
+from agentforge.platform.domain.cron import CronExpressionError, CronSchedule, is_cron_cadence
 from agentforge.platform.domain.reporting import ReportFormat, ReportType
 from agentforge.platform.domain.tenant_quota import TenantQuota
 
@@ -296,8 +302,24 @@ def create_console_router(
             raise HTTPException(status_code=400, detail="invalid report_type")
         tenant_id = str(body.get("tenant_id", "default"))
         cadence = str(body.get("cadence", "daily"))
+        if is_cron_cadence(cadence):
+            try:
+                CronSchedule(cadence)
+            except CronExpressionError:
+                raise HTTPException(status_code=400, detail="invalid cadence cron expression")
+        elif cadence not in ("daily", "weekly", "monthly"):
+            raise HTTPException(status_code=400, detail="invalid cadence")
+        retention_days = body.get("retention_days")
+        if retention_days is not None:
+            try:
+                retention_days = int(retention_days)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="invalid retention_days")
         schedule = await report_service.schedule(
-            tenant_id=tenant_id, report_type=rtype, cadence=cadence
+            tenant_id=tenant_id,
+            report_type=rtype,
+            cadence=cadence,
+            retention_days=retention_days,
         )
         return schedule.model_dump(mode="json")
 
@@ -319,13 +341,39 @@ def create_console_router(
         await report_service.delete_schedule(report_id)
         return {"deleted": report_id}
 
-    @router.post("/reports/run-due")
-    async def run_due(request: Request) -> dict:
-        """Admin run all due report schedules (idempotent, advances next_run)."""
+    @router.post("/reports/schedule/{report_id}/enabled")
+    async def set_schedule_enabled(request: Request, report_id: str, body: dict) -> dict:
+        """Admin pause (enabled=false) or resume (enabled=true) a report schedule.
+
+        A disabled schedule is skipped by run_due without deleting its config.
+        """
         _authorize_admin(authenticator, request)
         if report_service is None:
             raise HTTPException(status_code=503, detail="Report service is not configured")
-        return await report_service.run_due()
+        enabled = bool(body.get("enabled", True))
+        try:
+            sched = await report_service.set_schedule_enabled(report_id, enabled)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="schedule not found")
+        return sched.model_dump(mode="json")
+
+    @router.post("/reports/run-due")
+    async def run_due(request: Request, body: dict = {}) -> dict:
+        """Admin run all due report schedules (idempotent, advances next_run).
+
+        Optionally override the global default retention window for schedules
+        without an explicit retention_days via body {"default_retention_days": N}.
+        """
+        _authorize_admin(authenticator, request)
+        if report_service is None:
+            raise HTTPException(status_code=503, detail="Report service is not configured")
+        default_retention_days = body.get("default_retention_days")
+        if default_retention_days is not None:
+            try:
+                default_retention_days = int(default_retention_days)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="invalid default_retention_days")
+        return await report_service.run_due(default_retention_days=default_retention_days)
 
     @router.get("/reports/runs")
     async def list_runs(
@@ -333,17 +381,71 @@ def create_console_router(
         tenant_id: str | None = None,
         report_type: str | None = None,
         limit: int = 100,
+        archived: bool | None = None,
+        cursor: str | None = None,
     ) -> dict:
-        """Admin list persisted operational report runs (newest first)."""
+        """Admin list persisted operational report runs (newest first).
+
+        Pass ``archived=true/false`` to filter and ``cursor`` to page through
+        the results. Defaults to all runs, newest first.
+        """
         _authorize_admin(authenticator, request)
         if report_service is None:
             raise HTTPException(status_code=503, detail="Report service is not configured")
-        runs = await report_service.list_runs(
+        runs, next_cursor = await report_service.list_runs_paginated(
             tenant_id=tenant_id,
             report_type=report_type,
             limit=limit,
+            archived=archived,
+            cursor=cursor,
         )
-        return {"runs": runs}
+        return {"runs": runs, "next_cursor": next_cursor}
+
+    @router.post("/reports/runs/{run_id}/archive")
+    async def archive_run(request: Request, run_id: str, body: dict) -> dict:
+        """Admin mark (archived=true) or restore (archived=false) a report run."""
+        _authorize_admin(authenticator, request)
+        if report_service is None:
+            raise HTTPException(status_code=503, detail="Report service is not configured")
+        archived = bool(body.get("archived", True))
+        try:
+            return await report_service.archive_run(run_id, archived=archived)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="report run not found")
+
+    @router.get("/reports/runs/archive")
+    async def export_archive(
+        request: Request,
+        tenant_id: str | None = None,
+        limit: int = 100,
+    ) -> Response:
+        """Admin download bundled report runs as a ZIP archive.
+
+        Each run is serialized in its native format (JSON/CSV) into a file
+        named ``run_{run_id}.{ext}`` inside the returned ZIP stream. The ZIP
+        is written to a temp file and streamed back in chunks so the archive
+        is never fully buffered in memory.
+        """
+        _authorize_admin(authenticator, request)
+        if report_service is None:
+            raise HTTPException(status_code=503, detail="Report service is not configured")
+        fd, path = tempfile.mkstemp(suffix=".zip")
+        with os.fdopen(fd, "wb") as sink:
+            await report_service.export_archive_to(sink, tenant_id=tenant_id, limit=limit)
+        headers = {"Content-Disposition": 'attachment; filename="report_runs_archive.zip"'}
+
+        def _iter_zip() -> Iterator[bytes]:
+            try:
+                with open(path, "rb") as f:
+                    while chunk := f.read(64 * 1024):
+                        yield chunk
+            finally:
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+
+        return StreamingResponse(_iter_zip(), media_type="application/zip", headers=headers)
 
     @router.get("/reports/runs/{run_id}")
     async def get_run(
@@ -363,6 +465,24 @@ def create_console_router(
             headers = {"Content-Disposition": f'attachment; filename="run_{run_id}.csv"'}
             return Response(content=run.to_csv(), media_type="text/csv", headers=headers)
         return Response(content=run.to_json(), media_type="application/json")
+
+    @router.post("/reports/runs/prune")
+    async def prune_runs(request: Request, body: dict) -> dict:
+        """Admin delete report runs older than a retention window.
+
+        Archived runs are preserved unless ``include_archived=true``.
+        """
+        _authorize_admin(authenticator, request)
+        if report_service is None:
+            raise HTTPException(status_code=503, detail="Report service is not configured")
+        retention_days = int(body.get("retention_days", 30))
+        tenant_id = body.get("tenant_id")
+        include_archived = bool(body.get("include_archived", False))
+        return await report_service.prune_runs(
+            retention_days=retention_days,
+            tenant_id=tenant_id,
+            include_archived=include_archived,
+        )
 
     return router
 

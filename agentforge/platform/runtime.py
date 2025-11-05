@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from agentforge.platform.api.security import ApiKeyAuthenticator
@@ -137,6 +139,7 @@ class ServiceContainer:
         tenant_quota_repository=None,
         scheduled_report_repository=None,
         run_repository=None,
+        default_report_retention_days: int | None = None,
     ) -> None:
         self.repository = repository
         self.classifier = classifier
@@ -199,6 +202,7 @@ class ServiceContainer:
             regression_repository,
             scheduled_report_repository,
             run_repository,
+            default_retention_days=default_report_retention_days,
         )
         self.high_risk_authorizer = HighRiskActionAuthorizer(
             policy_engine,
@@ -262,6 +266,21 @@ def _wrap_gateway(inner, cost_repository, tenant_quota_repository=None) -> Quota
     )
 
 
+def _default_report_retention() -> int | None:
+    """Global default report run retention (days) from environment.
+
+    Applies to due schedules that don't define an explicit retention_days,
+    giving run_due an automatic cleanup backstop. Absent/invalid -> disabled.
+    """
+    raw = os.environ.get("AGENTFORGE_REPORT_DEFAULT_RETENTION_DAYS")
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 def build_memory_container(
     model_gateway=None,
     authenticator: ApiKeyAuthenticator | None = None,
@@ -292,6 +311,7 @@ def build_memory_container(
         scheduled_report_repository=scheduled_report_repository,
         run_repository=run_repository,
         outbox_store=outbox_store,
+        default_report_retention_days=_default_report_retention(),
     )
 
 
@@ -330,6 +350,7 @@ def build_sqlalchemy_container(
         tenant_quota_repository=tenant_quota_repository,
         scheduled_report_repository=scheduled_report_repository,
         run_repository=run_repository,
+        default_report_retention_days=_default_report_retention(),
     )
 
 

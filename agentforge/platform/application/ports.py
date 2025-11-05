@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 from datetime import datetime
 from typing import Protocol
 
@@ -241,4 +242,23 @@ class ReportRunRepository(Protocol):
         tenant_id: str | None = None,
         report_type: str | None = None,
         limit: int = 100,
+        archived: bool | None = None,
     ) -> list[ReportRun]: ...
+
+    async def list_page(
+        self,
+        tenant_id: str | None = None,
+        report_type: str | None = None,
+        limit: int = 100,
+        archived: bool | None = None,
+        cursor: str | None = None,
+    ) -> tuple[builtins.list[ReportRun], str | None]: ...
+
+    async def set_archived(self, run_id: str, archived: bool) -> None: ...
+
+    async def delete_older_than(
+        self,
+        cutoff: datetime,
+        tenant_id: str | None = None,
+        include_archived: bool = False,
+    ) -> int: ...
