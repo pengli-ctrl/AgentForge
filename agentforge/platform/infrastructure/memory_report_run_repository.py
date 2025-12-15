@@ -3,7 +3,7 @@ from __future__ import annotations
 import builtins
 from datetime import datetime
 
-from agentforge.platform.domain.reporting import ReportRun
+from agentforge.platform.domain.reporting import ReportRun, _decode_run_cursor, _encode_run_cursor
 
 
 class MemoryReportRunRepository:
@@ -50,11 +50,19 @@ class MemoryReportRunRepository:
             and (report_type is None or r.report_type.value == report_type)
             and (archived is None or r.archived == archived)
         ]
-        items.sort(key=lambda r: r.generated_at, reverse=True)
-        start = int(cursor) if (cursor is not None and cursor.isdigit()) else 0
-        bucket = items[start : start + limit]
-        next_cursor = str(start + len(bucket)) if start + len(bucket) < len(items) else None
-        return bucket, next_cursor
+        items.sort(key=lambda r: (r.generated_at, r.run_id), reverse=True)
+        anchor = _decode_run_cursor(cursor)
+        if anchor is not None:
+            anchor_ts, anchor_id = anchor
+            items = [r for r in items if (r.generated_at, r.run_id) < (anchor_ts, anchor_id)]
+        probe = items[: limit + 1]
+        page = probe[:limit]
+        next_cursor = (
+            _encode_run_cursor(page[-1].generated_at, page[-1].run_id)
+            if len(probe) > limit
+            else None
+        )
+        return page, next_cursor
 
     async def set_archived(self, run_id: str, archived: bool) -> None:
         run = self._runs.get(run_id)

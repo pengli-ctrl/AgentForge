@@ -1,10 +1,12 @@
-"""Agent 管理 REST 接口 — Agent 注册、状态查询、健康检查。
+"""Agent 管理 REST 接口 — Agent 查询、健康检查。
 
 API 端点：
     GET    /api/v1/agents          — 查询 Agent 列表
     GET    /api/v1/agents/{name}   — 查询 Agent 详情
-    POST   /api/v1/agents/{name}/register — 注册 Agent
     GET    /api/v1/agents/health   — 健康检查
+
+注意：平台并未提供 ``POST /api/v1/agents/{name}/register`` 端点；
+Agent 的注册由运行时/框架侧完成，而非通过 HTTP 暴露的 REST 接口。
 """
 
 from __future__ import annotations
@@ -12,7 +14,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from agentforge.api.middleware.error_handler import NOT_FOUND, VALIDATION_ERROR
+from agentforge.api.middleware.error_handler import NOT_FOUND
 from agentforge.workflow.registry import AgentRegistry
 
 logger = logging.getLogger(__name__)
@@ -74,37 +76,6 @@ class AgentRoutes:
             agent_info["has_prompt"] = bool(agent.prompt_template)
 
         return agent_info
-
-    async def register_agent(self, name: str, body: dict[str, Any]) -> dict[str, Any]:
-        """注册 Agent（通过工厂模式）。
-
-        Args:
-            name: Agent 名称。
-            body: 请求体，包含 agent_type 和 config。
-
-        Returns:
-            注册结果。
-
-        Raises:
-            APIError: 参数缺失时抛出 VALIDATION_ERROR。
-        """
-        agent_type = body.get("agent_type", "")
-        if not agent_type:
-            raise VALIDATION_ERROR
-
-        # 实际注册逻辑需要根据 agent_type 创建对应实例
-        # 这里返回注册信息，实际注册由调用方完成
-        logger.info(
-            "Agent registration requested (name=%s, type=%s)",
-            name,
-            agent_type,
-        )
-
-        return {
-            "name": name,
-            "agent_type": agent_type,
-            "status": "registered",
-        }
 
     async def health_check(self) -> dict[str, Any]:
         """Agent 健康检查。

@@ -39,9 +39,9 @@ jobs:
 
       - name: Run mypy (type check)
         run: mypy --ignore-missing-imports --no-strict-optional agentforge/
-        continue-on-error: true
 
-  # ===== 单元测试 =====
+  # ===== 测试 =====
+  # 覆盖单元、集成与 platform 三层套件；不使用 continue-on-error，测试必须真实通过
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -62,15 +62,9 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
-      - name: Run unit tests
+      - name: Run full test suite (unit + integration + platform)
         run: |
-          python -m pytest tests/unit/ -v --tb=short --cov=agentforge --cov-report=term-missing
-        continue-on-error: true
-
-      - name: Run integration tests
-        run: |
-          python -m pytest tests/integration/ -v --tb=short
-        continue-on-error: true
+          python -m pytest tests/ -v --tb=short --cov=agentforge --cov-report=term-missing
 
   # ===== 语法检查 =====
   syntax-check:

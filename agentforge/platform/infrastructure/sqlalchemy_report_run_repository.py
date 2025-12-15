@@ -3,11 +3,12 @@ from __future__ import annotations
 import builtins
 from datetime import datetime
 
+from sqlalchemy import and_
 from sqlalchemy import delete as sql_delete
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from agentforge.platform.domain.reporting import ReportRun
+from agentforge.platform.domain.reporting import ReportRun, _decode_run_cursor, _encode_run_cursor
 from agentforge.platform.infrastructure.db.models import ReportRunRecord
 
 
@@ -57,20 +58,43 @@ class SQLAlchemyReportRunRepository:
         archived: bool | None = None,
         cursor: str | None = None,
     ) -> tuple[builtins.list[ReportRun], str | None]:
-        statement = select(ReportRunRecord).order_by(ReportRunRecord.generated_at.desc())
+        """Keyset-cursor page over report runs, newest first.
+
+        Ordered by ``(generated_at, run_id)`` descending; the opaque cursor
+        is a base64 (generated_at, run_id) anchor, so the page boundary is
+        stable even when rows before it are inserted/deleted concurrently.
+        """
+        statement = select(ReportRunRecord).order_by(
+            ReportRunRecord.generated_at.desc(),
+            ReportRunRecord.run_id.desc(),
+        )
         if tenant_id is not None:
             statement = statement.where(ReportRunRecord.tenant_id == tenant_id)
         if report_type is not None:
             statement = statement.where(ReportRunRecord.report_type == report_type)
         if archived is not None:
             statement = statement.where(ReportRunRecord.archived == archived)
-        start = int(cursor) if (cursor is not None and cursor.isdigit()) else 0
-        statement = statement.offset(start).limit(limit + 1)
+        anchor = _decode_run_cursor(cursor)
+        if anchor is not None:
+            anchor_ts, anchor_id = anchor
+            statement = statement.where(
+                or_(
+                    ReportRunRecord.generated_at < anchor_ts,
+                    and_(
+                        ReportRunRecord.generated_at == anchor_ts,
+                        ReportRunRecord.run_id < anchor_id,
+                    ),
+                )
+            )
+        statement = statement.limit(limit + 1)
         async with self._session_factory() as session:
             rows = (await session.execute(statement)).scalars().all()
-        has_more = len(rows) > limit
         page = rows[:limit]
-        next_cursor = str(start + len(page)) if has_more else None
+        next_cursor = (
+            _encode_run_cursor(page[-1].generated_at, page[-1].run_id)
+            if len(rows) > limit
+            else None
+        )
         return [record.to_domain() for record in page], next_cursor
 
     async def set_archived(self, run_id: str, archived: bool) -> None:

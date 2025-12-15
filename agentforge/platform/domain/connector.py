@@ -116,3 +116,50 @@ class WebhookDelivery(BaseModel):
             "text": self.text,
             "reply_target": self.payload.get("reply_target"),
         }
+
+
+_SENSITIVE_KEY_TOKENS = (
+    "secret",
+    "password",
+    "authorization",
+    "api-key",
+    "api_key",
+    "apikey",
+    "auth_value",
+    "access_token",
+    "refresh_token",
+    "client_secret",
+    "token",
+)
+
+
+def _is_sensitive_key(key: str) -> bool:
+    lower = key.lower()
+    return any(tok in lower for tok in _SENSITIVE_KEY_TOKENS)
+
+
+def _redact(value: Any, key: str = "") -> Any:
+    """Recursively mask values that sit under a secret-looking key."""
+    if _is_sensitive_key(key):
+        # Preserve presence but never echo the plaintext value.
+        return "***" if value else value
+    if isinstance(value, dict):
+        return {str(k): _redact(v, str(k)) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_redact(item, key) for item in value]
+    return value
+
+
+def spec_to_public_dict(spec: ConnectorSpec) -> dict[str, Any]:
+    """Serialise a ConnectorSpec for external API responses with credentials redacted.
+
+    Secret material such as ``config["auth_value"]`` (and any secret-looking
+    header value, e.g. an ``Authorization`` bearer token) is replaced with a
+    ``***`` marker so list/detail/register responses never echo plaintext
+    credentials. A ``credentials_configured`` boolean signals presence without
+    exposing the value.
+    """
+    data = spec.model_dump(mode="json")
+    data["config"] = _redact(spec.config or {})
+    data["credentials_configured"] = bool(spec.config and spec.config.get("auth_value"))
+    return data

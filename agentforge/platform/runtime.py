@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -8,6 +9,7 @@ from agentforge.platform.api.security import ApiKeyAuthenticator
 from agentforge.platform.application.builtin_policies import (
     _async_relation_check,
     builtin_policies,
+    seed_rbac,
 )
 from agentforge.platform.application.classification_evaluation_service import (
     ClassificationEvaluationService,
@@ -364,3 +366,35 @@ def get_container() -> ServiceContainer:
     if _default_container is None:
         _default_container = build_memory_container()
     return _default_container
+
+
+logger = logging.getLogger(__name__)
+
+
+async def boot_runtime(container: ServiceContainer) -> None:
+    """Wire startup-only concerns for an assembled ServiceContainer.
+
+    These two steps are defined but were never wired into assembly, which left
+    the platform not fully usable out of the box:
+
+    * ``seed_rbac`` ensures the built-in roles exist (idempotent) so policy
+      evaluation is meaningful from the first boot.
+    * ``connector_registry.load_from_repository`` rebuilds connector adapters
+      from the persisted connector repository so registered connectors survive
+      a restart.
+
+    Each step is best-effort: a transient backend outage (e.g. schema not yet
+    migrated) logs a warning instead of taking the platform down, and the
+    container stays fully assembled for in-memory / dev use.
+    """
+    try:
+        await seed_rbac(container.rbac_repository)
+    except Exception as exc:  # noqa: BLE001 - startup resilience
+        logger.warning("boot_runtime: seed_rbac failed: %s", exc)
+    try:
+        await container.connector_registry.load_from_repository(
+            container.connector_repository,
+            adapter_factory=container.adapter_factory,
+        )
+    except Exception as exc:  # noqa: BLE001 - startup resilience
+        logger.warning("boot_runtime: connector load_from_repository failed: %s", exc)

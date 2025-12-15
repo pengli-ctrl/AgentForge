@@ -38,6 +38,7 @@ class MetricsCollector:
         self.namespace = namespace
         self._prometheus: Any = None
         self._metrics: dict[str, Any] = {}
+        self._fallback: dict[str, float] = {}
         self._init_prometheus()
 
     def _init_prometheus(self) -> None:
@@ -114,7 +115,6 @@ class MetricsCollector:
         except ImportError:
             logger.warning("prometheus_client not installed, using in-memory counters")
             self._prometheus = None
-            self._fallback: dict[str, dict[str, float]] = {}
 
     def record_task(self, status: str, workflow: str = "") -> None:
         """记录任务状态变更。

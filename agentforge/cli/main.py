@@ -173,8 +173,8 @@ class CLIClient:
                 print(json.dumps(result, indent=2, ensure_ascii=False))
 
             elif parsed.command == "metrics":
-                result = await client.get_metrics()
-                print(result)
+                metrics = await client.get_metrics()
+                print(metrics)
 
             elif parsed.command == "workflows":
                 import os

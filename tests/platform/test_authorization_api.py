@@ -7,7 +7,7 @@ from agentforge.platform.api.app import create_platform_app
 from agentforge.platform.domain.rbac import Permission, Role, RoleAssignment
 from agentforge.platform.domain.ticket import RiskLevel, Ticket, TicketPriority, TicketStatus
 from agentforge.platform.infrastructure.memory_rbac_repository import MemoryRbacRepository
-from agentforge.platform.runtime import ServiceContainer, build_memory_container
+from agentforge.platform.runtime import build_memory_container
 
 
 async def _seed_admin(rbac: MemoryRbacRepository) -> None:
@@ -22,9 +22,7 @@ async def _seed_admin(rbac: MemoryRbacRepository) -> None:
         )
     )
     await rbac.save_assignment(
-        RoleAssignment(
-            assignment_id="asg-1", tenant_id="t1", user_id="alice", role_id="r-admin"
-        )
+        RoleAssignment(assignment_id="asg-1", tenant_id="t1", user_id="alice", role_id="r-admin")
     )
 
 
@@ -55,9 +53,7 @@ def test_authorize_endpoint_denied_unapproved(client):
 
 def test_authorize_endpoint_requires_tenant(client):
     tc, _container = client
-    res = tc.post(
-        "/v1/authorize", json={"principal": "alice", "action": "ticket.writeback"}
-    )
+    res = tc.post("/v1/authorize", json={"principal": "alice", "action": "ticket.writeback"})
     assert res.status_code == 422
 
 

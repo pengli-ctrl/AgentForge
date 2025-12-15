@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     feishu_verification_token: str = ""
     feishu_app_id: str = ""
     feishu_app_secret: str = ""
+    # Replay-protection window for Feishu callbacks (seconds). 0 disables the
+    # freshness check to preserve backwards compatibility; set e.g. 300 in
+    # production to reject replayed events.
+    feishu_signature_max_age_seconds: float = 0.0
+    # Shared secret for HMAC-signed generic IM webhooks (/v1/events/im).
+    # Empty means HMAC is skipped (tenant auth still applies).
+    events_im_webhook_secret: str = ""
     auth_enabled: bool = False
     api_keys: dict[str, str] = Field(default_factory=dict)
     admin_api_key: str = ""

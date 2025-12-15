@@ -24,6 +24,8 @@ from agentforge.platform.domain.reporting import (
     ReportRun,
     ReportType,
     ScheduledReport,
+    _decode_run_cursor,
+    _encode_run_cursor,
 )
 from agentforge.platform.infrastructure.db.base import Base
 from agentforge.platform.infrastructure.memory_audit_repository import MemoryAuditRepository
@@ -1048,6 +1050,46 @@ async def test_report_run_repository_list_page_memory() -> None:
     # no overlap across pages
     ids = [r.run_id for r in page1 + page2 + page3]
     assert len(ids) == len(set(ids)) == 5
+
+
+@pytest.mark.asyncio
+async def test_report_run_keyset_cursor_stable_under_duplicate_timestamps() -> None:
+    """Keyset cursor must page stably even when rows share generated_at.
+
+    Offsets drift when rows before the cursor change; a keyset anchored on
+    (generated_at, run_id) must return disjoint, complete pages regardless.
+    """
+    repo = MemoryReportRunRepository()
+    fixed_ts = datetime(2026, 9, 18, 12, 0, 0, tzinfo=timezone.utc)
+    for i in range(5):
+        run = ReportRun(
+            run_id=f"r{i}",
+            tenant_id="t1",
+            report_type=ReportType.COST,
+            generated_at=fixed_ts,
+        )
+        await repo.save(run)
+
+    ids: list[str] = []
+    cursor: str | None = None
+    while True:
+        page, cursor = await repo.list_page(tenant_id="t1", limit=2, cursor=cursor)
+        ids.extend(r.run_id for r in page)
+        if cursor is None:
+            break
+    assert ids == ["r4", "r3", "r2", "r1", "r0"]
+    assert len(ids) == len(set(ids)) == 5
+
+
+def test_report_run_keyset_cursor_roundtrip() -> None:
+    """The opaque keyset cursor must round-trip (generated_at, run_id)."""
+    ts = datetime(2026, 9, 18, 13, 0, 0, tzinfo=timezone.utc)
+    cursor = _encode_run_cursor(ts, "abc123")
+    decoded_ts, decoded_id = _decode_run_cursor(cursor)
+    assert decoded_id == "abc123"
+    assert decoded_ts == ts
+    assert _decode_run_cursor(None) is None
+    assert _decode_run_cursor("garbage-not-base64") is None
 
 
 @pytest.mark.asyncio

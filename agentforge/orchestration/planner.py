@@ -366,7 +366,7 @@ class PlannerAgent:
 
         # Cycle check via topological sort
         in_degree = {nid: 0 for nid in node_ids}
-        adjacency = {nid: [] for nid in node_ids}
+        adjacency: dict[str, list[str]] = {nid: [] for nid in node_ids}
         for edge in edges:
             adjacency[edge["from"]].append(edge["to"])
             in_degree[edge["to"]] += 1
@@ -434,15 +434,19 @@ class PlannerAgent:
         """
         Heuristic agent selection based on task description keywords.
         Used as fallback when LLM planning fails.
+
+        Agent names here MUST match the names actually registered in the
+        AgentRegistry (hyphenated, e.g. ``security-scan``) so the selected
+        agent can be resolved at execution time.
         """
         task_lower = task_description.lower()
 
         keyword_agent_map = [
-            (["security", "vulnerability", "cve", "injection", "xss"], "security_scan"),
-            (["test", "unit test", "integration test", "coverage"], "test_execution"),
-            (["document", "readme", "docstring", "comment"], "doc_generator"),
+            (["security", "vulnerability", "cve", "injection", "xss"], "security-scan"),
+            (["test", "unit test", "integration test", "coverage"], "test-execution"),
+            (["document", "readme", "docstring", "comment"], "doc-generator"),
             (["deploy", "release", "ci/cd", "pipeline"], "deploy"),
-            (["review", "code review", "refactor", "lint"], "code_review"),
+            (["review", "code review", "refactor", "lint"], "code-review"),
         ]
 
         for keywords, agent_name in keyword_agent_map:
@@ -450,9 +454,9 @@ class PlannerAgent:
                 if agent_name in self._registry.list_agents():
                     return agent_name
 
-        # Default to code_review as the most general-purpose agent
-        if "code_review" in self._registry.list_agents():
-            return "code_review"
+        # Default to code-review as the most general-purpose agent
+        if "code-review" in self._registry.list_agents():
+            return "code-review"
 
         # Ultimate fallback: return first available agent
         agents = self._registry.list_agents()

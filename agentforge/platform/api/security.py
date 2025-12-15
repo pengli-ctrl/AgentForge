@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
+
 from fastapi import HTTPException, Request
 
 
@@ -37,3 +40,20 @@ class ApiKeyAuthenticator:
     @staticmethod
     def _read_key(request: Request) -> str:
         return request.headers.get("X-API-Key", "")
+
+
+def verify_event_hmac(raw_body: bytes, secret: str, provided: str) -> bool:
+    """Verify an HMAC-SHA256 signature over the raw request body.
+
+    When ``secret`` is empty (nothing configured) verification cannot be
+    performed; the caller treats that as a pass-through for dev/local
+    environments. When a secret is configured, a missing or mismatched
+    ``provided`` signature is rejected. Used for the generic IM webhook to
+    align the endpoint's behaviour with its documented "HMAC 验签" contract.
+    """
+    if not secret:
+        return True
+    if not provided:
+        return False
+    expected = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, provided)

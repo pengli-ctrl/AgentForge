@@ -11,10 +11,13 @@
     AGENTFORGE_DEBUG: 是否启用 DEBUG 模式（true/false）
     AGENTFORGE_RATE_LIMIT_CAPACITY: 限流桶容量
     AGENTFORGE_RATE_LIMIT_RATE: 限流速率（请求/秒）
+    AGENTFORGE_ALLOW_NO_AUTH: 显式关闭认证（仅当未配置 API Key 且非 DEBUG 时需要，
+                              生产环境请勿开启）
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from typing import Any
@@ -68,10 +71,42 @@ def create_app(
     task_store = task_store or TaskStore()
     agent_registry = agent_registry or AgentRegistry()
 
+    # 推导认证策略并针对"未配置 API Key"给出明确告警，避免静默锁死或静默放行。
+    # 行为可预期：
+    #   - debug=True            → 允许无认证（开发环境）
+    #   - 配置了 API Key       → 必须提供合法 Key
+    #   - 未配置 Key 且非 debug → 默认全 401（安全默认），并给出明确 WARNING；
+    #     仅当显式设置 AGENTFORGE_ALLOW_NO_AUTH=true 时才关闭认证（生产请勿开启）。
+    env_allow_no_auth = os.environ.get("AGENTFORGE_ALLOW_NO_AUTH", "").lower() == "true"
+    if not api_keys:
+        if env_allow_no_auth:
+            allow_no_auth = True
+            logger.warning(
+                "No API keys configured and AGENTFORGE_ALLOW_NO_AUTH=true: "
+                "authentication is DISABLED, all non-public endpoints are open. "
+                "Set AGENTFORGE_API_KEYS before exposing this service publicly."
+            )
+        elif debug:
+            allow_no_auth = True
+            logger.warning(
+                "DEBUG mode without API keys: authentication is DISABLED "
+                "on all non-public endpoints."
+            )
+        else:
+            allow_no_auth = False
+            logger.warning(
+                "No API keys configured and debug=False: all non-public endpoints "
+                "will return 401. Set AGENTFORGE_API_KEYS, enable debug (dev only), "
+                "or set AGENTFORGE_ALLOW_NO_AUTH=true only if you explicitly want to "
+                "disable authentication."
+            )
+    else:
+        allow_no_auth = debug
+
     # 初始化中间件
     auth_middleware = AuthMiddleware(
         api_keys=api_keys or set(),
-        allow_no_auth=debug,
+        allow_no_auth=allow_no_auth,
     )
     rate_limit_middleware = RateLimitMiddleware(
         capacity=rate_limit_capacity,
@@ -97,6 +132,30 @@ def create_app(
     )
 
     # --- 中间件 ---
+
+    # 注意：FastAPI 的中间件按注册顺序由外向内包裹，先注册的中间件位于最外层。
+    # 因此 error 中间件必须先于 auth/rate-limit 注册，才能捕获下游中间件抛出的异常。
+
+    @app.middleware("http")
+    async def error_handler_middleware(request: Request, call_next):
+        """全局异常标准化中间件。
+
+        包裹后续的认证/限流中间件及路由处理，把未在路由层捕获的异常
+        统一转换为标准化 JSON 错误响应。
+        """
+        try:
+            return await call_next(request)
+        except APIError as e:
+            return JSONResponse(
+                status_code=e.status_code,
+                content=error_handler.handle_api_error(e).to_dict(debug),
+            )
+        except Exception as e:
+            api_error = error_handler.handle_exception(e)
+            return JSONResponse(
+                status_code=api_error.status_code,
+                content=api_error.to_dict(debug),
+            )
 
     @app.middleware("http")
     async def auth_and_rate_limit(request: Request, call_next):
@@ -143,7 +202,19 @@ def create_app(
     async def create_task(request: Request) -> JSONResponse:
         """提交新任务。"""
         try:
-            body = await request.json()
+            try:
+                body = await request.json()
+            except json.JSONDecodeError:
+                # 非 JSON 请求体属于客户端错误，不应作为 500 内部错误处理。
+                error = APIError(
+                    code="INVALID_JSON",
+                    message="Request body must be valid JSON",
+                    status_code=422,
+                )
+                return JSONResponse(
+                    status_code=422,
+                    content=error.to_dict(include_detail=debug),
+                )
             result = await task_routes.create_task(body)
             return JSONResponse(status_code=201, content=result)
         except APIError as e:

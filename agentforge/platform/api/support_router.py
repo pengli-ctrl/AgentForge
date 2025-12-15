@@ -5,17 +5,35 @@ from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
 
+from agentforge.platform.api.security import verify_event_hmac
 from agentforge.platform.runtime import ServiceContainer
 
 
-def create_support_router(container: ServiceContainer) -> APIRouter:
+def create_support_router(
+    container: ServiceContainer,
+    webhook_secret: str = "",
+) -> APIRouter:
     router = APIRouter(prefix="/v1", tags=["support"])
 
     @router.post("/events/im")
     async def receive_im_event(request: Request, body: dict[str, Any]) -> dict[str, Any]:
+        """Ingest an IM event.
+
+        The endpoint is tenant-authenticated (a valid tenant API key must be
+        presented) and, when ``webhook_secret`` is configured, additionally
+        HMAC-SHA256 signed (the raw request body against ``X-Webhook-Signature``)
+        to prove the payload was produced by a trusted agent. When no
+        ``webhook_secret`` is configured (e.g. local/dev) HMAC is skipped, but
+        the tenant binding above is still enforced.
+        """
         tenant_id = body.get("tenant_id")
-        if isinstance(tenant_id, str):
-            container.authenticator.authorize_tenant(request, tenant_id)
+        if not isinstance(tenant_id, str) or not tenant_id:
+            raise HTTPException(status_code=422, detail="tenant_id is required")
+        container.authenticator.authorize_tenant(request, tenant_id)
+        raw_body = await request.body()
+        provided = request.headers.get("X-Webhook-Signature", "")
+        if not verify_event_hmac(raw_body, webhook_secret, provided):
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
         try:
             ticket = await container.ticket_service.create_from_event(body)
         except ValueError as exc:

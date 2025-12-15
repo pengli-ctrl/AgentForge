@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
+from agentforge.platform.application.ports import EventPublisher
 from agentforge.platform.infrastructure.db.base import create_session_factory
 from agentforge.platform.infrastructure.kafka_publisher import KafkaEventPublisher
 from agentforge.platform.infrastructure.logging_event_publisher import LoggingEventPublisher
@@ -17,6 +18,7 @@ async def run_outbox_worker() -> None:
     configure_tracing(endpoint=settings.otel_exporter_otlp_endpoint)
     session_factory = create_session_factory(settings.database_url)
     store = SQLAlchemyOutboxStore(session_factory)
+    publisher: EventPublisher
     if settings.kafka_bootstrap_servers:
         publisher = KafkaEventPublisher(
             bootstrap_servers=settings.kafka_bootstrap_servers,

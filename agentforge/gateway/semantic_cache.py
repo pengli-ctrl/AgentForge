@@ -116,6 +116,10 @@ class SemanticCache:
         Performs O(N) linear scan computing cosine similarity against all
         cached entries. Returns the best match if similarity > threshold.
 
+        TTL-expired entries encountered on the way are removed (not merely
+        skipped), so stale items do not linger in memory and do not inflate
+        ``stats()["current_size"]``.
+
         Args:
             query_embedding: Query vector from embedding model.
 
@@ -125,14 +129,20 @@ class SemanticCache:
         async with self._lock:
             self._total_lookups += 1
 
+            # Prune TTL-expired entries before scanning. Deleting within the lock
+            # avoids iterating while mutating and keeps expired data from lingering.
+            expired_keys = [
+                key for key, entry in self._store.items() if entry.age_hours > self._ttl_hours
+            ]
+            if expired_keys:
+                for key in expired_keys:
+                    del self._store[key]
+                self._total_evictions += len(expired_keys)
+
             best_entry: Optional[CacheEntry] = None
             best_score = 0.0
 
             for entry in self._store.values():
-                # Skip TTL-expired entries
-                if entry.age_hours > self._ttl_hours:
-                    continue
-
                 score = self._cosine_similarity(query_embedding, entry.embedding)
                 if score > best_score:
                     best_score = score
@@ -171,6 +181,9 @@ class SemanticCache:
         Store a result in the cache with its embedding.
 
         If the cache is at capacity, triggers LRU+TTL eviction before inserting.
+        If the key already exists, the old entry is removed first so the new one
+        lands at the most-recently-used end of the OrderedDict — otherwise
+        overwriting in place would break LRU order and reset its hit stats.
 
         Args:
             key_text: Original text or hash for identification.
@@ -182,12 +195,18 @@ class SemanticCache:
             if len(self._store) >= self._max_size:
                 await self._evict()
 
+            key = key_text[:200]  # Truncate long keys
+            # Remove an existing entry for the same key first, so the new one is
+            # inserted at the MRU end of the OrderedDict (correct LRU order).
+            if key in self._store:
+                del self._store[key]
+
             entry = CacheEntry(
-                key=key_text[:200],  # Truncate long keys
+                key=key,
                 embedding=embedding,
                 result=result,
             )
-            self._store[key_text[:200]] = entry
+            self._store[key] = entry
 
     async def _evict(self) -> None:
         """

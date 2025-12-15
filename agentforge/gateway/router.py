@@ -58,21 +58,49 @@ class SmartRouter:
     3-dimensional scoring router with fallback chain and circuit breaker.
 
     Scoring algorithm:
-        1. Normalize each dimension to 0–10 scale (min-max normalization)
-        2. For cost and latency, invert (lower is better → higher score)
-        3. Weighted sum: score = 0.5*capability + 0.3*cost_score + 0.2*latency_score
-        4. Select model with highest weighted score
+        1. Capability is computed from the model's baseline plus a task-specific
+           bonus, then amplified by a *capability-proportional* complexity factor
+           (only genuinely capable models are further rewarded as tasks get
+           harder). This prevents cheap low-capability models (e.g. MiniMax)
+           from being swept up by a uniform complexity scaling.
+        2. Cost and latency are inverted min-max normalized against the pool,
+           but with a lower-bound floor so the most expensive / slowest model is
+           never pinned to 0 — previously the relative normalization made the
+           premium Qwen3-Pro score 0 on both dimensions and permanently lose to
+           the budget model.
+        3. Complexity shifts the weighting: at complexity=0 the base weights
+           (0.5/0.3/0.2, matching README) keep simple tasks on the cheap/fast
+           model (MiniMax); as complexity rises the capability weight grows so
+           high-capability models (Qwen3-Pro) win hard tasks.
+        4. Select the model with the highest weighted score.
 
     Why these weights?
         Capability (0.5) is most important — a wrong answer is worse than a slow one.
         Cost (0.3) matters for sustainability but shouldn't override quality.
         Latency (0.2) matters for UX but users tolerate 2–3s delays.
+        For complex tasks capability is even more important, so the capability
+        weight is raised by ComplexityWeightShift (up to +0.35 at complexity=1).
 
     Fallback chain on failure:
-        Primary → Secondary (next highest score) → MiniMax (always fastest) → preset
+        Primary → Secondary (most capable available) → MiniMax (always fastest) → preset
     """
 
     WEIGHTS = {"capability": 0.5, "cost": 0.3, "latency": 0.2}
+
+    # Lower-bound protection for cost/latency scores. Min-max normalization is
+    # relative to the pool, so the most expensive/slowest model would otherwise
+    # always score 0 and never be selected, no matter how capable it is.
+    COST_AND_LATENCY_FLOOR = 3.0
+
+    # How strongly (fraction of the 0..1 capability scale) complex tasks amplify a
+    # model's capability. Proportional to the model's own capability so that only
+    # genuinely capable models benefit — budget models are not swept up.
+    CAPABILITY_COMPLEXITY_AMPLIFICATION = 0.6
+
+    # Extra capability weight shifted in as complexity 0.0 → 1.0. Base weight is
+    # WEIGHTS["capability"] (0.5); at max complexity it becomes 0.5 + 0.35 = 0.85,
+    # making capability decisively dominant for hard tasks.
+    COMPLEXITY_WEIGHT_SHIFT = 0.35
 
     def __init__(self, registry: Optional[ModelRegistry] = None):
         self._registry = registry or ModelRegistry()
@@ -106,6 +134,8 @@ class SmartRouter:
                 minimax.is_available = True  # Force-restore
             available = [minimax] if minimax else []
 
+        weights = self._effective_weights(complexity)
+
         # Compute scores for each available model
         scores = {}
         details = {}
@@ -115,7 +145,7 @@ class SmartRouter:
             cost_score = self._score_cost(model, available)
             latency_score = self._score_latency(model, available)
 
-            weighted = self._weighted_sum(cap_score, cost_score, latency_score)
+            weighted = self._weighted_sum(cap_score, cost_score, latency_score, weights)
             scores[model.name] = weighted
             details[model.name] = {
                 "capability": round(cap_score, 2),
@@ -137,15 +167,41 @@ class SmartRouter:
             scores_detail=details,
         )
 
+    def _effective_weights(self, complexity: float) -> dict[str, float]:
+        """Compute dimension weights for the given complexity.
+
+        At complexity=0 this returns the README base weights (0.5/0.3/0.2).
+        As complexity rises, capability weight grows toward the base + shift,
+        and cost/latency keep their relative proportion in the remainder. This is
+        how complex tasks favor high-capability models without ever dropping the
+        cost/latency dimensions entirely.
+        """
+        cap_weight = self.WEIGHTS["capability"] + complexity * self.COMPLEXITY_WEIGHT_SHIFT
+        cap_weight = max(0.0, min(1.0, cap_weight))
+        remaining = 1.0 - cap_weight
+        cost_lat_sum = self.WEIGHTS["cost"] + self.WEIGHTS["latency"]
+        cost_weight = remaining * (self.WEIGHTS["cost"] / cost_lat_sum)
+        latency_weight = remaining - cost_weight
+        return {
+            "capability": cap_weight,
+            "cost": cost_weight,
+            "latency": latency_weight,
+        }
+
     def _score_capability(self, model: ModelProfile, task_type: str, complexity: float) -> float:
         """
         Capability score (0–10). Adjusted by task type and complexity.
 
-        High-complexity tasks amplify model capability differences.
         Task-specific bonuses:
         - Kimi gets a boost for long-context tasks (200K context window)
         - Qwen3-Pro gets a boost for reasoning tasks (highest baseline)
         - DeepSeek-V3 gets a boost for code generation tasks
+
+        Complexity amplification is *capability-proportional*: the factor scales
+        with the model's own capability so only high-capability models are
+        rewarded on hard tasks. A cheap, low-capability fallback (MiniMax) is
+        intentionally left unamplified, giving the premium capability models real
+        room to win as complexity increases.
         """
         base = model.capability_score
 
@@ -158,44 +214,63 @@ class SmartRouter:
             "classification": {"MiniMax": 0.5},  # Cheap model sufficient
         }
         bonus = task_bonuses.get(task_type, {}).get(model.name, 0.0)
+        raw = base + bonus
 
-        # Complexity amplification: high complexity → capability matters more
-        complexity_factor = 1.0 + (complexity * 0.2)  # Up to +20% at max complexity
+        # Capability-proportional complexity amplification.
+        capability_norm = min(1.0, raw / 10.0)
+        complexity_factor = (
+            1.0 + complexity * self.CAPABILITY_COMPLEXITY_AMPLIFICATION * capability_norm
+        )
 
-        return min(10.0, (base + bonus) * complexity_factor)
+        return raw * complexity_factor
 
     def _score_cost(self, model: ModelProfile, all_models: list[ModelProfile]) -> float:
         """
         Cost score (0–10). Inverted: lower cost → higher score.
-        Normalized relative to the most expensive model in the pool.
+        Normalized relative to the most expensive model in the pool, with a
+        lower-bound floor so the most expensive model is never scored 0.
         """
-        costs = [m.cost_per_1k_tokens for m in all_models]
-        min_cost, max_cost = min(costs), max(costs)
+        min_cost = min(m.cost_per_1k_tokens for m in all_models)
+        max_cost = max(m.cost_per_1k_tokens for m in all_models)
         if max_cost == min_cost:
             return 5.0  # All same cost
-        # Invert: cheapest gets 10, most expensive gets 0
+        # Invert: cheapest gets 10, most expensive gets COST_AND_LATENCY_FLOOR
         normalized = 10.0 * (1.0 - (model.cost_per_1k_tokens - min_cost) / (max_cost - min_cost))
-        return normalized
+        return max(normalized, self.COST_AND_LATENCY_FLOOR)
 
     def _score_latency(self, model: ModelProfile, all_models: list[ModelProfile]) -> float:
         """
         Latency score (0–10). Inverted: lower latency → higher score.
-        Normalized relative to the slowest model in the pool.
+        Normalized relative to the slowest model in the pool, with a lower-bound
+        floor so the slowest model is never scored 0.
         """
-        latencies = [m.avg_latency_ms for m in all_models]
-        min_lat, max_lat = min(latencies), max(latencies)
+        min_lat = min(m.avg_latency_ms for m in all_models)
+        max_lat = max(m.avg_latency_ms for m in all_models)
         if max_lat == min_lat:
             return 5.0
-        # Invert: fastest gets 10, slowest gets 0
+        # Invert: fastest gets 10, slowest gets COST_AND_LATENCY_FLOOR
         normalized = 10.0 * (1.0 - (model.avg_latency_ms - min_lat) / (max_lat - min_lat))
-        return normalized
+        return max(normalized, self.COST_AND_LATENCY_FLOOR)
 
-    def _weighted_sum(self, capability: float, cost: float, latency: float) -> float:
-        """Compute weighted score from three dimensions."""
+    def _weighted_sum(
+        self,
+        capability: float,
+        cost: float,
+        latency: float,
+        weights: Optional[dict[str, float]] = None,
+    ) -> float:
+        """Compute weighted score from three dimensions.
+
+        If no weights are supplied the README base weights (0.5/0.3/0.2) are used;
+        otherwise the caller-provided weights (already adjusted for complexity)
+        drive the combination.
+        """
+        if weights is None:
+            weights = self.WEIGHTS
         return (
-            self.WEIGHTS["capability"] * capability
-            + self.WEIGHTS["cost"] * cost
-            + self.WEIGHTS["latency"] * latency
+            weights["capability"] * capability
+            + weights["cost"] * cost
+            + weights["latency"] * latency
         )
 
     # ── Failure tracking & circuit breaker ──────────────────────────────
@@ -231,7 +306,11 @@ class SmartRouter:
         """
         Get the next model in the fallback chain.
 
-        Order: next highest score → MiniMax (lightest) → None (preset response).
+        The fallback chain is: next most capable → MiniMax (lightest) → None
+        (preset response). We deliberately prefer capability over cost here: when
+        the primary already failed, we want the best-quality backup, not the
+        cheapest. Ordering by raw capability is stable and does not depend on task
+        context, which this method does not receive.
         """
         available = self._registry.get_available()
         candidates = [m for m in available if m.name != failed_model]

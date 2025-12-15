@@ -11,6 +11,7 @@ Agent 通过工具注册表调用此工具执行 Git 操作，
 - 仓库 URL 白名单：初始化时传入 allowed_repo_urls，clone 时校验
 - 本地路径限制：所有本地路径必须在 workspace 目录内，防止路径遍历攻击
 - 参数校验：拼接前校验路径不包含 `..`
+- 命令超时：clone/pull 大仓库或网络阻塞时，超时后 kill 子进程避免永久挂起
 """
 
 from __future__ import annotations
@@ -42,10 +43,12 @@ class GitTool(BaseTool):
     - 仓库 URL 白名单校验
     - 本地路径限制在指定工作目录内
     - 路径遍历攻击防护
+    - subprocess 有超时与超时后 kill，避免网络阻塞造成协程永久挂起
 
     Args:
         workspace: 本地工作目录（克隆的仓库存放在此目录下）。
         allowed_repo_urls: 允许克隆的仓库 URL 白名单。为空则允许所有（开发模式）。
+        command_timeout: 单条 git 命令的超时秒数，超时后 kill 子进程。
     """
 
     # 允许的 Git 操作（白名单）
@@ -55,9 +58,11 @@ class GitTool(BaseTool):
         self,
         workspace: str = "/tmp/agentforge-workspace",
         allowed_repo_urls: set[str] | None = None,
+        command_timeout: float = 60.0,
     ) -> None:
         self.workspace = workspace
         self.allowed_repo_urls = allowed_repo_urls or set()
+        self._command_timeout = command_timeout
 
     @property
     def name(self) -> str:
@@ -150,13 +155,15 @@ class GitTool(BaseTool):
         """执行 git 命令并返回结果。
 
         使用 asyncio.create_subprocess_exec 异步执行 git 命令，
-        捕获 stdout 和 stderr。
+        捕获 stdout 和 stderr。通过 ``asyncio.wait_for`` 对
+        ``communicate()`` 施加超时；超时后 kill 子进程并回收，
+        避免 clone/pull 大仓库或网络阻塞时协程永久挂起。
 
         Args:
             args: git 命令参数列表（不含 "git" 前缀）。
 
         Returns:
-            工具执行结果。退出码非 0 时 success=False。
+            工具执行结果。退出码非 0 时 success=False，超时同样 success=False。
         """
         cmd = ["git"] + args
         logger.info("Executing git command: %s", " ".join(cmd))
@@ -167,7 +174,6 @@ class GitTool(BaseTool):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await process.communicate()
         except FileNotFoundError:
             return ToolResult(
                 success=False,
@@ -175,6 +181,30 @@ class GitTool(BaseTool):
                 error="git executable not found. Please install git.",
             )
         except Exception as e:
+            return ToolResult(
+                success=False,
+                output="",
+                error=f"Failed to execute git command: {e}",
+            )
+
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(), timeout=self._command_timeout
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                "Git command timed out after %.0fs, killing process (args=%s)",
+                self._command_timeout,
+                args,
+            )
+            await self._kill_process(process)
+            return ToolResult(
+                success=False,
+                output="",
+                error=f"git command timed out after {self._command_timeout}s",
+            )
+        except Exception as e:
+            await self._kill_process(process)
             return ToolResult(
                 success=False,
                 output="",
@@ -204,6 +234,23 @@ class GitTool(BaseTool):
             output=stdout_text,
             metadata={"returncode": process.returncode},
         )
+
+    async def _kill_process(self, process: asyncio.subprocess.Process) -> None:
+        """Terminate a stuck subprocess and reap it so no zombie remains.
+
+        Args:
+            process: The subprocess to kill.
+        """
+        try:
+            process.kill()
+        except ProcessLookupError:
+            pass
+        except Exception:
+            logger.debug("process already terminated", exc_info=True)
+        try:
+            await process.wait()
+        except Exception:
+            logger.debug("failed to reap process after kill", exc_info=True)
 
     async def execute(self, **kwargs: Any) -> ToolResult:
         """执行 Git 操作。

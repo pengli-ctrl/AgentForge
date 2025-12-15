@@ -23,6 +23,13 @@ Integration:
     LoopBlock is a DAG node type. The DAG engine treats it as a single node
     that internally executes a sub-DAG multiple times. LoopSpan tracks each
     iteration for observability.
+
+Sub-DAG budget:
+    Each iteration runs a bounded mini-DAG (Defaults: ≤20 nodes, ≤60s global
+    timeout, ≤3 parallel nodes). These are LOCAL per-iteration bounds that
+    keep a single iteration cheap; the caller is responsible for ensuring the
+    overall loop budget (iterations × per-iteration timeout) fits inside the
+    enclosing DAG's global timeout. They are configurable via the constructor.
 """
 
 import asyncio
@@ -32,6 +39,12 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
+
+# Per-iteration sub-DAG limits for LoopBlock. Kept as named constants so they
+# are explicit and easy to tune; overridable via the constructor.
+DEFAULT_SUB_DAG_MAX_NODES = 20  # Max nodes inside one loop iteration's sub-DAG
+DEFAULT_SUB_DAG_TIMEOUT = 60.0  # Per-iteration sub-DAG global timeout (seconds)
+DEFAULT_SUB_DAG_MAX_PARALLEL = 3  # Max parallel nodes inside one iteration
 
 
 @dataclass
@@ -76,6 +89,9 @@ class LoopBlock:
         max_iterations: int = 5,
         exit_condition: Optional[Callable] = None,
         name: str = "loop_block",
+        sub_dag_timeout: float = DEFAULT_SUB_DAG_TIMEOUT,
+        sub_dag_max_nodes: int = DEFAULT_SUB_DAG_MAX_NODES,
+        sub_dag_max_parallel: int = DEFAULT_SUB_DAG_MAX_PARALLEL,
     ):
         """
         Args:
@@ -85,6 +101,9 @@ class LoopBlock:
                            Returns True to stop iterating.
                            Default: always stop after 1 iteration (no looping).
             name: Identifier for logging/tracing.
+            sub_dag_timeout: Per-iteration sub-DAG global timeout (seconds).
+            sub_dag_max_nodes: Max nodes allowed in one iteration's sub-DAG.
+            sub_dag_max_parallel: Max parallel nodes within one iteration.
         """
         if max_iterations > self.ABSOLUTE_MAX_ITERATIONS:
             logger.warning(
@@ -97,6 +116,9 @@ class LoopBlock:
         self._sub_dag = sub_dag
         self._exit_condition = exit_condition or (lambda result, i: True)
         self._name = name
+        self._sub_dag_timeout = sub_dag_timeout
+        self._sub_dag_max_nodes = sub_dag_max_nodes
+        self._sub_dag_max_parallel = sub_dag_max_parallel
 
     async def execute(
         self,
@@ -135,9 +157,14 @@ class LoopBlock:
                 # Import here to avoid circular dependency
                 from agentforge.orchestration.dag_engine import DAGEngine
 
-                # Create a mini-engine for sub-DAG execution
-                # Inherits timeout and degradation from parent engine context
-                sub_engine = DAGEngine(max_nodes=20, global_timeout=60.0, max_parallel=3)
+                # Bounded mini-engine per iteration. Limits are explicit and
+                # configurable (see constructor) so the loop budget can be
+                # tuned to fit within the enclosing DAG's global timeout.
+                sub_engine = DAGEngine(
+                    max_nodes=self._sub_dag_max_nodes,
+                    global_timeout=self._sub_dag_timeout,
+                    max_parallel=self._sub_dag_max_parallel,
+                )
                 sub_result = await sub_engine.execute(
                     correlation_id=f"{self._name}_iter_{iteration}",
                     input_data=await context.get_all(),

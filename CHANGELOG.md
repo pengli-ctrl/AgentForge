@@ -5,6 +5,27 @@ All notable changes to AgentForge are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0] - 2026-09
+
+### Added
+- Enterprise AI platform layer (enterprise-facing capability, first landing on customer-support ticket processing)
+- Multi-tenant isolation across tickets, knowledge, RBAC, quotas, audit trails, and connectors
+- RBAC + declarative policy engine (fail-closed, risk levels, approval requirements, allow-list), optional OpenFGA
+- High-risk action authorizer with human-approval boundary and full authorization audit trail
+- Tenant-level quota/cost governance (budget, alert, hard cap) + cost/model distribution dashboard
+- End-to-end ticket workflow: retrieval - generation - approval - write-back
+- Reliable delivery: Temporal workflows + Outbox/DLQ (retry, DLQ replay)
+- Retrieval evaluation (Recall@K / MRR / citation accuracy) and versioned Prompt/Model registries with release quality gates
+- Offline regression harness with Golden Dataset
+- Connector SDK + Webhook/HMAC generalization + OpenAPI adapter (idempotency, rate limiting, audit) + Feishu Connector
+- Keyset (cursor) pagination replacing offset pagination (`(generated_at, run_id)` base64-urlsafe cursor)
+- Policy configuration hot-reload with monotonic `source_revision` and versioned reload audit events
+- Full test suite now covers platform layer (703 tests across unit/integration/platform)
+- CI hardened: full test matrix (py3.10/3.11/3.12), platform tests included, masking `continue-on-error` removed, mypy as a hard gate (0 errors across 206 files)
+
+### Changed
+- Docs now describe the enterprise platform layer end to end, with an accurate test count (703) reflected across README and badges.
+
 ## [3.0.0] - 2024-03
 
 ### Added

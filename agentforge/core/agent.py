@@ -44,14 +44,22 @@ class AgentState(Enum):
     FAILED = "failed"  # Terminal failure, needs reset
     TIMEOUT = "timeout"  # Timed out, can retry
 
-    # Valid state transitions (enforced in _transition_to)
-    _TRANSITIONS = {
-        IDLE: {RUNNING},
-        RUNNING: {IDLE, DEGRADED, FAILED, TIMEOUT},
-        DEGRADED: {IDLE, FAILED},
-        FAILED: {IDLE},
-        TIMEOUT: {IDLE, RUNNING},
-    }
+
+# Valid state transitions (enforced in _transition_to). Kept OUTSIDE the Enum
+# body because Python's EnumMeta rewrites class-namespace dicts whose keys are
+# enum members, which would corrupt a member-keyed mapping into the class itself.
+_AGENT_STATE_TRANSITIONS = {
+    AgentState.IDLE: {AgentState.RUNNING},
+    AgentState.RUNNING: {
+        AgentState.IDLE,
+        AgentState.DEGRADED,
+        AgentState.FAILED,
+        AgentState.TIMEOUT,
+    },
+    AgentState.DEGRADED: {AgentState.IDLE, AgentState.FAILED},
+    AgentState.FAILED: {AgentState.IDLE},
+    AgentState.TIMEOUT: {AgentState.IDLE, AgentState.RUNNING},
+}
 
 
 @dataclass
@@ -227,6 +235,7 @@ class BaseAgent(ABC):
             result_data = self.on_error(asyncio.TimeoutError("Agent timeout"))
 
         except Exception as e:
+            self._transition_to(AgentState.FAILED)
             self._error_count += 1
             self._last_error = str(e)
             status = SpanStatus.ERROR
@@ -245,7 +254,17 @@ class BaseAgent(ABC):
         success = status == SpanStatus.OK or status == SpanStatus.DEGRADED
         degraded = result_data.get("degraded", False)
 
-        if degraded and status == SpanStatus.OK:
+        # Resolve an accurate terminal/lifecycle state. If an exception already
+        # moved us to TIMEOUT or FAILED, we must NOT overwrite it back to IDLE —
+        # otherwise the failure state would be lost (a real correctness bug).
+        if self._state == AgentState.TIMEOUT or status == SpanStatus.TIMEOUT:
+            # Keep the timeout state so the caller/retry layer can observe and
+            # decide whether to retry. TIMEOUT → IDLE happens via reset().
+            pass
+        elif self._state == AgentState.FAILED or status == SpanStatus.ERROR:
+            # Keep the terminal failure state; caller must call reset() to reuse.
+            pass
+        elif degraded:
             status = SpanStatus.DEGRADED
             self._transition_to(AgentState.DEGRADED)
         else:
@@ -265,8 +284,16 @@ class BaseAgent(ABC):
     # ── Internal helpers ────────────────────────────────────────────────
 
     def _transition_to(self, new_state: AgentState) -> None:
-        """Enforce valid state transitions."""
-        valid = AgentState._TRANSITIONS.get(self._state, set())
+        """
+        Enforce valid state transitions.
+
+        If the requested transition is not in the allowed set, the current
+        state is preserved (and a warning logged) rather than silently
+        overwritten.
+        """
+        # mypy: Enum member-keyed dict is fine to read via .get at runtime.
+        valid = _AGENT_STATE_TRANSITIONS.get(self._state, set())
+
         if new_state not in valid:
             logger.warning(
                 "Agent[%s] invalid transition: %s → %s (allowed: %s)",
@@ -275,6 +302,8 @@ class BaseAgent(ABC):
                 new_state.value,
                 {s.value for s in valid},
             )
+            return  # Keep the original state — enforce the transition guard.
+
         self._state = new_state
 
     async def _end_agent_span(self, span: Span, result: dict, status: SpanStatus) -> None:
@@ -429,7 +458,7 @@ class Agent:
         return {"agent_result": {"summary": self._summarize(None, tool_results)}}
 
     def _summarize(self, response, tool_results: list) -> str:
-        if response is not None and getattr(response, "content", ""):
+        if response is not None and bool(getattr(response, "content", None)):
             return response.content
         outputs = [result.output for result in tool_results if result.output]
         return "; ".join(outputs) if outputs else ""

@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
 from agentforge.platform.application.ports import CostRepository
+from agentforge.platform.domain.connector import spec_to_public_dict
 from agentforge.platform.domain.cron import CronExpressionError, CronSchedule, is_cron_cadence
 from agentforge.platform.domain.reporting import ReportFormat, ReportType
 from agentforge.platform.domain.tenant_quota import TenantQuota
@@ -235,7 +236,7 @@ def create_console_router(
         specs = await connector_repository.list_specs(tenant_id=None)
         rows = []
         for spec in specs:
-            row = spec.model_dump(mode="json")
+            row = spec_to_public_dict(spec)
             if connector_registry is not None:
                 health = await connector_registry.health(spec.connector_id)
                 row["health"] = health.model_dump(mode="json") if health is not None else None
@@ -257,7 +258,7 @@ def create_console_router(
             raise HTTPException(status_code=404, detail="connector not found")
         spec.enabled = bool(body.get("enabled", True))
         await connector_repository.save_spec(spec)
-        return spec.model_dump(mode="json")
+        return spec_to_public_dict(spec)
 
     # --- operational reports (export + scheduling) ---
 

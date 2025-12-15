@@ -36,8 +36,8 @@ logger = logging.getLogger(__name__)
 
 # 尝试导入 ragas，做优雅降级
 try:
-    from ragas import evaluate as ragas_evaluate  # type: ignore[import-untyped]
-    from ragas.metrics import (  # type: ignore[import-untyped]
+    from ragas import evaluate as ragas_evaluate
+    from ragas.metrics import (
         answer_relevancy,
         context_precision,
         context_recall,
@@ -47,7 +47,7 @@ try:
     RAGAS_AVAILABLE = True
 except ImportError:
     RAGAS_AVAILABLE = False
-    ragas_evaluate = None  # type: ignore[assignment]
+    ragas_evaluate = None
 
 # 评估维度权重（用于计算综合分）
 DIMENSION_WEIGHTS: dict[str, float] = {
@@ -393,7 +393,7 @@ class RAGEvaluator:
 
         # 构造 ragas 数据集
         try:
-            from datasets import Dataset  # type: ignore[import-untyped]
+            from datasets import Dataset
         except ImportError:
             logger.warning("datasets library not installed, falling back to LLM-as-Judge")
             return self._evaluate_with_llm_judge(samples, rag_pipeline, top_k)
@@ -453,16 +453,18 @@ class RAGEvaluator:
 
         return eval_result.to_dict()
 
-    def _evaluate_with_llm_judge(
+    async def _evaluate_with_llm_judge_async(
         self,
         samples: list[GoldenSample],
         rag_pipeline: RAGPipelineProtocol,
         top_k: int,
     ) -> dict[str, Any]:
-        """使用 LLM-as-Judge 降级评估（ragas 未安装时）。
+        """使用 LLM-as-Judge 降级评估的异步实现（ragas 未安装时）。
 
-        用 LLM 对每条样本做语义断言，近似四个维度。
-        通过 asyncio.run 在同步方法中调用异步 LLM。
+        在既有（或调用方提供的）事件循环内用 ``await`` 驱动 LLM 裁判，
+        不重复创建事件循环。任何样本的 RAG 检索 / 生成 / 裁判失败都会被
+        记录真实错误并跳过该样本，而不是把四个维度静默补成 0 分——后者会
+        伪造一份看似正常、实则无效的错误报告。
 
         Args:
             samples: GoldenSample 列表。
@@ -471,55 +473,47 @@ class RAGEvaluator:
 
         Returns:
             评估结果字典。
+
+        Raises:
+            RuntimeError: 所有样本都未能取得裁判分数（无法给出有意义的报告）。
         """
         faith_scores: list[float] = []
         relevancy_scores: list[float] = []
         precision_scores: list[float] = []
         recall_scores: list[float] = []
         per_sample: list[dict[str, Any]] = []
+        failed = 0
 
         for sample in samples:
-            retrieved, answer = self._run_rag_for_sample(sample, rag_pipeline, top_k)
-            retrieved_text = "\n".join(retrieved)
-
-            # 在同步上下文中运行异步 LLM 调用
             try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                f_score, _ = loop.run_until_complete(
-                    self._judge.judge(sample.query, answer, retrieved_text, "faithfulness")
+                retrieved, answer = self._run_rag_for_sample(sample, rag_pipeline, top_k)
+                retrieved_text = "\n".join(retrieved)
+
+                f_score, _ = await self._judge.judge(
+                    sample.query, answer, retrieved_text, "faithfulness"
                 )
-                r_score, _ = loop.run_until_complete(
-                    self._judge.judge(
-                        sample.query,
-                        answer,
-                        sample.ground_truth_answer,
-                        "answer_relevancy",
-                    )
+                r_score, _ = await self._judge.judge(
+                    sample.query,
+                    answer,
+                    sample.ground_truth_answer,
+                    "answer_relevancy",
                 )
-                cp_score, _ = loop.run_until_complete(
-                    self._judge.judge(
-                        sample.query,
-                        retrieved_text,
-                        sample.ground_truth_context,
-                        "context_precision",
-                    )
+                cp_score, _ = await self._judge.judge(
+                    sample.query,
+                    retrieved_text,
+                    sample.ground_truth_context,
+                    "context_precision",
                 )
-                cr_score, _ = loop.run_until_complete(
-                    self._judge.judge(
-                        sample.query,
-                        retrieved_text,
-                        sample.ground_truth_context,
-                        "context_recall",
-                    )
+                cr_score, _ = await self._judge.judge(
+                    sample.query,
+                    retrieved_text,
+                    sample.ground_truth_context,
+                    "context_recall",
                 )
-                loop.close()
-            except RuntimeError:
-                # 已有事件循环运行中，创建 task 方式不适用于同步上下文
-                f_score = 0.0
-                r_score = 0.0
-                cp_score = 0.0
-                cr_score = 0.0
+            except Exception as exc:  # noqa: BLE001 - 记录真实错误，不伪造 0 分
+                failed += 1
+                logger.error("LLM-as-Judge failed for sample %r: %s", str(sample.query)[:50], exc)
+                continue
 
             faith_scores.append(f_score)
             relevancy_scores.append(r_score)
@@ -536,10 +530,16 @@ class RAGEvaluator:
                 }
             )
 
-        avg_faith = sum(faith_scores) / len(faith_scores) if faith_scores else 0.0
-        avg_rel = sum(relevancy_scores) / len(relevancy_scores) if relevancy_scores else 0.0
-        avg_cp = sum(precision_scores) / len(precision_scores) if precision_scores else 0.0
-        avg_cr = sum(recall_scores) / len(recall_scores) if recall_scores else 0.0
+        if not per_sample:
+            raise RuntimeError(
+                "LLM-as-Judge evaluation produced no scores: all "
+                f"{len(samples)} sample(s) failed. No report was generated."
+            )
+
+        avg_faith = sum(faith_scores) / len(faith_scores)
+        avg_rel = sum(relevancy_scores) / len(relevancy_scores)
+        avg_cp = sum(precision_scores) / len(precision_scores)
+        avg_cr = sum(recall_scores) / len(recall_scores)
 
         overall = self._compute_overall(avg_faith, avg_rel, avg_cp, avg_cr)
 
@@ -554,12 +554,61 @@ class RAGEvaluator:
         )
 
         logger.info(
-            "LLM-as-Judge evaluation completed (samples=%d, overall=%.4f)",
+            "LLM-as-Judge evaluation completed (samples=%d, failed=%d, overall=%.4f)",
             len(samples),
+            failed,
             overall,
         )
 
         return result.to_dict()
+
+    def _evaluate_with_llm_judge(
+        self,
+        samples: list[GoldenSample],
+        rag_pipeline: RAGPipelineProtocol,
+        top_k: int,
+    ) -> dict[str, Any]:
+        """使用 LLM-as-Judge 降级评估的同步入口（ragas 未安装时）。
+
+        仅在不存在正在运行的事件循环时，为本批次一次性创建并关闭一个事件
+        循环（不再为每条样本反复新建/关闭）；循环关闭放在 ``finally`` 中，
+        中途异常也不会泄漏。
+
+        若调用方本身正运行在事件循环中（Web/API 常见），本同步方法无法阻塞，
+        会抛出带指引信息的 RuntimeError，由调用方改用
+        :meth:`_evaluate_with_llm_judge_async`，而不是静默返回全 0 分。
+
+        Args:
+            samples: GoldenSample 列表。
+            rag_pipeline: RAG 管道实例。
+            top_k: 检索 Top-K。
+
+        Returns:
+            评估结果字典。
+
+        Raises:
+            RuntimeError: 已存在运行中的事件循环，或全部样本评估失败。
+        """
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            # 没有正在运行的事件循环，安全地创建一次性循环。
+            pass
+        else:
+            raise RuntimeError(
+                "RAGEvaluator._evaluate_with_llm_judge must not be called from "
+                "inside a running event loop. Use the async variant "
+                "_evaluate_with_llm_judge_async instead."
+            )
+
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            return loop.run_until_complete(
+                self._evaluate_with_llm_judge_async(samples, rag_pipeline, top_k)
+            )
+        finally:
+            loop.close()
 
     def _compute_overall(
         self,

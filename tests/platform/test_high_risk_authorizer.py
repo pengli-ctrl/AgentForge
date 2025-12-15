@@ -142,8 +142,12 @@ async def test_audit_recorded_for_allow_and_deny() -> None:
     auth = HighRiskActionAuthorizer(engine, audit, rbac)
     # denied (no role)
     await auth.authorize(
-        tenant_id="t1", principal="nobody", action="ticket.writeback",
-        resource_type="ticket", resource_id="x", ticket=_ticket(TicketStatus.WAITING_APPROVAL),
+        tenant_id="t1",
+        principal="nobody",
+        action="ticket.writeback",
+        resource_type="ticket",
+        resource_id="x",
+        ticket=_ticket(TicketStatus.WAITING_APPROVAL),
     )
     actions = [e.action for e in audit.events]
     assert "ticket.writeback.authorization" in actions
@@ -160,9 +164,13 @@ async def test_execute_guarded_denied_raises() -> None:
 
     with pytest.raises(PermissionError):
         await auth.execute_guarded(
-            tenant_id="t1", principal="alice", action="ticket.writeback",
-            resource_type="ticket", resource_id="x",
-            ticket=_ticket(TicketStatus.WAITING_APPROVAL), fn=_fn,
+            tenant_id="t1",
+            principal="alice",
+            action="ticket.writeback",
+            resource_type="ticket",
+            resource_id="x",
+            ticket=_ticket(TicketStatus.WAITING_APPROVAL),
+            fn=_fn,
         )
 
 
@@ -174,9 +182,7 @@ async def test_writeback_gate_blocks_unapproved() -> None:
         registry, audit_repository=_FakeAuditRepo(), high_risk_authorizer=auth
     )
     with pytest.raises(PermissionError):
-        await service.write_back(
-            _ticket(TicketStatus.WAITING_APPROVAL), actor="alice"
-        )
+        await service.write_back(_ticket(TicketStatus.WAITING_APPROVAL), actor="alice")
     assert registry.invocations == []
 
 
@@ -187,8 +193,6 @@ async def test_writeback_gate_allows_approved() -> None:
     service = TicketWritebackService(
         registry, audit_repository=_FakeAuditRepo(), high_risk_authorizer=auth
     )
-    data = await service.write_back(
-        _ticket(TicketStatus.READY_TO_PUBLISH), actor="alice"
-    )
+    data = await service.write_back(_ticket(TicketStatus.READY_TO_PUBLISH), actor="alice")
     assert data == {"ok": True}
     assert len(registry.invocations) == 1

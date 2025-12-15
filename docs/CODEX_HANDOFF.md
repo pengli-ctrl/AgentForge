@@ -108,6 +108,8 @@ python -m alembic upgrade head --sql
 - 缺少生产部署、Helm、Terraform、备份、升级、回滚和灾备方案。
 - 当前 API Key 是静态映射，不是企业级身份系统。
 
+> **未实现项 / 风险 / 漏洞全量清单见** `docs/BACKLOG.md`**（阶段 D 增量 15 收尾后建立，基线提交 `06eee7b`）。** 登记阶段 C/D/E 未实现项、基础设施缺口（无 Docker/无真实 Temporal/K8s/CRM/OpenFGA）与本地可继续补写项（分页 keyset 化、ZIP 去临时落盘、策略热加载、配额/成本下沉 SQL）.
+
 ## 7. 后续路线图
 
 原工程书使用“阶段 0 到阶段 5”。基于当前真实完成度，后续建议重新基线为“阶段 A 到阶段 F”，避免把已经部分完成的阶段重复计算。
@@ -173,11 +175,11 @@ python -m alembic upgrade head --sql
 5. 稳定版本、兼容策略、Connector SDK 和行业模板。
 6. 开源核心与企业控制面、许可和企业支持方案。
 
-阶段 A 与阶段 B 已完成（阶段 B 全 4 个增量均已完成，见第 8 节增量完成记录）。阶段 C 全 5 个增量已完成（增量 1 Connector 适配、增量 2 连接器注册持久化 + 工单写回闭环、增量 3 RBAC/Policy/OpenFGA 权限模型、增量 4 租户配额 + 管理控制台概览、增量 5 高风险动作审计闭环 + 人工授权边界）。阶段 D 增量 1（管理控制台基础页面接口）、增量 2（Outbox/DLQ/任务状态维护接口）、增量 3（成本/配额/模型分布/质量指标看板接口）、增量 4（审计查询、租户配置与连接器管理页面接口）与增量 5（运营报表导出与定时化）已完成；后续剩余 2 个建议增量。每个增量应控制在 0.5 到 2 天内可完成、可测试、可提交的范围内。
+阶段 A 与阶段 B 已完成（阶段 B 全 4 个增量均已完成，见第 8 节增量完成记录）。阶段 C 全 5 个增量已完成（增量 1 Connector 适配、增量 2 连接器注册持久化 + 工单写回闭环、增量 3 RBAC/Policy/OpenFGA 权限模型、增量 4 租户配额 + 管理控制台概览、增量 5 高风险动作审计闭环 + 人工授权边界）；增量 6（策略配置源热加载）已完成。阶段 D 增量 1（管理控制台基础页面接口）、增量 2（Outbox/DLQ/任务状态维护接口）、增量 3（成本/配额/模型分布/质量指标看板接口）、增量 4（审计查询、租户配置与连接器管理页面接口）与增量 5（运营报表导出与定时化）已完成。阶段 D 全 15 个增量（1-15 后端闭环 + 增量 16 keyset 分页改造）已完成。后续按 `docs/BACKLOG.md` 处理剩余项：本地可闭环的补写，需外部设施（Temporal/前端/真实 PG/K8s/CRM）的登记待补。每个增量应控制在 0.5 到 2 天内可完成、可测试、可提交的范围内。
 
 ## 8. 增量完成记录
 
-阶段 A（7 个增量）、阶段 B（4 个增量）、阶段 C（5 个增量）均已完成；阶段 D 增量 1（管理控制台基础页面接口）、增量 2（Outbox/DLQ/任务状态/重试与故障操作接口）、增量 3（成本/配额/模型分布/质量指标看板接口）、增量 4（审计查询、租户配置与连接器管理页面接口）、增量 5（运营报表导出与定时化）、增量 6（运营报表产物持久化与历史查询）、增量 7（报表 run 保留/清理策略）、增量 8（排程保留策略持久化 + `run_due` 自动联动清理）、增量 9（排程暂停/恢复 + 全局默认保留策略）、增量 10（cron 表达式排程）、增量 11（报表 run 归档 + 批量 ZIP 归档导出）、增量 12（归档与保留清理联动）、增量 13（报表管理操作审计日志接入）、增量 14（ZIP 归档导出流式化）与增量 15（报表 run 列表游标分页）已完成。阶段 B 增量 1-4、阶段 C 增量 1-5、阶段 D 增量 1-15 的完成记录如下；下一步进入阶段 D 增量 16（`run_due` 移入 worker 异步化，或剩余管理页面收尾）。
+阶段 A（7 个增量）、阶段 B（4 个增量）、阶段 C（5 个增量）均已完成；阶段 D 增量 1（管理控制台基础页面接口）、增量 2（Outbox/DLQ/任务状态/重试与故障操作接口）、增量 3（成本/配额/模型分布/质量指标看板接口）、增量 4（审计查询、租户配置与连接器管理页面接口）、增量 5（运营报表导出与定时化）、增量 6（运营报表产物持久化与历史查询）、增量 7（报表 run 保留/清理策略）、增量 8（排程保留策略持久化 + `run_due` 自动联动清理）、增量 9（排程暂停/恢复 + 全局默认保留策略）、增量 10（cron 表达式排程）、增量 11（报表 run 归档 + 批量 ZIP 归档导出）、增量 12（归档与保留清理联动）、增量 13（报表管理操作审计日志接入）、增量 14（ZIP 归档导出流式化）、增量 15（报表 run 列表游标分页）与增量 16（分页 keyset 化改造）已完成。阶段 B 增量 1-4、阶段 C 增量 1-5、阶段 D 增量 1-16 的完成记录如下。阶段 D 中不依赖外部设施的本地可闭环缺口（分页 keyset 化等）已走完；剩余需外部基础设施（`run_due` 异步接 worker、前端页面、真实 PostgreSQL/Kafka/Temporal、策略热加载、配额/成本下沉 SQL 等）的问题登记在 `docs/BACKLOG.md`，待后续具备条件时按编号补写。
 
 ### 阶段 D 增量 4 完成记录（2026-09-18）
 
@@ -344,7 +346,7 @@ python -m alembic upgrade head --sql
 - 验证：`tests/platform` 223 passed（净 +2）、全仓 689 passed（净 +2）、Black/isort/Flake8 通过、增量相关源文件 mypy 通过（`Success: no issues found`）；新增 2 项到 `tests/platform/test_reports.py`（`export_archive_to` 写入磁盘后 ZIP 内文件数与格式有效、`/reports/runs/archive` 端点流式返回可解压 JSON/CSV 且 content-type/disposition 正确）。
 - alembic head 保持为 `20260918_0015`（本增量无 schema 变更）。
 - 剩余风险：`run_due` 仍同步（未接 worker）；流式路径依赖临时文件落盘（磁盘 I/O 与生命周期由路由器管理，异常时 `finally` 清理）；真实 PostgreSQL 端到端未验证。
-- 下一步：阶段 D 增量 15（`run_due` 移入 worker 异步化、或剩余管理页面收尾）。
+- 下一步：阶段 D 增量 16（分页 keyset 化），随后按 `docs/BACKLOG.md` 补本地可闭环缺口。
 
 
 ### 阶段 D 增量 15 完成记录（2026-09-18）
@@ -352,15 +354,39 @@ python -m alembic upgrade head --sql
 - 范围：报表 run 列表游标分页——为管理控制台报表 run 列表增加 cursor 分页，贴合既有的 cursor 分页模式（类 ticket/audit 的 `(items, next_cursor)`），支持大历史集合分批遍历（纯后端、可独立闭环）。
 - 端口：`application/ports.py` `ReportRunRepository` 新增 `list_page(tenant_id, report_type, limit, archived, cursor) -> tuple[list[ReportRun], str | None]`（`list` 保持兼容返回 `list[ReportRun]`）。
 - 仓储：
-  - `memory_report_run_repository.py`：`list_page` 复用 `list` 的过滤/排序（`generated_at desc`），按 offset（`int(cursor)`）切片，返回 `(bucket, next_cursor)`。
-  - `sqlalchemy_report_run_repository.py`：`list_page` 复用 `list` 的过滤与排序，`offset(start).limit(limit+1)` 探测是否有下一页（limit+1 技巧），返回 `(page, next_cursor)`。
+  - `memory_report_run_repository.py`：`list_page` 初版按 offset（`int(cursor)`）切片，返回 `(bucket, next_cursor)`；随后由增量 16 升级为 keyset 游标（见下）。
+  - `sqlalchemy_report_run_repository.py`：`list_page` 初版用 `offset(start).limit(limit+1)` 探测下一页；随后由增量 16 升级为 keyset 游标（见下）。
+
   - 两文件与 ports 均显式 `import builtins`，用 `builtins.list[...]` 规避 mypy 陷阱（`list_page` 定义在 `list` 方法之后，裸 `list` 注解会被解析成方法而非内建类型）。
 - 应用：`application/report_service.py` 新增 `list_runs_paginated(...) -> tuple[list[dict], str | None]`（透传 cursor，复用 `_run_meta`；`list_runs` 保留向后兼容）。
 - 接口：`api/console_router.py` `GET /v1/console/reports/runs` 新增 `cursor` 查询参数，返回 `{"runs": [...], "next_cursor": ...}`。
 - 验证：`tests/platform` 227 passed（净 +4）、全仓 693 passed（净 +4）、Black/isort/Flake8 通过、增量相关源文件 mypy 通过（`Success: no issues found`）；新增 4 项到 `tests/platform/test_reports.py`（memory `list_page` 2/2/1 不重叠、sqlalchemy `list_page` 3/2、service `list_runs_paginated`、`/reports/runs` 端点 cursor 遍历且两页无重叠）。
 - alembic head 保持为 `20260918_0015`（本增量无 schema 变更）。
 - 剩余风险：`run_due` 仍同步（未接 worker）；游标为 offset 语义（非 keyset，服务端无"页间数据增删导致偏移漂移"的加固）；真实 PostgreSQL 端到端未验证。
-- 下一步：阶段 D 增量 16（`run_due` 移入 worker 异步化、或剩余管理页面收尾）。
+- 下一步：阶段 D 增量 16（分页 keyset 化），随后按 `docs/BACKLOG.md` 补本地可闭环缺口。
+
+### 阶段 D 增量 16 完成记录（2026-09-18）
+
+- 范围：报表 run 列表分页从 offset 升级为 keyset（滚动游标），消除页间数据变化导致的偏移漂移；并行将报表 ZIP 导出判定为“已合理实现（temp-file + StreamingResponse 分段流式）”，不改动其实现。
+- 动机：增量 15 引入的 offset 分页在并发写入/删除时会让下一页错过或重复行。改为基于稳定唯一键 `(generated_at, run_id)` 的 keyset 游标后，翻页边界不随前置行变化而漂移。
+- 共享：`domain/reporting.py` 新增 `_encode_run_cursor(generated_at, run_id)` / `_decode_run_cursor(cursor)`（base64 URL-safe 编码），供 memory 与 sqlalchemy 双仓储复用。
+- 仓储：
+  - `memory_report_run_repository.py`：`list_page` 排序改为 `(generated_at, run_id)` 降序，按游标锚点过滤 `(generated_at, run_id) < (anchor_ts, anchor_id)`，取 `limit+1` 探测下一页。
+  - `sqlalchemy_report_run_repository.py`：`list_page` 排序改为 `(generated_at DESC, run_id DESC)`，游标锚点展开为 `(generated_at < anchor_ts) OR (generated_at = anchor_ts AND run_id < anchor_id)`，`limit(limit+1)` 探测下一页。
+- 服务：`report_service.list_runs_paginated` 不变（透传 cursor）；console `/reports/runs` 路由不变。
+- 测试：+2——`test_report_run_keyset_cursor_stable_under_duplicate_timestamps`（同时间戳多 run 稳定翻页、不重不漏）、`test_report_run_keyset_cursor_roundtrip`（游标往返 + 非法输入容错）。
+- 验证：platform 229 / full 695（baseline 693+2），black/isort/flake8 干净（100 列，项目配置），mypy 改动文件无新增错误（既有基线 394 与 support_ticket.py 未动），alembic head 仍 `20260918_0015`（无 schema 变更）。
+- 剩余风险：`run_due` 仍同步（未接 worker）；真实 PostgreSQL 端到端、frontend 页面、策略热加载、配额/成本下沉 SQL 等在 `docs/BACKLOG.md` 登记待补。
+- 下一步：阶段 D 剩余本地可闭环项——Q-01/Q-02 配额/成本统计下沉 SQL 聚合（move todo），或 C-05 策略运行时热加载基础版。
+
+### 阶段 C 增量 6 完成记录（2026-09-18）
+
+- 范围：策略配置源热加载（C-05 的本地可闭环部分）——`PolicyEngine` 从磁盘/配置源原子换载策略，替代"仅进程内手动注册、无运行时热加载"。
+- 共享：`domain/policy.py` 新增 `PolicyFileLoader`——严格解析外部策略 JSON（`ActionPolicy.model_validate`，`extra="forbid"` 拒绝未知字段），文档非 list 或存在非法条目整体拒绝。
+- 引擎：`policy_engine.py` 新增 `source_revision`（单调递增的换载计数）、`reload(policies)`（构造新注册表成功后才整体替换，重复 key 拒绝，失败不残留半更新）、`reload_from_loader(loader)`（loader 全部成功后才换载，loader 抛错则引擎保持原策略）。
+- 测试：+5——解析合法 JSON、拒绝未知字段/非 list/非 JSON、reload 后决策语义翻转且 revision 递增、坏 loader 不破坏既有策略（原子性）、重复 key 拒绝。
+- 验证：policy 套件 12 过（7 既有 + 5 新增）；black/isort/flake8（100 列）干净；mypy 两源文件无问题（tests 内 4 处既有 permissions 字符串类型错误为 pre-existing，未动）。
+- 剩余：管理员权限矩阵、运行时策略编辑 API（审计策略变更）未实现，属多进程/权限矩阵范畴，登记 BACKLOG C-05 待补。
 
 ### 阶段 D 增量 3 完成记录（2026-09-18）
 

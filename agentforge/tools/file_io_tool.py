@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
 from agentforge.core.base_tool import BaseTool, ToolResult
@@ -125,11 +126,17 @@ class FileIOTool(BaseTool):
         else:
             return ToolResult(
                 success=False,
+                output="",
                 error=f"Unknown operation: {operation}",
             )
 
     def _validate_path(self, file_path: str) -> bool:
         """验证文件路径是否安全（在根目录内）。
+
+        使用 ``Path.resolve().relative_to(root)`` 做路径边界判断，而非字符串
+        前缀 ``startswith``。前缀匹配存在经典绕过：当 ``root_dir=".../user"``
+        时，``.../user_evil/a.py`` 也以该前缀开头而通过。基于文件系统组件
+        的边界判断能真正防止路径穿越。
 
         Args:
             file_path: 文件路径。
@@ -137,8 +144,18 @@ class FileIOTool(BaseTool):
         Returns:
             路径是否安全。
         """
-        abs_path = os.path.abspath(os.path.join(self.root_dir, file_path))
-        return abs_path.startswith(self.root_dir)
+        root = Path(self.root_dir).resolve()
+
+        if os.path.isabs(file_path):
+            target = Path(file_path).resolve()
+        else:
+            target = (root / file_path).resolve()
+
+        try:
+            target.relative_to(root)
+            return True
+        except ValueError:
+            return False
 
     async def _read_file(self, file_path: str) -> ToolResult:
         """读取文件内容。
@@ -150,16 +167,17 @@ class FileIOTool(BaseTool):
             文件内容。
         """
         if not self._validate_path(file_path):
-            return ToolResult(success=False, error="Path outside allowed root directory")
+            return ToolResult(success=False, output="", error="Path outside allowed root directory")
 
         abs_path = os.path.join(self.root_dir, file_path)
         if not os.path.exists(abs_path):
-            return ToolResult(success=False, error=f"File not found: {file_path}")
+            return ToolResult(success=False, output="", error=f"File not found: {file_path}")
 
         file_size = os.path.getsize(abs_path)
         if file_size > self.max_file_size:
             return ToolResult(
                 success=False,
+                output="",
                 error=f"File too large: {file_size} bytes (max: {self.max_file_size})",
             )
 
@@ -168,7 +186,7 @@ class FileIOTool(BaseTool):
                 content = f.read()
             return ToolResult(success=True, output=content)
         except Exception as e:
-            return ToolResult(success=False, error=str(e))
+            return ToolResult(success=False, output="", error=str(e))
 
     async def _write_file(self, file_path: str, content: str) -> ToolResult:
         """写入文件内容。
@@ -181,7 +199,7 @@ class FileIOTool(BaseTool):
             写入结果。
         """
         if not self._validate_path(file_path):
-            return ToolResult(success=False, error="Path outside allowed root directory")
+            return ToolResult(success=False, output="", error="Path outside allowed root directory")
 
         abs_path = os.path.join(self.root_dir, file_path)
         os.makedirs(os.path.dirname(abs_path), exist_ok=True)
@@ -194,7 +212,7 @@ class FileIOTool(BaseTool):
                 output=f"File written: {file_path} ({len(content)} bytes)",
             )
         except Exception as e:
-            return ToolResult(success=False, error=str(e))
+            return ToolResult(success=False, output="", error=str(e))
 
     async def _list_dir(self, dir_path: str) -> ToolResult:
         """列出目录内容。
@@ -206,11 +224,11 @@ class FileIOTool(BaseTool):
             文件列表。
         """
         if not self._validate_path(dir_path):
-            return ToolResult(success=False, error="Path outside allowed root directory")
+            return ToolResult(success=False, output="", error="Path outside allowed root directory")
 
         abs_path = os.path.join(self.root_dir, dir_path)
         if not os.path.isdir(abs_path):
-            return ToolResult(success=False, error=f"Not a directory: {dir_path}")
+            return ToolResult(success=False, output="", error=f"Not a directory: {dir_path}")
 
         try:
             entries = os.listdir(abs_path)
@@ -220,7 +238,7 @@ class FileIOTool(BaseTool):
                 metadata={"entries": entries, "count": len(entries)},
             )
         except Exception as e:
-            return ToolResult(success=False, error=str(e))
+            return ToolResult(success=False, output="", error=str(e))
 
     async def _exists(self, file_path: str) -> ToolResult:
         """检查文件是否存在。
@@ -232,7 +250,7 @@ class FileIOTool(BaseTool):
             存在性检查结果。
         """
         if not self._validate_path(file_path):
-            return ToolResult(success=False, error="Path outside allowed root directory")
+            return ToolResult(success=False, output="", error="Path outside allowed root directory")
 
         abs_path = os.path.join(self.root_dir, file_path)
         exists = os.path.exists(abs_path)

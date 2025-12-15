@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from fastapi.testclient import TestClient
 
 from agentforge.platform.api.app import create_platform_app
@@ -45,7 +47,6 @@ async def _seed(container, tickets) -> None:
 
 
 def test_console_tickets_lists_and_filters() -> None:
-    import asyncio
 
     from agentforge.platform.infrastructure.memory_ticket_repository import (
         MemoryTicketRepository,
@@ -74,7 +75,6 @@ def test_console_tickets_lists_and_filters() -> None:
 
 
 def test_console_inbox_returns_only_waiting_approval() -> None:
-    import asyncio
 
     container, client = _client()
     asyncio.run(
@@ -93,7 +93,6 @@ def test_console_inbox_returns_only_waiting_approval() -> None:
 
 
 def test_console_overview_includes_task_status_counts() -> None:
-    import asyncio
 
     container, client = _client()
     asyncio.run(
@@ -119,7 +118,6 @@ def test_console_overview_includes_task_status_counts() -> None:
 
 
 def test_console_costs_overview_aggregates_tenants() -> None:
-    import asyncio
 
     from agentforge.platform.domain.cost import CostRecord
     from agentforge.platform.infrastructure.memory_cost_repository import (
@@ -154,7 +152,6 @@ def test_console_costs_overview_aggregates_tenants() -> None:
 
 
 def test_ticket_list_pagination_cursor() -> None:
-    import asyncio
 
     container, client = _client()
     asyncio.run(

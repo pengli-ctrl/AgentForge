@@ -23,8 +23,9 @@ Why these limits?
 Design rationale:
     Uses semaphore pattern (acquire/release) for concurrency control.
     Size and count checks are stateless (just compare against thresholds).
-    All three checks run before DAG execution starts — fail-fast prevents
-    partial execution and wasted resources.
+    Size/count checks run before DAG execution starts — fail-fast prevents
+    partial execution and wasted resources. The concurrency semaphore is
+    acquired at DAG start and released in a finally block.
 """
 
 import asyncio
@@ -151,23 +152,15 @@ class RequestGuard:
         """
         Acquire a concurrency slot before starting a DAG.
 
-        Returns True if acquired, False if system is at capacity.
-        Does NOT block — returns immediately. Use try_acquire() for
-        non-blocking behavior.
+        Waits for an available slot when the system is at capacity (standard
+        asyncio.Semaphore behavior) and returns True once acquired. The wait is
+        safe because the semaphore is the single source of truth — there is no
+        peek of the internal ``_value`` (which would be a TOCTOU anti-pattern).
         """
-        acquired = self._semaphore._value > 0  # peek without blocking
-        if acquired:
-            await self._semaphore.acquire()
-            async with self._dag_count_lock:
-                self._active_dag_count += 1
-            return True
-        else:
-            logger.warning(
-                "RequestGuard: no slots available (%d/%d DAGs active)",
-                self._active_dag_count,
-                self._max_active,
-            )
-            return False
+        await self._semaphore.acquire()
+        async with self._dag_count_lock:
+            self._active_dag_count += 1
+        return True
 
     async def release(self) -> None:
         """Release a concurrency slot after DAG completion. Always call in finally."""

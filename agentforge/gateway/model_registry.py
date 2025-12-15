@@ -9,7 +9,9 @@ Design decisions:
     - Singleton-style: one registry instance shared across the gateway layer
     - Circuit breaker is tracked HERE, not in the router — the router calls
       registry.mark_unavailable() when failures exceed threshold
-    - Recovery is automatic via call_later (no background thread needed)
+    - Recovery is automatic via a tracked asyncio task (no background thread
+      needed); the task holds a strong reference so recovery always runs even
+      if no other reference to the registry survives scheduling time
     - Default models are registered at init with production-tuned profiles
     - Models can be added/removed at runtime for A/B testing or model rotation
 
@@ -80,11 +82,26 @@ class ModelRegistry:
         - All mutations (mark_unavailable, register, unregister) use asyncio.Lock
         - Read operations (get, list_models, get_available) are lock-free
           because they return copies or immutable references
+
+    Recovery safety:
+        - Previously, mark_unavailable scheduled recovery via
+          ``asyncio.get_event_loop().call_later(duration, self._recover_model,
+          name)``. ``call_later`` only holds a weak reference to the callback, so
+          the bound method could be GC'd and the model would never recover. It
+          also raced with other mutations because the flag flip was not guarded.
+        - Now each model's recovery is a pending ``asyncio.Task`` stored by strong
+          reference, guarded by ``_lock``. Re-marking cancels any prior pending
+          recovery, and ``mark_available`` cancels pending recovery as well, so a
+          model cannot be spuriously re-opened by an obsolete timer.
     """
 
     def __init__(self):
         self._models: dict[str, ModelProfile] = {}
         self._lock = asyncio.Lock()
+        # Strong reference to per-model recovery tasks. Keeping the running task
+        # alive guarantees the model is restored even if no other strong
+        # reference to the registry exists when recovery is scheduled.
+        self._pending_recovery: dict[str, asyncio.Task] = {}
         self._register_defaults()
 
     def _register_defaults(self) -> None:
@@ -167,28 +184,78 @@ class ModelRegistry:
         Called by SmartRouter when a model's failure rate exceeds threshold.
         After duration_seconds, the model is automatically recovered.
 
+        Holds the pending recovery for ``name`` by strong reference (via an
+        asyncio task stored in ``_pending_recovery``), cancelling any previous
+        not-yet-fired recovery so stale timers cannot resurrect the model early.
+
         Args:
             name: Model identifier to mark unavailable.
             duration_seconds: How long to keep the circuit open. Default 900s (15 min).
         """
         async with self._lock:
             model = self._models.get(name)
-            if model:
-                model.is_available = False
-                logger.warning("Circuit breaker: %s unavailable for %.0fs", name, duration_seconds)
-                # Schedule automatic recovery
-                asyncio.get_event_loop().call_later(duration_seconds, self._recover_model, name)
+            if not model:
+                return
 
-    def _recover_model(self, name: str) -> None:
-        """
-        Recover a circuit-broken model (called after timeout).
+            model.is_available = False
+            logger.warning("Circuit breaker: %s unavailable for %.0fs", name, duration_seconds)
 
-        This is invoked by call_later — it's synchronous because it's
-        called from the event loop's timer, not from async code.
+            # Cancel any previously scheduled recovery for this model.
+            previous = self._pending_recovery.pop(name, None)
+            if previous is not None and not previous.done():
+                previous.cancel()
+
+            # Strong-reference the recovery task so it is not GC'd.
+            recovery = asyncio.create_task(self._recover_model_after(name, duration_seconds))
+            self._pending_recovery[name] = recovery
+
+    async def _recover_model_after(self, name: str, duration_seconds: float) -> None:
         """
-        if name in self._models:
-            self._models[name].is_available = True
+        Recover a circuit-broken model after the timeout elapses (async task body).
+
+        Runs as an asyncio task and only flips availability back if this task is
+        still the current pending recovery for ``name`` (guards against races
+        with re-mark or an explicit mark_available).
+
+        Args:
+            name: Model identifier to recover.
+            duration_seconds: How long to wait before recovering.
+        """
+        try:
+            await asyncio.sleep(duration_seconds)
+        except asyncio.CancelledError:
+            return
+
+        async with self._lock:
+            current_task = asyncio.current_task()
+            if self._pending_recovery.get(name) is not current_task:
+                return
+            model = self._models.get(name)
+            if model is None:
+                return
+            model.is_available = True
+            self._pending_recovery.pop(name, None)
             logger.info("Circuit breaker: %s recovered", name)
+
+    async def mark_available(self, name: str) -> None:
+        """
+        Immediately restore a model and cancel any pending auto-recovery.
+
+        Useful when a health probe confirms the provider recovered ahead of the
+        scheduled timeout, or for manual intervention.
+
+        Args:
+            name: Model identifier to mark available.
+        """
+        async with self._lock:
+            model = self._models.get(name)
+            if model is None:
+                return
+            model.is_available = True
+            pending = self._pending_recovery.pop(name, None)
+            if pending is not None and not pending.done():
+                pending.cancel()
+            logger.info("Model %s marked available (cancelled pending recovery)", name)
 
     async def register_model(self, profile: ModelProfile) -> None:
         """

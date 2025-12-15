@@ -165,12 +165,14 @@ class TestHalfOpenState:
         assert breaker.failure_count == 0
 
     def test_half_open_failure_back_to_open(self) -> None:
+        now = [0.0]
         breaker = CircuitBreaker(
             failure_threshold=1,
             recovery_timeout=0.05,
+            clock=lambda: now[0],
         )
         breaker.record_failure()
-        time.sleep(0.06)
+        now[0] = 0.06
 
         assert breaker.state == CircuitState.HALF_OPEN
         breaker.can_execute()  # 消耗一次试探

@@ -56,9 +56,11 @@ class SupportTicketWorkflow:
         decision = self._approval_decision or {}
         return await workflow.execute_activity(
             apply_approval_activity,
-            ticket["tenant_id"],
-            ticket["ticket_id"],
-            decision.get("decision", "reject"),
-            decision.get("decided_by", "unknown"),
+            args=[
+                ticket["tenant_id"],
+                ticket["ticket_id"],
+                decision.get("decision", "reject"),
+                decision.get("decided_by", "unknown"),
+            ],
             start_to_close_timeout=timedelta(seconds=30),
         )

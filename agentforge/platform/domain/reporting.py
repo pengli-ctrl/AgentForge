@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 from datetime import datetime, timezone
 from enum import Enum
@@ -159,3 +160,21 @@ class ReportRun(BaseModel):
         for row in self.rows:
             writer.writerow({k: _csv_val(v) for k, v in row.items()})
         return buf.getvalue()
+
+
+def _encode_run_cursor(generated_at, run_id):
+    """URL-safe keyset cursor for a report run (generated_at, run_id)."""
+    raw = generated_at.isoformat() + "|" + run_id
+    return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii")
+
+
+def _decode_run_cursor(cursor):
+    """Decode a keyset cursor into (generated_at, run_id); None if invalid."""
+    if not cursor:
+        return None
+    try:
+        raw = base64.urlsafe_b64decode(cursor.encode("ascii")).decode("utf-8")
+        ts, run_id = raw.split("|", 1)
+        return datetime.fromisoformat(ts), run_id
+    except (ValueError, TypeError):
+        return None

@@ -16,7 +16,7 @@ class KafkaEventPublisher:
         self._bootstrap_servers = bootstrap_servers
         self._topic = topic
         self._producer_factory = producer_factory
-        self._producer = None
+        self._producer: Any | None = None
 
     async def start(self) -> None:
         if self._producer is not None:

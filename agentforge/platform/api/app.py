@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from agentforge.platform.api.audit_router import create_audit_router
@@ -22,6 +24,7 @@ from agentforge.platform.infrastructure.feishu_reply_connector import FeishuRepl
 from agentforge.platform.infrastructure.temporal.client import TemporalWorkflowClient
 from agentforge.platform.runtime import (
     ServiceContainer,
+    boot_runtime,
     build_memory_container,
     build_sqlalchemy_container,
 )
@@ -59,8 +62,22 @@ def create_platform_app(
         else:
             container = build_memory_container(authenticator=authenticator)
 
-    app = FastAPI(title="AgentForge Platform", version="0.5.0")
-    app.include_router(create_support_router(container))
+    @asynccontextmanager
+    async def _lifespan(app: FastAPI):
+        # Wire defined-but-unwired startup logic (built-in role seed + connector
+        # rebuild from the persisted repository) so the platform is usable out
+        # of the box and register connectors survive a restart.
+        if container is not None:
+            await boot_runtime(container)
+        yield
+
+    app = FastAPI(title="AgentForge Platform", version="0.5.0", lifespan=_lifespan)
+    app.include_router(
+        create_support_router(
+            container,
+            webhook_secret=settings.events_im_webhook_secret,
+        )
+    )
     app.include_router(create_authorization_router(container))
     app.include_router(create_knowledge_router(container))
     app.include_router(create_outbox_router(container))
@@ -100,6 +117,7 @@ def create_platform_app(
             container.connector_registry,
             repository=container.connector_repository,
             adapter_factory=container.adapter_factory,
+            authenticator=authenticator,
         )
     )
     app.include_router(
@@ -115,6 +133,7 @@ def create_platform_app(
                 if feishu_verification_token is not None
                 else settings.feishu_verification_token
             ),
+            signature_max_age_seconds=settings.feishu_signature_max_age_seconds,
         )
     )
 

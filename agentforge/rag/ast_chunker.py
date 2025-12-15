@@ -58,7 +58,7 @@ class ASTChunker:
 
     def __init__(self, language: str = "python") -> None:
         self.language = language
-        self._parser = None
+        self._parser: Any | None = None
         self._init_parser()
 
     def _init_parser(self) -> None:
@@ -123,6 +123,7 @@ class ASTChunker:
         Returns:
             代码分块列表。
         """
+        assert self._parser is not None, "AST parser not initialized"
         tree = self._parser.parse(source_code)
         root_node = tree.root_node
         chunks: list[CodeChunk] = []

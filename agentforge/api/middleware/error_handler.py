@@ -76,6 +76,12 @@ UNAUTHORIZED = APIError(
     status_code=401,
 )
 
+FORBIDDEN = APIError(
+    code="FORBIDDEN",
+    message="Permission denied",
+    status_code=403,
+)
+
 RATE_LIMITED = APIError(
     code="RATE_LIMITED",
     message="Rate limit exceeded. Please retry later.",
@@ -105,11 +111,14 @@ class ErrorHandlerMiddleware:
         debug: 是否启用 DEBUG 模式（包含详细错误信息）。
     """
 
-    # 已知异常到 APIError 的映射
+    # 已知异常到 APIError 的映射。
+    # 注意：不要将 ValueError 盲目映射为客户端 422 —— 内部业务异常
+    # （如 TaskStore.update_status 抛出的 "Invalid status transition"）
+    # 属于服务端逻辑错误，应保留为 500 而非伪装成客户端校验失败，
+    # 否则会掩盖服务端 bug。异常的显式校验错误应通过 APIError 抛出。
     EXCEPTION_MAP: dict[type[Exception], APIError] = {
         FileNotFoundError: NOT_FOUND,
-        ValueError: VALIDATION_ERROR,
-        PermissionError: UNAUTHORIZED,
+        PermissionError: FORBIDDEN,
     }
 
     def __init__(self, debug: bool = False) -> None:

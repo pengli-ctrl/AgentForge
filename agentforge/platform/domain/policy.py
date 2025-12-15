@@ -69,3 +69,36 @@ class RelationTuple(BaseModel):
     relation: str
     subject_type: str
     subject_id: str
+
+
+class PolicyFileLoader:
+    """Loads ``ActionPolicy`` s from a JSON document (stable hot-reload source).
+
+    The document is a list of policy dicts (name/tenant_id/action/risk_level/
+    allowed_roles/required_permission/require_approval/enabled). Parsing is
+    strict: any invalid entry aborts the whole load (see :meth:`load`) so a
+    partially-parsed bad file can never silently replace good policies.
+    """
+
+    @staticmethod
+    def parse(text: str) -> list[ActionPolicy]:
+        """Parse and validate a JSON policy document into ActionPolicy list.
+
+        Raises ``ValueError`` on non-JSON, non-list, or any entry that fails
+        ``ActionPolicy`` validation (including unknown fields, since the model
+        uses ``extra="forbid"``). Callers use this as the atomicity gate.
+        """
+        import json
+
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as exc:  # pragma: no cover - trivial path
+            raise ValueError(f"policy document is not valid JSON: {exc}") from exc
+        if not isinstance(data, list):
+            raise ValueError("policy document must be a list of policies")
+        return [ActionPolicy.model_validate(item) for item in data]
+
+    @classmethod
+    def from_string(cls, text: str) -> list[ActionPolicy]:
+        """Convenience: parse text and return policies (raises on invalid)."""
+        return cls.parse(text)

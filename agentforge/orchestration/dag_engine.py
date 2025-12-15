@@ -92,7 +92,7 @@ class DAGGraph:
         Raises ValueError if graph contains a cycle.
         """
         in_degree = {nid: 0 for nid in self.nodes}
-        adjacency = {nid: [] for nid in self.nodes}
+        adjacency: dict[str, list[str]] = {nid: [] for nid in self.nodes}
         for src, dst in self.edges:
             adjacency[src].append(dst)
             in_degree[dst] += 1
@@ -110,6 +110,11 @@ class DAGGraph:
         if len(ordered) != len(self.nodes):
             raise ValueError(f"Cycle detected: sorted {len(ordered)}/{len(self.nodes)}")
         return ordered
+
+
+# L3 early-termination threshold: when the fraction of non-successful (failed or
+# degraded) nodes among all DAG nodes exceeds this ratio, stop executing.
+EARLY_TERMINATION_FAILURE_RATIO = 0.30
 
 
 class DAGEngine:
@@ -180,15 +185,28 @@ class DAGEngine:
 
         # Build execution structures
         in_degree = {nid: 0 for nid in dag.nodes}
-        adjacency = {nid: [] for nid in dag.nodes}
+        adjacency: dict[str, list[str]] = {nid: [] for nid in dag.nodes}
         for src, dst in dag.edges:
             adjacency[src].append(dst)
             in_degree[dst] += 1
 
         node_results: dict[str, Any] = {}
+        degraded_nodes: set[str] = set()
         completed: set[str] = set()
         total_nodes = len(dag.nodes)
         span_list: list[dict] = []
+
+        # Reserve a concurrency slot (RequestGuard dimension 3) before executing.
+        # Guarded by try/finally below so the slot is always released.
+        slot_acquired = False
+        if self._request_guard:
+            slot_acquired = await self._request_guard.acquire()
+            if not slot_acquired:
+                self._request_guard.cleanup_request(correlation_id)
+                return DAGResult(
+                    success=False,
+                    error="Request guard rejected: concurrency limit reached",
+                )
 
         # Start trace
         trace = None
@@ -198,7 +216,16 @@ class DAGEngine:
         try:
             await asyncio.wait_for(
                 self._run_waves(
-                    dag, in_degree, adjacency, ctx, registry, node_results, completed, span_list
+                    dag,
+                    in_degree,
+                    adjacency,
+                    ctx,
+                    registry,
+                    node_results,
+                    degraded_nodes,
+                    completed,
+                    span_list,
+                    correlation_id,
                 ),
                 timeout=self._global_timeout,
             )
@@ -208,8 +235,15 @@ class DAGEngine:
                 await self._degradation_mgr.handle_system_failure()
         except Exception as e:
             logger.error("DAG[%s] error: %s", dag.name, e)
+        finally:
+            # Always free the concurrency slot and clean up per-request LLM tracking.
+            if self._request_guard:
+                if slot_acquired:
+                    await self._request_guard.release()
+                self._request_guard.cleanup_request(correlation_id)
 
-        # Compute final metrics
+        # Compute final metrics. node_results holds only truly-successful nodes;
+        # degraded/failed nodes are excluded from success_rate so the metric is honest.
         elapsed_ms = (time.monotonic() - start) * 1000
         success_rate = len(node_results) / total_nodes if total_nodes else 0.0
         total_cost = sum(r.get("cost", 0) for r in node_results.values() if isinstance(r, dict))
@@ -231,8 +265,6 @@ class DAGEngine:
                 else (SpanStatus.PARTIAL if success_rate > 0 else SpanStatus.ERROR)
             )
             await self._tracer.end_trace(trace, status)
-        if self._request_guard:
-            self._request_guard.cleanup_request(correlation_id)
 
         return DAGResult(
             success=success_rate > 0.7,
@@ -241,14 +273,30 @@ class DAGEngine:
             total_latency=elapsed_ms,
             success_rate=success_rate,
             span_list=span_list,
-            degraded=len(node_results) < total_nodes,
+            degraded=bool(degraded_nodes),
             terminated_early=terminated_early,
         )
 
     async def _run_waves(
-        self, dag, in_degree, adjacency, ctx, registry, node_results, completed, span_list
-    ):
-        """Execute nodes in parallel waves — each wave = nodes with all deps satisfied."""
+        self,
+        dag: DAGGraph,
+        in_degree: dict[str, int],
+        adjacency: dict[str, list[str]],
+        ctx: ContextStore,
+        registry: Any,
+        node_results: dict[str, Any],
+        degraded_nodes: set[str],
+        completed: set[str],
+        span_list: list[dict],
+        correlation_id: str,
+    ) -> None:
+        """
+        Execute nodes in parallel waves — each wave = nodes with all deps satisfied.
+
+        Successfully executed nodes are recorded in ``node_results``; nodes that
+        were degraded or failed are tracked separately in ``degraded_nodes`` so
+        success accounting and L3 early termination reflect reality.
+        """
         remaining = dict(in_degree)
         while len(completed) < len(dag.nodes):
             # Find wave: nodes with in_degree == 0 and not yet done
@@ -256,20 +304,23 @@ class DAGEngine:
             if not wave:
                 break
 
-            # L3 degradation check before each wave
+            # L3 degradation check before each wave: early termination when too
+            # many finished nodes were not successful (failed or degraded).
             if self._degradation_mgr and len(completed) > 0:
                 failed = len(completed) - len(node_results)
                 ratio = failed / len(dag.nodes) if dag.nodes else 0
-                if ratio > 0.30:
+                if ratio > EARLY_TERMINATION_FAILURE_RATIO:
                     logger.warning("DAG early termination: %.0f%% failed", ratio * 100)
                     return
 
             # Execute wave nodes in parallel with semaphore
             sem = asyncio.Semaphore(self._max_parallel)
 
-            async def _run(nid):
+            async def _run(nid: str) -> dict:
                 async with sem:
-                    return await self._execute_node(nid, dag, ctx, registry, span_list)
+                    return await self._execute_node(
+                        nid, dag, ctx, registry, span_list, correlation_id
+                    )
 
             results = await asyncio.gather(*[_run(n) for n in wave], return_exceptions=True)
 
@@ -278,7 +329,13 @@ class DAGEngine:
                 out_key = dag.nodes[nid].output_key or nid
                 if isinstance(result, Exception):
                     logger.error("Node[%s] failed: %s", nid, result)
+                    degraded_nodes.add(nid)
                     await ctx.write(out_key, None)
+                elif isinstance(result, dict) and result.get("degraded"):
+                    # Degraded node — do not count toward success_rate, but do
+                    # publish its (partial) output so downstream nodes can proceed.
+                    degraded_nodes.add(nid)
+                    await ctx.write(out_key, result.get("result"))
                 else:
                     node_results[nid] = result
                     val = result.get("result", result) if isinstance(result, dict) else result
@@ -287,7 +344,15 @@ class DAGEngine:
                 for downstream in adjacency.get(nid, []):
                     remaining[downstream] -= 1
 
-    async def _execute_node(self, node_id, dag, ctx, registry, span_list) -> dict:
+    async def _execute_node(
+        self,
+        node_id: str,
+        dag: DAGGraph,
+        ctx: ContextStore,
+        registry: Any,
+        span_list: list[dict],
+        correlation_id: str,
+    ) -> dict:
         """Execute single node with retry + L2 degradation on failure."""
         node = dag.nodes[node_id]
         agent = await registry.get(node.agent_name)
@@ -304,6 +369,18 @@ class DAGEngine:
             )
 
         for attempt in range(node.retry_count + 1):
+            # Reserve one unit of the per-request LLM budget (RequestGuard dimension 2).
+            if self._request_guard:
+                current = self._request_guard.get_llm_call_count(correlation_id)
+                if not self._request_guard.check_llm_call_count(current):
+                    logger.warning("Node[%s] LLM call budget exhausted", node_id)
+                    return {
+                        "result": None,
+                        "degraded": True,
+                        "error": f"LLM call budget exhausted for request {correlation_id}",
+                    }
+                self._request_guard.increment_llm_calls(correlation_id)
+
             try:
                 result = await asyncio.wait_for(
                     agent.run(input_data, span=span), timeout=node.timeout

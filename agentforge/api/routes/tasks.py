@@ -35,6 +35,9 @@ class TaskRoutes:
         workflow_engine: 工作流引擎实例（可选，用于异步执行任务）。
     """
 
+    # 单页允许返回的最大条数，避免超大 limit 拖垮查询。
+    MAX_LIMIT = 1000
+
     def __init__(
         self,
         task_store: TaskStore,
@@ -161,12 +164,20 @@ class TaskRoutes:
 
         Args:
             status: 按状态过滤。
-            limit: 返回数量上限。
-            offset: 分页偏移量。
+            limit: 返回数量上限（负值归零，超过 ``MAX_LIMIT`` 时截断）。
+            offset: 分页偏移量（负值归零）。
 
         Returns:
-            任务列表和分页信息。
+            ``tasks`` 当前页任务列表、``returned`` 本页实际返回条数、
+            以及规范化后的 ``limit``/``offset`` 分页参数。
+            说明：当前数据源不提供独立的总行数统计，因此返回 ``returned``
+            （本页实际条数）而非 ``total``，避免把"本页行数"误当作"总数"
+            的分页语义错误。
         """
+        # 边界校验：拒绝负值并对 limit 设上限，避免 LIMIT -1 / 超大 limit 问题。
+        limit = max(0, min(int(limit), self.MAX_LIMIT))
+        offset = max(0, int(offset))
+
         task_status = None
         if status:
             try:
@@ -178,7 +189,7 @@ class TaskRoutes:
 
         return {
             "tasks": [t.to_dict() for t in tasks],
-            "total": len(tasks),
+            "returned": len(tasks),
             "limit": limit,
             "offset": offset,
         }

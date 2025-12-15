@@ -7,6 +7,11 @@
 - 没有令牌时请求被拒绝（429 Too Many Requests）
 
 支持按 API Key 或 IP 地址进行独立限流。
+
+部署约束：
+- 令牌桶为进程内状态，多 worker 进程间不共享（多进程部署时限流各自独立）。
+- 桶字典以任意 client 标识为 key，需要内存淘汰策略（见 ``_evict``），
+  否则恶意/普通探测会产生无界的内存增长。
 """
 
 from __future__ import annotations
@@ -69,20 +74,64 @@ class RateLimitMiddleware:
     """令牌桶限流中间件 — 按客户端限流。
 
     每个客户端（通过 API Key 或 IP 标识）维护一个独立的令牌桶。
+    为避免 ``_buckets`` 无界增长，超过 ``max_buckets`` 或达到淘汰检查
+    间隔时会对空闲超过 ``bucket_ttl`` 秒的桶进行清理。
 
     Args:
         capacity: 桶容量（突发请求上限）。
         rate: 令牌生成速率（请求/秒）。
+        max_buckets: 桶字典的最大条目数（内存保护上限）。
+        bucket_ttl: 桶的空闲回收时间（秒）。
     """
 
     def __init__(
         self,
         capacity: float = 100.0,
         rate: float = 10.0,
+        max_buckets: int = 10_000,
+        bucket_ttl: float = 3_600.0,
     ) -> None:
         self.capacity = capacity
         self.rate = rate
+        self.max_buckets = max_buckets
+        self.bucket_ttl = bucket_ttl
         self._buckets: dict[str, TokenBucket] = {}
+        self._check_counter = 0
+
+    def _evict_stale(self) -> None:
+        """清理空闲超过 ``bucket_ttl`` 的桶。
+
+        桶的 ``last_refill`` 在每次 ``consume`` 时都会更新，
+        因此长时间未请求的客户端其桶时间戳必然陈旧，可安全回收。
+        """
+        now = time.time()
+        stale = [
+            key
+            for key, bucket in self._buckets.items()
+            if now - bucket.last_refill > self.bucket_ttl
+        ]
+        for key in stale:
+            del self._buckets[key]
+        if stale:
+            logger.info(
+                "Rate limit bucket eviction: removed %d idle bucket(s) (remaining=%d)",
+                len(stale),
+                len(self._buckets),
+            )
+
+    def _evict_lru(self) -> None:
+        """当桶数量仍超过上限时，按最近最少使用移除最旧的桶。"""
+        while len(self._buckets) >= self.max_buckets and self._buckets:
+            oldest_key = min(
+                self._buckets,
+                key=lambda key: self._buckets[key].last_refill,
+            )
+            del self._buckets[oldest_key]
+            logger.warning(
+                "Rate limit bucket overflow: evicted LRU bucket (client=%s, size=%d)",
+                oldest_key,
+                len(self._buckets),
+            )
 
     def check(self, client_id: str) -> bool:
         """检查客户端是否被允许请求。
@@ -93,6 +142,14 @@ class RateLimitMiddleware:
         Returns:
             是否允许请求。
         """
+        # 周期性执行淘汰，避免每次请求都做全量扫描。
+        self._check_counter += 1
+        if self._check_counter % 100 == 0 or len(self._buckets) >= self.max_buckets:
+            self._evict_stale()
+            # 若清理后仍触顶（如大量活跃客户端），再按 LRU 兜底淘汰。
+            if len(self._buckets) >= self.max_buckets:
+                self._evict_lru()
+
         if client_id not in self._buckets:
             self._buckets[client_id] = TokenBucket(
                 capacity=self.capacity,

@@ -139,13 +139,13 @@ class RedisStateStore:
         Returns:
             最新版本的快照数据，不存在则返回 None。
         """
+        versions: list[tuple[int, str]] = []
         if self._redis:
             pattern = f"{self.key_prefix}:{correlation_id}:*"
             keys = await self._redis.keys(pattern)
             if not keys:
                 return None
 
-            versions: list[tuple[int, str]] = []
             for k in keys:
                 parts = k.split(":")
                 ver = int(parts[-1])
@@ -156,7 +156,6 @@ class RedisStateStore:
             return json.loads(value) if value else None
         else:
             prefix = f"{self.key_prefix}:{correlation_id}:"
-            versions: list[tuple[int, str]] = []
             for k, v in self._fallback.items():
                 if k.startswith(prefix):
                     ver = int(k.split(":")[-1])

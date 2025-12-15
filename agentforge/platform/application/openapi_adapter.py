@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -72,19 +73,29 @@ class OpenAPIAdapter(Connector):
             response.raise_for_status()
             return response.json()
 
-    def _acquire_token(self) -> None:
+    def _acquire_token(self) -> bool:
+        """Consume one token from the rate-limit bucket if available.
+
+        Refills at ``rate_per_second`` up to ``_bucket_capacity`` (a token
+        bucket), then returns True and consumes a token when at least one is
+        available, or False when the bucket is empty so the caller backs off.
+        When no rate is configured the call always succeeds (unlimited).
+        """
         if self._rate_per_second is None:
-            return
+            return True
         now = time.monotonic()
         elapsed = now - self._bucket_updated
+        # Refill proportionally to elapsed time, capped at capacity so tokens
+        # never accumulate beyond a burst.
         self._bucket_tokens = min(
             self._bucket_capacity,
             self._bucket_tokens + elapsed * self._rate_per_second,
         )
         self._bucket_updated = now
-        if self._bucket_tokens < 1:
-            # Refill enough for one token on the next attempt window.
-            self._bucket_tokens += 1
+        if self._bucket_tokens < 1.0:
+            return False
+        self._bucket_tokens -= 1.0
+        return True
 
     def _build_headers(self, context: ConnectorContext) -> dict[str, str]:
         headers = dict(self._headers)
@@ -115,7 +126,12 @@ class OpenAPIAdapter(Connector):
 
         last_error: str | None = None
         for attempt in range(self._max_retries + 1):
-            self._acquire_token()
+            if not self._acquire_token():
+                # Token bucket exhausted: back off and retry on a later window
+                # rather than firing an unbounded request.
+                await asyncio.sleep(self._retry_backoff * (2**attempt))
+                last_error = "rate limited"
+                continue
             try:
                 data = await self._request(
                     spec,
@@ -134,7 +150,7 @@ class OpenAPIAdapter(Connector):
             except Exception as exc:  # noqa: BLE001 - surface as result error
                 last_error = f"{type(exc).__name__}: {exc}"
                 if attempt < self._max_retries:
-                    time.sleep(self._retry_backoff * (2**attempt))
+                    await asyncio.sleep(self._retry_backoff * (2**attempt))
         await self._audit(action, context, ok=False, error=last_error)
         return ConnectorInvocationResult(
             connector_id="openapi",

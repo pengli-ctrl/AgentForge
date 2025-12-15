@@ -27,6 +27,12 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# L1 circuit-breaker tuning — named constants instead of magic numbers.
+CIRCUIT_WINDOW_CALLS = 10  # Look back over the last N LLM calls per model
+CIRCUIT_FAILURE_THRESHOLD = 0.5  # Open the circuit when failure_rate > 0.5 (>50%)
+CIRCUIT_OPEN_DURATION_SECONDS = 900  # Keep the circuit open for 15 minutes
+MAX_TRACKED_OUTCOMES = 20  # Max per-model call outcomes kept in memory
+
 
 class DegradationLevel(Enum):
     """Four degradation levels, from least to most severe."""
@@ -54,7 +60,7 @@ class DegradationManager:
     Manages degradation decisions across all four levels.
 
     State tracking:
-    - Per-model failure counters for circuit breaker (L1)
+    - Per-model call outcomes for circuit breaker (L1)
     - Per-node retry counts (L2)
     - Global failure ratio for DAG-level decisions (L3)
     - System-wide health for cascade detection (L4)
@@ -65,8 +71,8 @@ class DegradationManager:
 
     def __init__(self):
         self._lock = asyncio.Lock()
-        # L1: per-model failure tracking for circuit breaker
-        self._model_failures: dict[str, list[float]] = {}  # model → [failure_timestamps]
+        # L1: per-model call outcomes (True=success, False=failure) for circuit breaker
+        self._model_calls: dict[str, list[bool]] = {}  # model → [outcome, ...]
         self._model_circuit_open: dict[str, float] = {}  # model → open_until_timestamp
         # L2: per-node retry tracking
         self._node_retry_counts: dict[str, int] = {}
@@ -85,8 +91,10 @@ class DegradationManager:
         L1 degradation: single model failure.
 
         Fallback chain: main_model → backup_model → lightest_model → preset_response.
-        Circuit breaker: if a model has >50% failure rate over last 10 calls,
-        open the circuit for 15 minutes (skip it entirely).
+        Circuit breaker: if a model has >50% failure rate over the last
+        :data:`CIRCUIT_WINDOW_CALLS` calls, open the circuit for 15 minutes
+        (skip it entirely). Callers should report successful calls via
+        :meth:`record_llm_success` so the rate is accurate.
 
         Args:
             model_name: The model that failed.
@@ -96,22 +104,9 @@ class DegradationManager:
             Dict with 'fallback_model' and 'action' describing what to do next.
         """
         async with self._lock:
-            # Record failure
             now = time.time()
-            if model_name not in self._model_failures:
-                self._model_failures[model_name] = []
-            self._model_failures[model_name].append(now)
-            # Keep only last 20 failures per model
-            self._model_failures[model_name] = self._model_failures[model_name][-20:]
-
-            # Check circuit breaker: >50% failure rate over last 10 calls → open 15min
-            recent = self._model_failures[model_name][-10:]
-            if len(recent) >= 10:
-                time_window = now - recent[0]
-                if time_window > 0 and len(recent) / max(1, time_window / 60) > 3:
-                    # More than 3 failures per minute over last 10 — circuit open
-                    self._model_circuit_open[model_name] = now + 900  # 15 min
-                    logger.warning("Circuit breaker OPEN for model: %s (15min)", model_name)
+            self._record_outcome_locked(model_name, False)
+            self._maybe_open_circuit(model_name, now)
 
         # Determine fallback
         fallback_chain = self._get_fallback_chain(model_name)
@@ -132,6 +127,40 @@ class DegradationManager:
             "action": "retry_with_fallback" if fallback_model else "preset_response",
             "degraded": True,
         }
+
+    async def record_llm_success(self, model_name: str) -> None:
+        """
+        Record a successful LLM call for circuit-breaker accounting.
+
+        Call this on every successful completion so the failure-rate check in
+        :meth:`handle_llm_failure` reflects the true ratio of the last
+        :data:`CIRCUIT_WINDOW_CALLS` calls.
+        """
+        async with self._lock:
+            self._record_outcome_locked(model_name, True)
+
+    def _record_outcome_locked(self, model_name: str, success: bool) -> None:
+        """Record a call outcome (True=success, False=failure), bounded in size."""
+        outcomes = self._model_calls.setdefault(model_name, [])
+        outcomes.append(success)
+        if len(outcomes) > MAX_TRACKED_OUTCOMES:
+            del outcomes[:-MAX_TRACKED_OUTCOMES]
+
+    def _maybe_open_circuit(self, model_name: str, now: float) -> None:
+        """Open the circuit when the recent failure rate exceeds the threshold."""
+        recent = self._model_calls.get(model_name, [])[-CIRCUIT_WINDOW_CALLS:]
+        if len(recent) < CIRCUIT_WINDOW_CALLS:
+            return
+        failures = sum(1 for ok in recent if not ok)
+        failure_rate = failures / len(recent)
+        if failure_rate > CIRCUIT_FAILURE_THRESHOLD:
+            self._model_circuit_open[model_name] = now + CIRCUIT_OPEN_DURATION_SECONDS
+            logger.warning(
+                "Circuit breaker OPEN for model: %s (%.0f%% failures over last %d calls)",
+                model_name,
+                failure_rate * 100,
+                CIRCUIT_WINDOW_CALLS,
+            )
 
     def _get_fallback_chain(self, failed_model: str) -> list[str]:
         """Return ordered list of fallback models (excluding circuit-broken ones)."""
@@ -329,7 +358,7 @@ class DegradationManager:
         async with self._lock:
             self._system_degraded = False
             self._model_circuit_open.clear()
-            self._model_failures.clear()
+            self._model_calls.clear()
         logger.info("System recovered from global degradation mode")
 
     @property
