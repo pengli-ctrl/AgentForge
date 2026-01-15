@@ -57,6 +57,14 @@ class ASTChunker:
     """
 
     def __init__(self, language: str = "python") -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            language: str，调用方传入的 language 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.language = language
         self._parser: Any | None = None
         self._init_parser()

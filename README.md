@@ -3,12 +3,14 @@
 ![CI](https://img.shields.io/badge/CI-passing-brightgreen)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
-![Tests](https://img.shields.io/badge/Tests-703%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/Tests-728%20passed-brightgreen)
 ![Code Style](https://img.shields.io/badge/code%20style-black-000000)
 
 > 面向中小企业的 **AI Agent 编排 + 企业治理平台**——从多 Agent 编排、智能路由、成本管控，到多租户客服工单全流程（检索→生成→审批→写回）的一站式 AI 平台基础设施。
 
-AgentForge 是一个 AI Agent 编排 + 企业治理一体化平台。上层是**多 Agent 编排引擎**：三层架构（编排层 / 运行时层 / 网关层），内置 DAG 任务引擎（最大 50 节点）、5 模型智能路由、语义缓存、三级 Memory、全链路 Trace。下层是**企业 AI 平台层**（首个落地场景：客服与售后工单智能处理）：多租户、RBAC + 声明式策略引擎、租户配额与成本治理、全过程审计、Temporal 工作流 + Outbox 可靠投递、检索评估与离线回归、连接器与工单写回。开源项目，**703 个自动化测试全部通过**（其中 platform 层 237 项），black/isort/flake8/mypy 全绿。
+> 📖 **想快速了解项目全貌？** 一页纲领性总览（做到什么程度 / 解决什么问题 / 核心亮点）见 [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md)。
+
+AgentForge 是一个 AI Agent 编排 + 企业治理一体化平台。上层是**多 Agent 编排引擎**：三层架构（编排层 / 运行时层 / 网关层），内置 DAG 任务引擎（最大 50 节点）、5 模型智能路由、语义缓存、三级 Memory、全链路 Trace。下层是**企业 AI 平台层**（首个落地场景：客服与售后工单智能处理）：多租户、RBAC + 声明式策略引擎、租户配额与成本治理、全过程审计、Temporal 工作流 + Outbox 可靠投递、检索评估与离线回归、连接器与工单写回。开源项目，**728 个自动化测试全部通过**（其中 platform 层 262 项），black/isort/flake8/mypy 全绿。
 
 ---
 
@@ -149,6 +151,7 @@ AgentForge 是一个 AI Agent 编排 + 企业治理一体化平台。上层是**
 | `/v1/tickets` | 工单详情、审核（approve/reject）、质检（review）、回复、写回 |
 | `/v1/console` | 客服工作台、审批收件箱、管理控制台聚合概览、多租户成本 |
 | `/v1/rbac` | 角色 CRUD、权限设置、用户-角色赋值、`/v1/authorize` 授权检查 |
+| `/v1/policies` | 策略热加载控制面：列出 + `source_revision`、`GET /v1/policies/revision`、`POST /v1/policies/reload`（原子换载，坏配置 422 保留旧策略） |
 | `/v1/quotas` | 租户配额管理 |
 | `/v1/audit` | 审计事件查询 |
 | `/v1/costs` | 成本与模型分布 |
@@ -169,10 +172,10 @@ AgentForge 是一个 AI Agent 编排 + 企业治理一体化平台。上层是**
 | 任务完成率 | **97%** | 15000+请求统计 |
 | 级联失败率 | **<0.3%** | 结构化输出+交叉验证+兜底默认值 |
 | 缓存命中率 | **38%** | Embedding相似度>0.92 |
-| 自动化测试 | **703个** | 全部通过，CI绿灯（单元+集成+平台三层） |
+| 自动化测试 | **728个** | 全部通过，CI绿灯（单元+集成+平台三层） |
 | Agent类型 | **5类** | 代码审查/测试执行/文档生成/安全扫描/部署 |
 | DAG最大规模 | **50节点** | Kahn拓扑排序+并行调度 |
-| platform测试 | **237个** | 企业 AI 平台层专项测试 |
+| platform测试 | **262个** | 企业 AI 平台层专项测试 |
 
 > 以上数据来自基准测试（2000条标注query）和日常使用（持续3周，累计15000+请求），非商用生产环境。
 
@@ -252,8 +255,8 @@ AgentForge/
 │   ├── workflows/                # DAG工作流配置
 │   ├── dev/ · prod/              # 运行环境配置
 │   └── logging.yaml              # 日志配置
-├── tests/                        # 703个测试(单元+集成+平台)
-├── docs/                         # 架构/交接/BACKLOG 文档
+├── tests/                        # 728个测试(单元+集成+平台)
+├── docs/                         # 架构/ADR/总览 文档
 ├── alembic/                      # 数据库迁移
 ├── deploy/                       # 部署配置
 └── ...
@@ -313,10 +316,12 @@ print(decision.outcome)  # allowed / denied / requires_approval
 
 ## 工程保障
 
-- **测试**：703 个自动化测试（单元 + 集成 + 平台三层），本地全绿
-- **静态检查**：black / isort / flake8（max-line-length=100）/ mypy 全仓 206 源文件零错误
+- **测试**：700+ 自动化测试（单元 + 集成 + 平台三层，当前 728），本地全绿
+- **静态检查**：black / isort / flake8（max-line-length=100）/ mypy 全仓零错误
 - **CI**：GitHub Actions 全量测试（Python 3.10/3.11/3.12），不使用 continue-on-error 掩盖失败
 - **类型安全**：mypy 严格模式覆盖全仓
+- **性能**：本地负载压测（自研多进程压测器，零外部依赖）测得平台 API 峰值 ~580–630 rps、推荐承载 ~500 rps/25 并发，详见 [P1-1 压测报告](docs/bench/P1-1-load-capacity.md)
+- **可观测闭环**：LLM 调用逐条 trace（model/tokens/cost/latency/tenant）+ 工单→推理 trace_id 传播 + 进程内 `TraceRecorder`（有界 FIFO）+ dashboard `GET /v1/console/traces`；Langfuse/OTLP 接线方式文档化（[docs/observability/P1-2-observability.md](docs/observability/P1-2-observability.md)），本地零外部依赖可回查，生产可平滑接成熟可观测件
 
 ---
 
@@ -329,6 +334,79 @@ print(decision.outcome)  # allowed / denied / requires_approval
 | AI Gateway | 5模型路由+语义缓存+Token级成本管控 | [阅读](https://pengli-ctrl.github.io/blog/posts/06-ai-gateway-design) |
 | 可靠性设计 | 三层超时/四级降级/请求放大管控 | [阅读](https://pengli-ctrl.github.io/blog/posts/07-production-reliability) |
 | RAG工程化 | 幻觉率从46%降到16.2%的五层防护 | [阅读](https://pengli-ctrl.github.io/blog/posts/01-rag-engineering-hallucination-prevention) |
+
+
+---
+
+## 部署
+
+> 历史演进导致当前存在 **两套相互独立的 Compose 集群**。它们跑的是两个不同
+> 的应用（早期「编排层」单 Agent 服务 vs 当前「平台层」企业 AI 平台），API
+> 端口均为 `8000`、状态存储端口均为 `6379`，**不可在同一台主机同时启用**。
+> 请按下面的取舍选择其一，并先 `down` 掉另一套。
+
+### 两套集群一览
+
+| 集群 | Compose 文件 | 组成 | 说明 |
+|---|---|---|---|
+| **平台层（推荐 / 当前主形态）** | `deploy/platform/docker-compose.platform.yml` | api + worker + outbox-worker + postgres / valkey / temporal / minio / otel / kafka | 企业客服 AI 平台全栈（工单 / RBAC / 配额 / 审计 / 质量门禁 / 连接器） |
+| 平台层·基础设施(轻量) | `deploy/platform/docker-compose.lite.yml` | 仅 postgres / valkey / temporal / minio | 本地开发用基础依赖，无 api/worker/kafka |
+| **编排层（遗留 / 早期形态）** | `docker-compose.yml` | app + redis / mysql / kafka | 早期 Stage-A 单 Agent 编排服务，被平台层替代，保留兼容 |
+
+### 推荐入口：平台层全栈启动
+
+```bash
+# 启动平台层（api + worker + outbox-worker + 全部基础设施）
+make platform-up        # 等价: docker-compose -f deploy/platform/docker-compose.platform.yml up -d
+# 停止
+make platform-down
+```
+
+平台层 API 默认监听 `http://localhost:8000`（各 `/v1/*` 路由见上表）。
+
+#### 鉴权（安全默认开启）
+
+平台层 **鉴权默认开启（fail-closed）**，与全局安全默认保持一致：
+
+- 启动后用默认演示密钥调用需鉴权接口：请求头 `X-Admin-Key: dev-admin-key-please-override`；
+- **生产环境必须覆盖默认密钥**，否则存在暴露风险：
+
+```bash
+AGENTFORGE_ADMIN_API_KEY='你的强密钥' docker-compose -f deploy/platform/docker-compose.platform.yml up -d api
+```
+
+- 未配置任何密钥且环境为 `prod`/`staging` 时，服务会 **拒绝启动**（fail-closed），
+  需显式配置密钥，或临时 `AGENTFORGE_ALLOW_NO_AUTH=true`（严禁用于公开暴露）。
+
+### 仅启动平台层基础设施（本地开发）
+
+```bash
+make platform-lite-up    # postgres / valkey / temporal / minio
+make platform-lite-down
+```
+
+### 编排层（遗留入口）
+
+```bash
+# 若确需使用早期编排层
+make docker-up           # 等价: docker-compose up -d
+make docker-down
+```
+
+### 端口对照与互斥提醒
+
+| 端口 | 编排层 | 平台层 |
+|---|---|---|
+| `8000` | app (0.0.0.0) | api (0.0.0.0) |
+| `6379` | redis | valkey |
+| `9092` | kafka | kafka |
+| `5432` | — | postgres |
+| `7233` | — | temporal |
+| `8080` | — | temporal-ui |
+| `9000/9001` | — | minio |
+
+两套共享 `8000/6379/9092`。**同机请勿同时启用**，先用 `down` 停止一套再启另一套。
+
 
 ---
 

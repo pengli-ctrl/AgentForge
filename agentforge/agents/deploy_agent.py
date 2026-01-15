@@ -60,6 +60,15 @@ class DeployAgent(Agent):
         llm_gateway: Any,
         tool_registry: ToolRegistry | None = None,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            llm_gateway: Any，调用方传入的 llm_gateway 参数。
+            tool_registry: ToolRegistry | None，调用方传入的 tool_registry 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         super().__init__(
             llm_gateway=llm_gateway,
             name="deploy",

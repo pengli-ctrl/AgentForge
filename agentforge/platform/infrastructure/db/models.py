@@ -1,3 +1,16 @@
+"""AgentForge 平台基础设施层：models。
+
+本模块负责 models 相关的平台能力，是 平台基础设施层 的组成部分。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+-
+主要类：TicketRecord、OutboxEventRecord、KnowledgeDocumentRecord、KnowledgeChunkRecord、CostRecordRecord、AuditEventRecord、EvaluationSampleRecord、GoldenItemRecord。
+- 主要函数：utc_now。
+"""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -33,10 +46,50 @@ from agentforge.platform.infrastructure.db.base import Base
 
 
 def utc_now() -> datetime:
+    """执行 utc_now 对应的逻辑，并返回处理结果。
+
+    Returns:
+        datetime，函数执行后的结果。
+    """
     return datetime.now(timezone.utc)
 
 
 class TicketRecord(Base):
+    """TicketRecord。
+
+    TicketRecord 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - __tablename__: 'tickets'。
+    - __table_args__: 唯一约束，保证同一租户下幂等键唯一。
+      对应约束名为 uq_tickets_tenant_idempotency。
+    - ticket_id: Mapped[str]。
+    - tenant_id: Mapped[str]。
+    - customer_id: Mapped[str | None]。
+    - conversation_id: Mapped[str | None]。
+    - source: Mapped[str]。
+    - subject: Mapped[str]。
+    - status: Mapped[str]。
+    - priority: Mapped[str]。
+    - intent: Mapped[str | None]。
+    - product: Mapped[str | None]。
+    - assigned_team: Mapped[str | None]。
+    - risk_level: Mapped[str]。
+    - confidence: Mapped[float | None]。
+    - idempotency_key: Mapped[str]。
+    - payload: Mapped[dict]。
+    - created_at: Mapped[datetime]。
+    - updated_at: Mapped[datetime]。
+    - version: Mapped[int]。
+    - 方法 from_domain()。
+    - 方法 apply_domain()。
+    - 方法 to_domain()。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    """
+
     __tablename__ = "tickets"
     __table_args__ = (
         UniqueConstraint("tenant_id", "idempotency_key", name="uq_tickets_tenant_idempotency"),
@@ -63,6 +116,14 @@ class TicketRecord(Base):
 
     @classmethod
     def from_domain(cls, ticket: Ticket) -> "TicketRecord":
+        """执行 from_domain 对应的逻辑，并返回处理结果。
+
+        Args:
+            ticket: Ticket，调用方传入的 ticket 参数。
+
+        Returns:
+            'TicketRecord'，函数执行后的结果。
+        """
         return cls(
             ticket_id=ticket.ticket_id,
             tenant_id=ticket.tenant_id,
@@ -85,6 +146,14 @@ class TicketRecord(Base):
         )
 
     def apply_domain(self, ticket: Ticket) -> None:
+        """应用业务变更，并返回调用方需要的结果。
+
+        Args:
+            ticket: Ticket，调用方传入的 ticket 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.customer_id = ticket.customer_id
         self.conversation_id = ticket.conversation_id
         self.subject = ticket.subject
@@ -101,6 +170,11 @@ class TicketRecord(Base):
         self.version = ticket.version
 
     def to_domain(self) -> Ticket:
+        """执行 to_domain 对应的逻辑，并返回处理结果。
+
+        Returns:
+            Ticket，函数执行后的结果。
+        """
         return Ticket(
             ticket_id=self.ticket_id,
             tenant_id=self.tenant_id,
@@ -124,6 +198,28 @@ class TicketRecord(Base):
 
 
 class OutboxEventRecord(Base):
+    """OutboxEventRecord。
+
+    OutboxEventRecord 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - __tablename__: 'outbox_events'。
+    - event_id: Mapped[str]。
+    - tenant_id: Mapped[str]。
+    - event_type: Mapped[str]。
+    - payload: Mapped[dict]。
+    - status: Mapped[str]。
+    - created_at: Mapped[datetime]。
+    - published_at: Mapped[datetime | None]。
+    - attempts: Mapped[int]。
+    - last_error: Mapped[str | None]。
+    - 方法 from_event()。
+
+    设计约束：
+    - 保持接口稳定，不向调用方暴露不必要的数据结构。
+    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    """
+
     __tablename__ = "outbox_events"
 
     event_id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -138,6 +234,14 @@ class OutboxEventRecord(Base):
 
     @classmethod
     def from_event(cls, event) -> "OutboxEventRecord":
+        """执行 from_event 对应的逻辑，并返回处理结果。
+
+        Args:
+            event: Any，调用方传入的 event 参数。
+
+        Returns:
+            'OutboxEventRecord'，函数执行后的结果。
+        """
         return cls(
             event_id=event.event_id,
             tenant_id=event.tenant_id,
@@ -149,6 +253,25 @@ class OutboxEventRecord(Base):
 
 
 class KnowledgeDocumentRecord(Base):
+    """KnowledgeDocumentRecord。
+
+    KnowledgeDocumentRecord 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - __tablename__: 'knowledge_documents'。
+    - document_id: Mapped[str]。
+    - tenant_id: Mapped[str]。
+    - title: Mapped[str]。
+    - content: Mapped[str]。
+    - source_uri: Mapped[str]。
+    - version: Mapped[int]。
+    - payload: Mapped[dict]。
+
+    设计约束：
+    - 保持接口稳定，不向调用方暴露不必要的数据结构。
+    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    """
+
     __tablename__ = "knowledge_documents"
 
     document_id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -161,6 +284,27 @@ class KnowledgeDocumentRecord(Base):
 
 
 class KnowledgeChunkRecord(Base):
+    """KnowledgeChunkRecord。
+
+    KnowledgeChunkRecord 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - __tablename__: 'knowledge_chunks'。
+    - chunk_id: Mapped[str]。
+    - document_id: Mapped[str]。
+    - tenant_id: Mapped[str]。
+    - content: Mapped[str]。
+    - position: Mapped[int]。
+    - payload: Mapped[dict]。
+    - embedding: Mapped[list[float] | None]。
+    - embedding_model: Mapped[str | None]。
+    - embedding_version: Mapped[int | None]。
+
+    设计约束：
+    - 保持接口稳定，不向调用方暴露不必要的数据结构。
+    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    """
+
     __tablename__ = "knowledge_chunks"
 
     chunk_id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -175,6 +319,27 @@ class KnowledgeChunkRecord(Base):
 
 
 class CostRecordRecord(Base):
+    """CostRecordRecord。
+
+    CostRecordRecord 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - __tablename__: 'cost_records'。
+    - id: Mapped[int]。
+    - tenant_id: Mapped[str]。
+    - task_id: Mapped[str]。
+    - model_name: Mapped[str]。
+    - provider: Mapped[str]。
+    - input_tokens: Mapped[int]。
+    - output_tokens: Mapped[int]。
+    - amount: Mapped[float]。
+    - created_at: Mapped[datetime]。
+
+    设计约束：
+    - 保持接口稳定，不向调用方暴露不必要的数据结构。
+    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    """
+
     __tablename__ = "cost_records"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -189,6 +354,31 @@ class CostRecordRecord(Base):
 
 
 class AuditEventRecord(Base):
+    """AuditEventRecord。
+
+    AuditEventRecord 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - __tablename__: 'audit_events'。
+    - event_id: Mapped[str]。
+    - tenant_id: Mapped[str]。
+    - action: Mapped[str]。
+    - resource_type: Mapped[str]。
+    - resource_id: Mapped[str]。
+    - risk_level: Mapped[str]。
+    - actor_type: Mapped[str]。
+    - actor_id: Mapped[str]。
+    - trace_id: Mapped[str | None]。
+    - payload: Mapped[dict]。
+    - created_at: Mapped[datetime]。
+    - 方法 from_domain()。
+    - 方法 to_domain()。
+
+    设计约束：
+    - 保持接口稳定，不向调用方暴露不必要的数据结构。
+    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    """
+
     __tablename__ = "audit_events"
 
     event_id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -205,6 +395,14 @@ class AuditEventRecord(Base):
 
     @classmethod
     def from_domain(cls, event: AuditEvent) -> "AuditEventRecord":
+        """执行 from_domain 对应的逻辑，并返回处理结果。
+
+        Args:
+            event: AuditEvent，调用方传入的 event 参数。
+
+        Returns:
+            'AuditEventRecord'，函数执行后的结果。
+        """
         return cls(
             event_id=event.event_id,
             tenant_id=event.tenant_id,
@@ -220,6 +418,11 @@ class AuditEventRecord(Base):
         )
 
     def to_domain(self) -> AuditEvent:
+        """执行 to_domain 对应的逻辑，并返回处理结果。
+
+        Returns:
+            AuditEvent，函数执行后的结果。
+        """
         return AuditEvent(
             event_id=self.event_id,
             tenant_id=self.tenant_id,
@@ -236,6 +439,36 @@ class AuditEventRecord(Base):
 
 
 class EvaluationSampleRecord(Base):
+    """EvaluationSampleRecord。
+
+    EvaluationSampleRecord 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - __tablename__: 'evaluation_samples'。
+    - sample_id: Mapped[str]。
+    - tenant_id: Mapped[str]。
+    - source_ticket_id: Mapped[str]。
+    - query: Mapped[str]。
+    - draft_text: Mapped[str]。
+    - final_text: Mapped[str]。
+    - action: Mapped[str]。
+    - reason: Mapped[str]。
+    - reviewer_id: Mapped[str]。
+    - intent: Mapped[str | None]。
+    - priority: Mapped[str]。
+    - risk_level: Mapped[str]。
+    - model_name: Mapped[str]。
+    - provider: Mapped[str]。
+    - trace_id: Mapped[str]。
+    - created_at: Mapped[datetime]。
+    - 方法 from_domain()。
+    - 方法 to_domain()。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    """
+
     __tablename__ = "evaluation_samples"
 
     sample_id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -257,6 +490,14 @@ class EvaluationSampleRecord(Base):
 
     @classmethod
     def from_domain(cls, sample: EvaluationSample) -> "EvaluationSampleRecord":
+        """执行 from_domain 对应的逻辑，并返回处理结果。
+
+        Args:
+            sample: EvaluationSample，调用方传入的 sample 参数。
+
+        Returns:
+            'EvaluationSampleRecord'，函数执行后的结果。
+        """
         return cls(
             sample_id=sample.sample_id,
             tenant_id=sample.tenant_id,
@@ -277,6 +518,11 @@ class EvaluationSampleRecord(Base):
         )
 
     def to_domain(self) -> EvaluationSample:
+        """执行 to_domain 对应的逻辑，并返回处理结果。
+
+        Returns:
+            EvaluationSample，函数执行后的结果。
+        """
         return EvaluationSample(
             sample_id=self.sample_id,
             tenant_id=self.tenant_id,
@@ -298,6 +544,29 @@ class EvaluationSampleRecord(Base):
 
 
 class GoldenItemRecord(Base):
+    """GoldenItemRecord。
+
+    GoldenItemRecord 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - __tablename__: 'golden_items'。
+    - item_id: Mapped[str]。
+    - tenant_id: Mapped[str]。
+    - query: Mapped[str]。
+    - expected_chunk_ids: Mapped[list]。
+    - expected_citations: Mapped[list]。
+    - expected_intent: Mapped[str | None]。
+    - expected_priority: Mapped[str | None]。
+    - expected_risk_level: Mapped[str | None]。
+    - created_at: Mapped[datetime]。
+    - 方法 from_domain()。
+    - 方法 to_domain()。
+
+    设计约束：
+    - 保持接口稳定，不向调用方暴露不必要的数据结构。
+    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    """
+
     __tablename__ = "golden_items"
 
     item_id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -312,6 +581,14 @@ class GoldenItemRecord(Base):
 
     @classmethod
     def from_domain(cls, item: GoldenItem) -> "GoldenItemRecord":
+        """执行 from_domain 对应的逻辑，并返回处理结果。
+
+        Args:
+            item: GoldenItem，调用方传入的 item 参数。
+
+        Returns:
+            'GoldenItemRecord'，函数执行后的结果。
+        """
         return cls(
             item_id=item.item_id,
             tenant_id=item.tenant_id,
@@ -325,6 +602,11 @@ class GoldenItemRecord(Base):
         )
 
     def to_domain(self) -> GoldenItem:
+        """执行 to_domain 对应的逻辑，并返回处理结果。
+
+        Returns:
+            GoldenItem，函数执行后的结果。
+        """
         return GoldenItem(
             item_id=self.item_id,
             tenant_id=self.tenant_id,
@@ -339,6 +621,33 @@ class GoldenItemRecord(Base):
 
 
 class RegressionRunRecord(Base):
+    """RegressionRunRecord。
+
+    RegressionRunRecord 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - __tablename__: 'regression_runs'。
+    - run_id: Mapped[str]。
+    - tenant_id: Mapped[str]。
+    - candidate_id: Mapped[str]。
+    - status: Mapped[str]。
+    - recall_at_k: Mapped[float]。
+    - citation_accuracy: Mapped[float]。
+    - classification_accuracy: Mapped[float]。
+    - priority_accuracy: Mapped[float]。
+    - structured_output_rate: Mapped[float]。
+    - high_risk_miss_rate: Mapped[float]。
+    - verdict: Mapped[str]。
+    - report: Mapped[dict]。
+    - created_at: Mapped[datetime]。
+    - 方法 from_domain()。
+    - 方法 to_domain()。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    """
+
     __tablename__ = "regression_runs"
 
     run_id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -359,6 +668,15 @@ class RegressionRunRecord(Base):
     def from_domain(
         cls, run: RegressionRun, report_dict: dict | None = None
     ) -> "RegressionRunRecord":
+        """执行 from_domain 对应的逻辑，并返回处理结果。
+
+        Args:
+            run: RegressionRun，调用方传入的 run 参数。
+            report_dict: dict | None，调用方传入的 report_dict 参数。
+
+        Returns:
+            'RegressionRunRecord'，函数执行后的结果。
+        """
         return cls(
             run_id=run.run_id,
             tenant_id=run.tenant_id,
@@ -376,6 +694,11 @@ class RegressionRunRecord(Base):
         )
 
     def to_domain(self) -> RegressionRun:
+        """执行 to_domain 对应的逻辑，并返回处理结果。
+
+        Returns:
+            RegressionRun，函数执行后的结果。
+        """
         return RegressionRun(
             run_id=self.run_id,
             tenant_id=self.tenant_id,
@@ -393,6 +716,32 @@ class RegressionRunRecord(Base):
 
 
 class ConnectorSpecRecord(Base):
+    """ConnectorSpecRecord。
+
+    ConnectorSpecRecord 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - __tablename__: 'connector_specs'。
+    - connector_id: Mapped[str]。
+    - tenant_id: Mapped[str]。
+    - name: Mapped[str]。
+    - kind: Mapped[str]。
+    - version: Mapped[str]。
+    - risk_level: Mapped[str]。
+    - endpoint: Mapped[str | None]。
+    - allowed_actions: Mapped[list]。
+    - credential: Mapped[dict | None]。
+    - config: Mapped[dict]。
+    - enabled: Mapped[bool]。
+    - created_at: Mapped[datetime]。
+    - 方法 from_domain()。
+    - 方法 to_domain()。
+
+    设计约束：
+    - 保持接口稳定，不向调用方暴露不必要的数据结构。
+    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    """
+
     __tablename__ = "connector_specs"
 
     connector_id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -410,6 +759,14 @@ class ConnectorSpecRecord(Base):
 
     @classmethod
     def from_domain(cls, spec: ConnectorSpec) -> "ConnectorSpecRecord":
+        """执行 from_domain 对应的逻辑，并返回处理结果。
+
+        Args:
+            spec: ConnectorSpec，调用方传入的 spec 参数。
+
+        Returns:
+            'ConnectorSpecRecord'，函数执行后的结果。
+        """
         return cls(
             connector_id=spec.connector_id,
             tenant_id=spec.tenant_id,
@@ -428,6 +785,11 @@ class ConnectorSpecRecord(Base):
         )
 
     def to_domain(self) -> ConnectorSpec:
+        """执行 to_domain 对应的逻辑，并返回处理结果。
+
+        Returns:
+            ConnectorSpec，函数执行后的结果。
+        """
         created_at = self.created_at
         if created_at is not None and created_at.tzinfo is None:
             created_at = created_at.replace(tzinfo=timezone.utc)
@@ -450,6 +812,27 @@ class ConnectorSpecRecord(Base):
 
 
 class RoleRecord(Base):
+    """RoleRecord。
+
+    RoleRecord 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - __tablename__: 'rbac_roles'。
+    - role_id: Mapped[str]。
+    - tenant_id: Mapped[str]。
+    - name: Mapped[str]。
+    - description: Mapped[str]。
+    - permissions: Mapped[list]。
+    - built_in: Mapped[bool]。
+    - created_at: Mapped[datetime]。
+    - 方法 from_domain()。
+    - 方法 to_domain()。
+
+    设计约束：
+    - 保持接口稳定，不向调用方暴露不必要的数据结构。
+    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    """
+
     __tablename__ = "rbac_roles"
 
     role_id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -462,6 +845,14 @@ class RoleRecord(Base):
 
     @classmethod
     def from_domain(cls, role: Role) -> "RoleRecord":
+        """执行 from_domain 对应的逻辑，并返回处理结果。
+
+        Args:
+            role: Role，调用方传入的 role 参数。
+
+        Returns:
+            'RoleRecord'，函数执行后的结果。
+        """
         return cls(
             role_id=role.role_id,
             tenant_id=role.tenant_id,
@@ -473,6 +864,11 @@ class RoleRecord(Base):
         )
 
     def to_domain(self) -> Role:
+        """执行 to_domain 对应的逻辑，并返回处理结果。
+
+        Returns:
+            Role，函数执行后的结果。
+        """
         created_at = self.created_at
         if created_at is not None and created_at.tzinfo is None:
             created_at = created_at.replace(tzinfo=timezone.utc)
@@ -488,6 +884,25 @@ class RoleRecord(Base):
 
 
 class RoleAssignmentRecord(Base):
+    """RoleAssignmentRecord。
+
+    RoleAssignmentRecord 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - __tablename__: 'rbac_role_assignments'。
+    - assignment_id: Mapped[str]。
+    - tenant_id: Mapped[str]。
+    - user_id: Mapped[str]。
+    - role_id: Mapped[str]。
+    - granted_at: Mapped[datetime]。
+    - 方法 from_domain()。
+    - 方法 to_domain()。
+
+    设计约束：
+    - 保持接口稳定，不向调用方暴露不必要的数据结构。
+    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    """
+
     __tablename__ = "rbac_role_assignments"
 
     assignment_id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -498,6 +913,14 @@ class RoleAssignmentRecord(Base):
 
     @classmethod
     def from_domain(cls, assignment: RoleAssignment) -> "RoleAssignmentRecord":
+        """执行 from_domain 对应的逻辑，并返回处理结果。
+
+        Args:
+            assignment: RoleAssignment，调用方传入的 assignment 参数。
+
+        Returns:
+            'RoleAssignmentRecord'，函数执行后的结果。
+        """
         return cls(
             assignment_id=assignment.assignment_id,
             tenant_id=assignment.tenant_id,
@@ -507,6 +930,11 @@ class RoleAssignmentRecord(Base):
         )
 
     def to_domain(self) -> RoleAssignment:
+        """执行 to_domain 对应的逻辑，并返回处理结果。
+
+        Returns:
+            RoleAssignment，函数执行后的结果。
+        """
         granted_at = self.granted_at
         if granted_at is not None and granted_at.tzinfo is None:
             granted_at = granted_at.replace(tzinfo=timezone.utc)
@@ -520,6 +948,26 @@ class RoleAssignmentRecord(Base):
 
 
 class TenantQuotaRecord(Base):
+    """TenantQuotaRecord。
+
+    TenantQuotaRecord 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - __tablename__: 'tenant_quotas'。
+    - tenant_id: Mapped[str]。
+    - monthly_limit: Mapped[float]。
+    - warning_threshold: Mapped[float]。
+    - hard_limit: Mapped[float]。
+    - enabled: Mapped[bool]。
+    - updated_at: Mapped[datetime]。
+    - 方法 from_domain()。
+    - 方法 to_domain()。
+
+    设计约束：
+    - 保持接口稳定，不向调用方暴露不必要的数据结构。
+    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    """
+
     __tablename__ = "tenant_quotas"
 
     tenant_id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -531,6 +979,14 @@ class TenantQuotaRecord(Base):
 
     @classmethod
     def from_domain(cls, quota: TenantQuota) -> "TenantQuotaRecord":
+        """执行 from_domain 对应的逻辑，并返回处理结果。
+
+        Args:
+            quota: TenantQuota，调用方传入的 quota 参数。
+
+        Returns:
+            'TenantQuotaRecord'，函数执行后的结果。
+        """
         return cls(
             tenant_id=quota.tenant_id,
             monthly_limit=quota.monthly_limit,
@@ -541,6 +997,11 @@ class TenantQuotaRecord(Base):
         )
 
     def to_domain(self) -> TenantQuota:
+        """执行 to_domain 对应的逻辑，并返回处理结果。
+
+        Returns:
+            TenantQuota，函数执行后的结果。
+        """
         updated_at = self.updated_at
         if updated_at is not None and updated_at.tzinfo is None:
             updated_at = updated_at.replace(tzinfo=timezone.utc)
@@ -555,6 +1016,29 @@ class TenantQuotaRecord(Base):
 
 
 class ScheduledReportRecord(Base):
+    """ScheduledReportRecord。
+
+    ScheduledReportRecord 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - __tablename__: 'scheduled_reports'。
+    - report_id: Mapped[str]。
+    - tenant_id: Mapped[str]。
+    - report_type: Mapped[str]。
+    - cadence: Mapped[str]。
+    - enabled: Mapped[bool]。
+    - retention_days: Mapped[int | None]。
+    - created_at: Mapped[datetime]。
+    - last_run_at: Mapped[datetime | None]。
+    - next_run_at: Mapped[datetime]。
+    - 方法 from_domain()。
+    - 方法 to_domain()。
+
+    设计约束：
+    - 保持接口稳定，不向调用方暴露不必要的数据结构。
+    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    """
+
     __tablename__ = "scheduled_reports"
 
     report_id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -569,6 +1053,14 @@ class ScheduledReportRecord(Base):
 
     @classmethod
     def from_domain(cls, report: ScheduledReport) -> "ScheduledReportRecord":
+        """执行 from_domain 对应的逻辑，并返回处理结果。
+
+        Args:
+            report: ScheduledReport，调用方传入的 report 参数。
+
+        Returns:
+            'ScheduledReportRecord'，函数执行后的结果。
+        """
         return cls(
             report_id=report.report_id,
             tenant_id=report.tenant_id,
@@ -582,7 +1074,21 @@ class ScheduledReportRecord(Base):
         )
 
     def to_domain(self) -> ScheduledReport:
+        """执行 to_domain 对应的逻辑，并返回处理结果。
+
+        Returns:
+            ScheduledReport，函数执行后的结果。
+        """
+
         def _utc(value: datetime | None) -> datetime | None:
+            """执行 _utc 对应的逻辑，并返回处理结果。
+
+            Args:
+                value: datetime | None，调用方传入的 value 参数。
+
+            Returns:
+                datetime | None，函数执行后的结果。
+            """
             if value is None:
                 return None
             if value.tzinfo is None:
@@ -603,6 +1109,29 @@ class ScheduledReportRecord(Base):
 
 
 class ReportRunRecord(Base):
+    """ReportRunRecord。
+
+    ReportRunRecord 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - __tablename__: 'report_runs'。
+    - run_id: Mapped[str]。
+    - tenant_id: Mapped[str]。
+    - report_type: Mapped[str]。
+    - format: Mapped[str]。
+    - rows: Mapped[list]。
+    - summary: Mapped[dict]。
+    - scheduled_report_id: Mapped[str | None]。
+    - generated_at: Mapped[datetime]。
+    - archived: Mapped[bool]。
+    - 方法 from_domain()。
+    - 方法 to_domain()。
+
+    设计约束：
+    - 保持接口稳定，不向调用方暴露不必要的数据结构。
+    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    """
+
     __tablename__ = "report_runs"
 
     run_id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -619,6 +1148,14 @@ class ReportRunRecord(Base):
 
     @classmethod
     def from_domain(cls, run: ReportRun) -> "ReportRunRecord":
+        """执行 from_domain 对应的逻辑，并返回处理结果。
+
+        Args:
+            run: ReportRun，调用方传入的 run 参数。
+
+        Returns:
+            'ReportRunRecord'，函数执行后的结果。
+        """
         return cls(
             run_id=run.run_id,
             tenant_id=run.tenant_id,
@@ -632,6 +1169,11 @@ class ReportRunRecord(Base):
         )
 
     def to_domain(self) -> ReportRun:
+        """执行 to_domain 对应的逻辑，并返回处理结果。
+
+        Returns:
+            ReportRun，函数执行后的结果。
+        """
         generated_at = self.generated_at
         if generated_at is not None and generated_at.tzinfo is None:
             generated_at = generated_at.replace(tzinfo=timezone.utc)

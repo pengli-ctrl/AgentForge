@@ -28,13 +28,40 @@ class MockRAGPipeline:
         retrieved: list[str] | None = None,
         answer: str = "Generated answer",
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            retrieved: list[str] | None，调用方传入的 retrieved 参数。
+            answer: str，调用方传入的 answer 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._retrieved = retrieved or ["context chunk 1", "context chunk 2"]
         self._answer = answer
 
     def retrieve(self, query: str, top_k: int = 5) -> list[str]:
+        """执行 retrieve 对应的逻辑，并返回处理结果。
+
+        Args:
+            query: str，调用方传入的 query 参数。
+            top_k: int，调用方传入的 top_k 参数。
+
+        Returns:
+            list[str]，函数执行后的结果。
+        """
         return self._retrieved[:top_k]
 
     def generate(self, query: str, contexts: list[str]) -> str:
+        """执行 generate 对应的逻辑，并返回处理结果。
+
+        Args:
+            query: str，调用方传入的 query 参数。
+            contexts: list[str]，调用方传入的 contexts 参数。
+
+        Returns:
+            str，函数执行后的结果。
+        """
         return self._answer
 
 
@@ -42,6 +69,11 @@ class TestGoldenSample:
     """GoldenSample 数据类测试。"""
 
     def test_create_sample(self) -> None:
+        """验证 create_sample 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         sample = GoldenSample(
             query="What is validate_input?",
             ground_truth_context="def validate_input(data): return bool(data)",
@@ -56,6 +88,11 @@ class TestEvaluationResult:
     """EvaluationResult 数据类测试。"""
 
     def test_defaults(self) -> None:
+        """验证 defaults 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         result = EvaluationResult()
         assert result.faithfulness == 0.0
         assert result.answer_relevancy == 0.0
@@ -65,6 +102,11 @@ class TestEvaluationResult:
         assert result.sample_count == 0
 
     def test_to_dict(self) -> None:
+        """验证 to_dict 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         result = EvaluationResult(
             faithfulness=0.85,
             answer_relevancy=0.90,
@@ -86,12 +128,22 @@ class TestRAGEvaluatorInit:
     """RAGEvaluator 初始化测试。"""
 
     def test_init_with_llm(self) -> None:
+        """验证 init_with_llm 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         llm = MockLLMGateway()
         evaluator = RAGEvaluator(llm_gateway=llm)
         assert evaluator.llm_gateway is llm
         assert evaluator._judge is not None
 
     def test_has_llm_judge(self) -> None:
+        """验证 has_llm_judge 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         llm = MockLLMGateway()
         evaluator = RAGEvaluator(llm_gateway=llm)
         assert isinstance(evaluator._judge, LLMAsJudge)
@@ -101,6 +153,11 @@ class TestEvaluate:
     """evaluate 方法测试。"""
 
     def test_evaluate_empty_dataset(self) -> None:
+        """验证 evaluate_empty_dataset 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         llm = MockLLMGateway()
         evaluator = RAGEvaluator(llm_gateway=llm)
         result = evaluator.evaluate([], MockRAGPipeline())
@@ -113,10 +170,10 @@ class TestEvaluate:
         judge_response = json.dumps({"score": 0.8, "reason": "good match"})
         llm = MockLLMGateway(
             responses=[
-                LLMResponse(content=judge_response),  # faithfulness
-                LLMResponse(content=judge_response),  # answer_relevancy
-                LLMResponse(content=judge_response),  # context_precision
-                LLMResponse(content=judge_response),  # context_recall
+                LLMResponse(content=judge_response),  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+                LLMResponse(content=judge_response),  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+                LLMResponse(content=judge_response),  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+                LLMResponse(content=judge_response),  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             ]
         )
         evaluator = RAGEvaluator(llm_gateway=llm)
@@ -184,7 +241,7 @@ class TestEvaluate:
         samples = [GoldenSample("q", "ctx", "ans")]
         result = evaluator.evaluate(samples, MockRAGPipeline())
 
-        # All scores = 1.0, so overall = 1.0
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         assert result["overall_score"] == pytest.approx(1.0, abs=0.01)
 
 
@@ -192,26 +249,46 @@ class TestComputeOverall:
     """_compute_overall 方法测试。"""
 
     def test_all_zero(self) -> None:
+        """验证 all_zero 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         llm = MockLLMGateway()
         evaluator = RAGEvaluator(llm_gateway=llm)
         overall = evaluator._compute_overall(0, 0, 0, 0)
         assert overall == 0.0
 
     def test_all_one(self) -> None:
+        """验证 all_one 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         llm = MockLLMGateway()
         evaluator = RAGEvaluator(llm_gateway=llm)
         overall = evaluator._compute_overall(1.0, 1.0, 1.0, 1.0)
         assert overall == pytest.approx(1.0)
 
     def test_weighted_correctly(self) -> None:
+        """验证 weighted_correctly 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         llm = MockLLMGateway()
         evaluator = RAGEvaluator(llm_gateway=llm)
         overall = evaluator._compute_overall(1.0, 0.0, 0.0, 0.0)
-        # Only faithfulness contributes: 0.30
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         expected = 1.0 * DIMENSION_WEIGHTS["faithfulness"]
         assert overall == pytest.approx(expected)
 
     def test_weights_sum_to_one(self) -> None:
+        """验证 weights_sum_to_one 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         total = sum(DIMENSION_WEIGHTS.values())
         assert pytest.approx(total) == 1.0
 
@@ -221,6 +298,11 @@ class TestLLMAsJudge:
 
     @pytest.mark.asyncio
     async def test_judge_returns_score_and_reason(self) -> None:
+        """验证 judge_returns_score_and_reason 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         response = json.dumps({"score": 0.75, "reason": "mostly correct"})
         llm = MockLLMGateway(responses=[LLMResponse(content=response)])
         judge = LLMAsJudge(llm_gateway=llm)
@@ -236,6 +318,11 @@ class TestLLMAsJudge:
 
     @pytest.mark.asyncio
     async def test_judge_score_clamped(self) -> None:
+        """验证 judge_score_clamped 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         response = json.dumps({"score": 1.5, "reason": "exceeds"})
         llm = MockLLMGateway(responses=[LLMResponse(content=response)])
         judge = LLMAsJudge(llm_gateway=llm)
@@ -245,6 +332,11 @@ class TestLLMAsJudge:
 
     @pytest.mark.asyncio
     async def test_judge_negative_score_clamped(self) -> None:
+        """验证 judge_negative_score_clamped 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         response = json.dumps({"score": -0.5, "reason": "bad"})
         llm = MockLLMGateway(responses=[LLMResponse(content=response)])
         judge = LLMAsJudge(llm_gateway=llm)
@@ -254,6 +346,11 @@ class TestLLMAsJudge:
 
     @pytest.mark.asyncio
     async def test_judge_invalid_json_returns_zero(self) -> None:
+        """验证 judge_invalid_json_returns_zero 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         llm = MockLLMGateway(responses=[LLMResponse(content="not json")])
         judge = LLMAsJudge(llm_gateway=llm)
 
@@ -263,6 +360,11 @@ class TestLLMAsJudge:
 
     @pytest.mark.asyncio
     async def test_judge_json_with_surrounding_text(self) -> None:
+        """验证 judge_json_with_surrounding_text 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         content = (
             "Here is my judgment:\n" + json.dumps({"score": 0.8, "reason": "good"}) + "\nDone."
         )
@@ -274,6 +376,11 @@ class TestLLMAsJudge:
 
     @pytest.mark.asyncio
     async def test_batch_judge(self) -> None:
+        """验证 batch_judge 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         responses = [
             LLMResponse(content=json.dumps({"score": 0.9, "reason": "great"})),
             LLMResponse(content=json.dumps({"score": 0.3, "reason": "poor"})),

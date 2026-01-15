@@ -29,6 +29,14 @@ class MockLLMGateway(LLMGateway):
     """
 
     def __init__(self, responses: list[LLMResponse] | None = None) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            responses: list[LLMResponse] | None，调用方传入的 responses 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         super().__init__(model="mock-model")
         self._responses = responses or []
         self._index = 0
@@ -41,6 +49,17 @@ class MockLLMGateway(LLMGateway):
         max_tokens: int | None = None,
         temperature: float | None = None,
     ) -> LLMResponse:
+        """执行 chat 对应的逻辑，并返回处理结果。
+
+        Args:
+            messages: list[dict[str, str]] | str，调用方传入的 messages 参数。
+            tools: list[dict] | None，调用方传入的 tools 参数。
+            max_tokens: int | None，调用方传入的 max_tokens 参数。
+            temperature: float | None，调用方传入的 temperature 参数。
+
+        Returns:
+            LLMResponse，函数执行后的结果。
+        """
         self.call_count += 1
 
         if self._index < len(self._responses):
@@ -63,6 +82,14 @@ class ScriptedLLMGateway(LLMGateway):
     """
 
     def __init__(self, scripts: dict[str, list[str]]) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            scripts: dict[str, list[str]]，调用方传入的 scripts 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         super().__init__(model="scripted-model")
         self._scripts = scripts
         self._indices: dict[str, int] = {}
@@ -75,6 +102,17 @@ class ScriptedLLMGateway(LLMGateway):
         temperature: float | None = None,
     ) -> LLMResponse:
         # 尝试从消息中推断 Agent 名称
+        """执行 chat 对应的逻辑，并返回处理结果。
+
+        Args:
+            messages: list[dict[str, str]] | str，调用方传入的 messages 参数。
+            tools: list[dict] | None，调用方传入的 tools 参数。
+            max_tokens: int | None，调用方传入的 max_tokens 参数。
+            temperature: float | None，调用方传入的 temperature 参数。
+
+        Returns:
+            LLMResponse，函数执行后的结果。
+        """
         agent_name = "default"
         if isinstance(messages, list) and messages:
             system_msg = messages[0].get("content", "")
@@ -110,7 +148,11 @@ def snapshot_manager() -> ContextSnapshotManager:
 
 @pytest.fixture
 def mock_llm() -> MockLLMGateway:
-    """提供 Mock LLM Gateway。"""
+    """执行 mock_llm 对应的逻辑，并返回处理结果。
+
+    Returns:
+        MockLLMGateway，函数执行后的结果。
+    """
     return MockLLMGateway()
 
 

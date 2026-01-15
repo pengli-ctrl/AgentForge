@@ -14,14 +14,24 @@ class TestParserCreation:
     """参数解析器测试。"""
 
     def test_parser_has_subcommands(self) -> None:
+        """验证 parser_has_subcommands 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         cli = CLIClient()
         parser = cli._create_parser()
-        # Parse --help should not error
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
         with pytest.raises(SystemExit):
             parser.parse_args(["--help"])
 
     def test_parser_accepts_url_and_api_key(self) -> None:
+        """验证 parser_accepts_url_and_api_key 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         cli = CLIClient()
         parser = cli._create_parser()
         parsed = parser.parse_args(
@@ -44,6 +54,14 @@ class TestNoCommand:
     """无子命令测试。"""
 
     def test_no_command_prints_help_returns_zero(self, capsys) -> None:
+        """验证 no_command_prints_help_returns_zero 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            capsys: Any，调用方传入的 capsys 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         cli = CLIClient()
         exit_code = cli.run([])
         assert exit_code == 0
@@ -55,6 +73,11 @@ class TestSubmitCommand:
     """submit 子命令测试。"""
 
     def test_submit_parses_workflow_and_input(self) -> None:
+        """验证 submit_parses_workflow_and_input 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         cli = CLIClient()
         parser = cli._create_parser()
         parsed = parser.parse_args(
@@ -77,6 +100,11 @@ class TestStatusCommand:
     """status 子命令测试。"""
 
     def test_status_parses_task_id(self) -> None:
+        """验证 status_parses_task_id 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         cli = CLIClient()
         parser = cli._create_parser()
         parsed = parser.parse_args(["status", "task-abc-123"])
@@ -88,6 +116,11 @@ class TestServeCommand:
     """serve 子命令测试。"""
 
     def test_serve_parses_host_and_port(self) -> None:
+        """验证 serve_parses_host_and_port 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         cli = CLIClient()
         parser = cli._create_parser()
         parsed = parser.parse_args(
@@ -104,6 +137,11 @@ class TestServeCommand:
         assert parsed.port == 9000
 
     def test_serve_defaults(self) -> None:
+        """验证 serve_defaults 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         cli = CLIClient()
         parser = cli._create_parser()
         parsed = parser.parse_args(["serve"])
@@ -149,11 +187,21 @@ class TestModuleLevelApp:
     """模块级 app 实例测试。"""
 
     def test_app_is_cli_client(self) -> None:
+        """验证 app_is_cli_client 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         from agentforge.cli.main import app
 
         assert isinstance(app, CLIClient)
 
     def test_main_function_exists(self) -> None:
+        """验证 main_function_exists 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         from agentforge.cli.main import main
 
         assert callable(main)

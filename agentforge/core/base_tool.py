@@ -98,6 +98,11 @@ class ToolRegistry:
     """
 
     def __init__(self) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._tools: dict[str, BaseTool] = {}
 
     def register(self, tool: BaseTool) -> None:

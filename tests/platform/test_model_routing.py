@@ -1,3 +1,14 @@
+"""AgentForge 平台测试层：test_model_routing。
+
+本测试模块验证 test_model_routing 覆盖的业务路径、边界条件和回归场景。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+- 主要函数：test_model_router_selects_expected_profiles、test_quota_gateway_rejects_over_budget。
+"""
+
 import pytest
 
 from agentforge.platform.application.model_router import ModelRouter
@@ -9,6 +20,11 @@ from agentforge.platform.infrastructure.memory_cost_repository import MemoryCost
 
 
 def test_model_router_selects_expected_profiles() -> None:
+    """验证 model_router_selects_expected_profiles 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     router = ModelRouter(
         [
             ModelProfile(
@@ -37,6 +53,11 @@ def test_model_router_selects_expected_profiles() -> None:
 
 @pytest.mark.asyncio
 async def test_quota_gateway_rejects_over_budget() -> None:
+    """验证 quota_gateway_rejects_over_budget 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     cost_repository = MemoryCostRepository()
     await cost_repository.save(
         CostRecord(

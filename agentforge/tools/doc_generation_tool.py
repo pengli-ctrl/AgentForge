@@ -27,6 +27,14 @@ class DocGenerationTool(BaseTool):
     """
 
     def __init__(self, output_dir: str = "./docs/generated") -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            output_dir: str，调用方传入的 output_dir 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.output_dir = output_dir
 
     @property
@@ -35,7 +43,11 @@ class DocGenerationTool(BaseTool):
         return "doc_generation"
 
     def schema(self) -> dict:
-        """返回 JSON Schema。"""
+        """执行 schema 对应的逻辑，并返回处理结果。
+
+        Returns:
+            dict，函数执行后的结果。
+        """
         return {
             "type": "function",
             "function": {

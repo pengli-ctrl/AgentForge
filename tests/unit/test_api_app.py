@@ -19,7 +19,14 @@ def app():
 
 @pytest.fixture
 async def client(app):
-    """创建 httpx AsyncClient。"""
+    """执行 client 对应的逻辑，并返回处理结果。
+
+    Args:
+        app: Any，调用方传入的 app 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     from httpx import ASGITransport, AsyncClient
 
     transport = ASGITransport(app=app)
@@ -32,11 +39,27 @@ class TestHealthEndpoint:
 
     @pytest.mark.asyncio
     async def test_health_returns_200(self, client) -> None:
+        """验证 health_returns_200 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            client: Any，调用方传入的 client 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         resp = await client.get("/health")
         assert resp.status_code == 200
 
     @pytest.mark.asyncio
     async def test_health_returns_status(self, client) -> None:
+        """验证 health_returns_status 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            client: Any，调用方传入的 client 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         resp = await client.get("/health")
         data = resp.json()
         assert data["status"] == "healthy"
@@ -48,6 +71,14 @@ class TestTaskCreation:
 
     @pytest.mark.asyncio
     async def test_create_task_returns_201(self, client) -> None:
+        """验证 create_task_returns_201 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            client: Any，调用方传入的 client 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         resp = await client.post(
             "/api/v1/tasks",
             json={
@@ -62,6 +93,14 @@ class TestTaskCreation:
 
     @pytest.mark.asyncio
     async def test_create_task_missing_workflow(self, client) -> None:
+        """验证 create_task_missing_workflow 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            client: Any，调用方传入的 client 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         resp = await client.post(
             "/api/v1/tasks",
             json={"input_data": {"code": "x"}},
@@ -74,12 +113,28 @@ class TestTaskListing:
 
     @pytest.mark.asyncio
     async def test_list_tasks_returns_200(self, client) -> None:
+        """验证 list_tasks_returns_200 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            client: Any，调用方传入的 client 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         resp = await client.get("/api/v1/tasks")
         assert resp.status_code == 200
 
     @pytest.mark.asyncio
     async def test_list_tasks_after_creation(self, client) -> None:
-        # Create a task first
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+        """验证 list_tasks_after_creation 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            client: Any，调用方传入的 client 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         await client.post(
             "/api/v1/tasks",
             json={
@@ -98,6 +153,14 @@ class TestTaskDetail:
 
     @pytest.mark.asyncio
     async def test_get_nonexistent_task(self, client) -> None:
+        """验证 get_nonexistent_task 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            client: Any，调用方传入的 client 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         resp = await client.get("/api/v1/tasks/nonexistent-id")
         assert resp.status_code == 404
 
@@ -107,11 +170,27 @@ class TestAgentEndpoints:
 
     @pytest.mark.asyncio
     async def test_list_agents_returns_200(self, client) -> None:
+        """验证 list_agents_returns_200 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            client: Any，调用方传入的 client 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         resp = await client.get("/api/v1/agents")
         assert resp.status_code == 200
 
     @pytest.mark.asyncio
     async def test_agents_health_returns_200(self, client) -> None:
+        """验证 agents_health_returns_200 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            client: Any，调用方传入的 client 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         resp = await client.get("/api/v1/agents/health")
         assert resp.status_code == 200
 
@@ -121,5 +200,13 @@ class TestMetricsEndpoint:
 
     @pytest.mark.asyncio
     async def test_metrics_returns_200(self, client) -> None:
+        """验证 metrics_returns_200 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            client: Any，调用方传入的 client 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         resp = await client.get("/metrics")
         assert resp.status_code == 200

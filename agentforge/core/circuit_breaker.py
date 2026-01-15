@@ -84,6 +84,17 @@ class CircuitBreaker:
         half_open_max_calls: int = 1,
         clock: Callable[[], float] | None = None,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            failure_threshold: int，调用方传入的 failure_threshold 参数。
+            recovery_timeout: float，调用方传入的 recovery_timeout 参数。
+            half_open_max_calls: int，调用方传入的 half_open_max_calls 参数。
+            clock: Callable[[], float] | None，调用方传入的 clock 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
         self.half_open_max_calls = half_open_max_calls
@@ -223,6 +234,11 @@ class CircuitBreaker:
         return self._failure_count
 
     def __repr__(self) -> str:
+        """执行 __repr__ 对应的逻辑，并返回处理结果。
+
+        Returns:
+            str，函数执行后的结果。
+        """
         return (
             f"CircuitBreaker(state={self._state.value}, "
             f"failures={self._failure_count}, "

@@ -93,6 +93,17 @@ class LLMGateway(ABC):
         timeout: float = 30.0,
         temperature: float = 0.7,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            model: str，调用方传入的 model 参数。
+            max_tokens: int，调用方传入的 max_tokens 参数。
+            timeout: float，调用方传入的 timeout 参数。
+            temperature: float，调用方传入的 temperature 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.model = model
         self.max_tokens = max_tokens
         self.timeout = timeout
@@ -165,6 +176,20 @@ class VLLMGateway(LLMGateway):
         temperature: float = 0.7,
         _transport: Any = None,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            endpoint: str，调用方传入的 endpoint 参数。
+            model: str，调用方传入的 model 参数。
+            api_key: str，调用方传入的 api_key 参数。
+            max_tokens: int，调用方传入的 max_tokens 参数。
+            timeout: float，调用方传入的 timeout 参数。
+            temperature: float，调用方传入的 temperature 参数。
+            _transport: Any，调用方传入的 _transport 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         super().__init__(model, max_tokens, timeout, temperature)
         self.endpoint = endpoint
         self.api_key = api_key

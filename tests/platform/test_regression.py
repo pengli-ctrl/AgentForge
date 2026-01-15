@@ -1,3 +1,15 @@
+"""AgentForge 平台测试层：test_regression。
+
+本测试模块验证 test_regression 覆盖的业务路径、边界条件和回归场景。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+-
+主要函数：test_regression_reports_persisted_and_pass_gate、test_regression_tenant_isolation、test_regression_empty_dataset_report、test_sqlalchemy_regression_repository_roundtrip、test_regression_api_seeds_and_runs。
+"""
+
 import uuid
 
 import pytest
@@ -26,6 +38,14 @@ from agentforge.platform.infrastructure.sqlalchemy_regression_repository import 
 
 
 def _candidate(tenant_id: str = "t1") -> ReleaseCandidate:
+    """执行 _candidate 对应的逻辑，并返回处理结果。
+
+    Args:
+        tenant_id: str，调用方传入的 tenant_id 参数。
+
+    Returns:
+        ReleaseCandidate，函数执行后的结果。
+    """
     return ReleaseCandidate(
         candidate_id=f"cand-{uuid.uuid4().hex[:8]}",
         tenant_id=tenant_id,
@@ -38,7 +58,14 @@ def _candidate(tenant_id: str = "t1") -> ReleaseCandidate:
 
 
 def _build_runner(knowledge_repo):
-    """返回 (RegressionRunner, MemoryRegressionRepository) 便于种子存取。"""
+    """执行 _build_runner 对应的逻辑，并返回处理结果。
+
+    Args:
+        knowledge_repo: Any，调用方传入的 knowledge_repo 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     from agentforge.platform.application.reranker import HybridReranker
 
     eval_svc = RetrievalEvaluationService(knowledge_repo, HybridReranker())
@@ -54,6 +81,15 @@ def _build_runner(knowledge_repo):
 
 
 async def _seed_knowledge(repo: MemoryKnowledgeRepository, tenant_id: str = "t1") -> list[str]:
+    """执行 _seed_knowledge 对应的逻辑，并返回处理结果。
+
+    Args:
+        repo: MemoryKnowledgeRepository，调用方传入的 repo 参数。
+        tenant_id: str，调用方传入的 tenant_id 参数。
+
+    Returns:
+        list[str]，函数执行后的结果。
+    """
     from agentforge.platform.domain.knowledge import KnowledgeChunk, KnowledgeDocument
 
     doc = KnowledgeDocument(
@@ -76,6 +112,14 @@ async def _seed_knowledge(repo: MemoryKnowledgeRepository, tenant_id: str = "t1"
 
 
 def _golden_items(tenant_id: str = "t1") -> list[GoldenItem]:
+    """执行 _golden_items 对应的逻辑，并返回处理结果。
+
+    Args:
+        tenant_id: str，调用方传入的 tenant_id 参数。
+
+    Returns:
+        list[GoldenItem]，函数执行后的结果。
+    """
     return [
         GoldenItem(
             item_id="g1",
@@ -103,6 +147,14 @@ def _golden_items(tenant_id: str = "t1") -> list[GoldenItem]:
 async def _run_end_to_end(
     tenant_id: str = "t1",
 ) -> tuple[RegressionRunner, MemoryRegressionRepository]:
+    """执行 _run_end_to_end 对应的逻辑，并返回处理结果。
+
+    Args:
+        tenant_id: str，调用方传入的 tenant_id 参数。
+
+    Returns:
+        tuple[RegressionRunner, MemoryRegressionRepository]，函数执行后的结果。
+    """
     repo = MemoryKnowledgeRepository()
     await _seed_knowledge(repo, tenant_id)
     runner, reg_repo = _build_runner(repo)
@@ -113,6 +165,11 @@ async def _run_end_to_end(
 
 @pytest.mark.asyncio
 async def test_regression_reports_persisted_and_pass_gate() -> None:
+    """验证 regression_reports_persisted_and_pass_gate 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     runner, _reg_repo = await _run_end_to_end()
     report = await runner.run(tenant_id="t1", candidate=_candidate("t1"), k=2)
     assert report.verdict in {"pass", "hold", "block"}
@@ -127,6 +184,11 @@ async def test_regression_reports_persisted_and_pass_gate() -> None:
 
 @pytest.mark.asyncio
 async def test_regression_tenant_isolation() -> None:
+    """验证 regression_tenant_isolation 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     repo = MemoryKnowledgeRepository()
     await _seed_knowledge(repo, "ta")
     runner, reg_repo = _build_runner(repo)
@@ -142,6 +204,11 @@ async def test_regression_tenant_isolation() -> None:
 
 @pytest.mark.asyncio
 async def test_regression_empty_dataset_report() -> None:
+    """验证 regression_empty_dataset_report 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     repo = MemoryKnowledgeRepository()
     runner, _reg_repo = _build_runner(repo)
     report = await runner.run("empty", _candidate("empty"), k=2)
@@ -150,6 +217,11 @@ async def test_regression_empty_dataset_report() -> None:
 
 @pytest.mark.asyncio
 async def test_sqlalchemy_regression_repository_roundtrip() -> None:
+    """验证 sqlalchemy_regression_repository_roundtrip 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     engine = create_async_engine(
         "sqlite+aiosqlite://",
         connect_args={"check_same_thread": False},
@@ -203,6 +275,11 @@ async def test_sqlalchemy_regression_repository_roundtrip() -> None:
 
 @pytest.mark.asyncio
 async def test_regression_api_seeds_and_runs() -> None:
+    """验证 regression_api_seeds_and_runs 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     from fastapi.testclient import TestClient
 
     from agentforge.platform.api.app import create_platform_app

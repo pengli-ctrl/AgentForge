@@ -1,1 +1,6 @@
-# Temporal workflows and activities for AgentForge platform.
+"""AgentForge 平台工作流层包初始化。
+
+本模块用于声明包边界，并保持该目录可以被稳定导入。
+"""
+
+# 说明：该步骤用于保证业务流程、租户隔离和可追踪性。

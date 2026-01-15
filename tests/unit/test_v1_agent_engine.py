@@ -19,9 +19,19 @@ class StubTool(BaseTool):
 
     @property
     def name(self) -> str:
+        """执行 name 对应的逻辑，并返回处理结果。
+
+        Returns:
+            str，函数执行后的结果。
+        """
         return "stub_tool"
 
     def schema(self) -> dict:
+        """执行 schema 对应的逻辑，并返回处理结果。
+
+        Returns:
+            dict，函数执行后的结果。
+        """
         return {
             "name": "stub_tool",
             "description": "A stub tool for testing",
@@ -29,6 +39,14 @@ class StubTool(BaseTool):
         }
 
     async def execute(self, **kwargs: Any) -> ToolResult:
+        """执行 execute 对应的逻辑，并返回处理结果。
+
+        Args:
+            **kwargs: Any，调用方传入的 **kwargs 参数。
+
+        Returns:
+            ToolResult，函数执行后的结果。
+        """
         return ToolResult(success=True, output="stub executed")
 
 
@@ -36,6 +54,11 @@ class TestAgentResult:
     """AgentResult 数据类测试。"""
 
     def test_defaults(self) -> None:
+        """验证 defaults 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         result = AgentResult(output="done")
         assert result.output == "done"
         assert result.iterations == 0
@@ -47,12 +70,28 @@ class TestAgentEngineInit:
     """初始化测试。"""
 
     def test_init_with_gateway(self, mock_llm: Any) -> None:
+        """验证 init_with_gateway 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            mock_llm: Any，调用方传入的 mock_llm 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         engine = AgentEngine(llm_gateway=mock_llm)
         assert engine.llm is mock_llm
         assert engine.max_iterations == 5
         assert engine.token_budget == 8000
 
     def test_custom_max_iterations(self, mock_llm: Any) -> None:
+        """验证 custom_max_iterations 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            mock_llm: Any，调用方传入的 mock_llm 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         engine = AgentEngine(llm_gateway=mock_llm, max_iterations=3)
         assert engine.max_iterations == 3
 
@@ -61,6 +100,14 @@ class TestToolRegistration:
     """工具注册测试。"""
 
     def test_register_tool(self, mock_llm: Any) -> None:
+        """验证 register_tool 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            mock_llm: Any，调用方传入的 mock_llm 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         engine = AgentEngine(llm_gateway=mock_llm)
         tool = StubTool()
         engine.register_tool(tool)
@@ -161,13 +208,21 @@ class TestReActLoop:
         engine.register_tool(StubTool())
         result = await engine.execute("Review code")
 
-        assert result.token_usage == 450  # (100+50) + (200+100)
+        assert result.token_usage == 450  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestBuildMessages:
     """消息构建测试。"""
 
     def test_initial_messages_contain_system_and_user(self, mock_llm: Any) -> None:
+        """验证 initial_messages_contain_system_and_user 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            mock_llm: Any，调用方传入的 mock_llm 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         engine = AgentEngine(llm_gateway=mock_llm)
         messages = engine._build_initial_messages("test task")
         assert len(messages) == 2

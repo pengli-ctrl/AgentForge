@@ -1,3 +1,14 @@
+"""AgentForge 平台 API 层：support_router。
+
+本模块定义 support_ 相关 HTTP 接口，负责请求解析、鉴权校验、调用应用服务并组织响应。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+- 主要函数：create_support_router。
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -13,18 +24,33 @@ def create_support_router(
     container: ServiceContainer,
     webhook_secret: str = "",
 ) -> APIRouter:
+    """创建新的业务对象，并返回调用方需要的结果。
+
+    Args:
+        container: ServiceContainer，调用方传入的 container 参数。
+        webhook_secret: str，调用方传入的 webhook_secret 参数。
+
+    Returns:
+        APIRouter，函数执行后的结果。
+
+    Raises:
+        HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+    """
     router = APIRouter(prefix="/v1", tags=["support"])
 
     @router.post("/events/im")
     async def receive_im_event(request: Request, body: dict[str, Any]) -> dict[str, Any]:
-        """Ingest an IM event.
+        """执行 receive_im_event 对应的逻辑，并返回处理结果。
 
-        The endpoint is tenant-authenticated (a valid tenant API key must be
-        presented) and, when ``webhook_secret`` is configured, additionally
-        HMAC-SHA256 signed (the raw request body against ``X-Webhook-Signature``)
-        to prove the payload was produced by a trusted agent. When no
-        ``webhook_secret`` is configured (e.g. local/dev) HMAC is skipped, but
-        the tenant binding above is still enforced.
+        Args:
+            request: Request，调用方传入的 request 参数。
+            body: dict[str, Any]，调用方传入的 body 参数。
+
+        Returns:
+            dict[str, Any]，函数执行后的结果。
+
+        Raises:
+            HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
         """
         tenant_id = body.get("tenant_id")
         if not isinstance(tenant_id, str) or not tenant_id:
@@ -42,6 +68,18 @@ def create_support_router(
 
     @router.post("/workflows/support")
     async def start_support_workflow(request: Request, body: dict[str, Any]) -> dict[str, str]:
+        """执行 start_support_workflow 对应的逻辑，并返回处理结果。
+
+        Args:
+            request: Request，调用方传入的 request 参数。
+            body: dict[str, Any]，调用方传入的 body 参数。
+
+        Returns:
+            dict[str, str]，函数执行后的结果。
+
+        Raises:
+            HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+        """
         tenant_id = body.get("tenant_id")
         if isinstance(tenant_id, str):
             container.authenticator.authorize_tenant(request, tenant_id)
@@ -65,6 +103,16 @@ def create_support_router(
         ticket_id: str,
         body: dict[str, Any],
     ) -> dict[str, Any]:
+        """执行 approve_ticket 对应的逻辑，并返回处理结果。
+
+        Args:
+            request: Request，调用方传入的 request 参数。
+            ticket_id: str，调用方传入的 ticket_id 参数。
+            body: dict[str, Any]，调用方传入的 body 参数。
+
+        Returns:
+            dict[str, Any]，函数执行后的结果。
+        """
         return await _apply_approval(container, request, ticket_id, body, "approve")
 
     @router.post("/tickets/{ticket_id}/reject")
@@ -73,10 +121,33 @@ def create_support_router(
         ticket_id: str,
         body: dict[str, Any],
     ) -> dict[str, Any]:
+        """执行 reject_ticket 对应的逻辑，并返回处理结果。
+
+        Args:
+            request: Request，调用方传入的 request 参数。
+            ticket_id: str，调用方传入的 ticket_id 参数。
+            body: dict[str, Any]，调用方传入的 body 参数。
+
+        Returns:
+            dict[str, Any]，函数执行后的结果。
+        """
         return await _apply_approval(container, request, ticket_id, body, "reject")
 
     @router.get("/tickets/{ticket_id}")
     async def get_ticket(request: Request, ticket_id: str, tenant_id: str) -> dict[str, Any]:
+        """读取并返回指定数据，并返回调用方需要的结果。
+
+        Args:
+            request: Request，调用方传入的 request 参数。
+            ticket_id: str，调用方传入的 ticket_id 参数。
+            tenant_id: str，调用方传入的 tenant_id 参数。
+
+        Returns:
+            dict[str, Any]，函数执行后的结果。
+
+        Raises:
+            HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+        """
         container.authenticator.authorize_tenant(request, tenant_id)
         ticket = await container.repository.get(tenant_id, ticket_id)
         if ticket is None:
@@ -89,6 +160,19 @@ def create_support_router(
         ticket_id: str,
         body: dict[str, Any],
     ) -> dict[str, Any]:
+        """执行 review_ticket 对应的逻辑，并返回处理结果。
+
+        Args:
+            request: Request，调用方传入的 request 参数。
+            ticket_id: str，调用方传入的 ticket_id 参数。
+            body: dict[str, Any]，调用方传入的 body 参数。
+
+        Returns:
+            dict[str, Any]，函数执行后的结果。
+
+        Raises:
+            HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+        """
         tenant_id = body.get("tenant_id")
         reviewer_id = body.get("reviewer_id")
         action = body.get("action")
@@ -117,6 +201,19 @@ def create_support_router(
         ticket_id: str,
         body: dict[str, Any],
     ) -> dict[str, Any]:
+        """执行 publish_reply 对应的逻辑，并返回处理结果。
+
+        Args:
+            request: Request，调用方传入的 request 参数。
+            ticket_id: str，调用方传入的 ticket_id 参数。
+            body: dict[str, Any]，调用方传入的 body 参数。
+
+        Returns:
+            dict[str, Any]，函数执行后的结果。
+
+        Raises:
+            HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+        """
         tenant_id = body.get("tenant_id")
         reply_text = body.get("text")
         if not isinstance(tenant_id, str):
@@ -140,6 +237,19 @@ def create_support_router(
         ticket_id: str,
         body: dict[str, Any],
     ) -> dict[str, Any]:
+        """执行 writeback_ticket 对应的逻辑，并返回处理结果。
+
+        Args:
+            request: Request，调用方传入的 request 参数。
+            ticket_id: str，调用方传入的 ticket_id 参数。
+            body: dict[str, Any]，调用方传入的 body 参数。
+
+        Returns:
+            dict[str, Any]，函数执行后的结果。
+
+        Raises:
+            HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+        """
         tenant_id = body.get("tenant_id")
         if not isinstance(tenant_id, str) or not tenant_id:
             raise HTTPException(status_code=422, detail="tenant_id is required")
@@ -169,6 +279,21 @@ async def _apply_approval(
     body: dict[str, Any],
     decision: str,
 ) -> dict[str, Any]:
+    """执行 _apply_approval 对应的逻辑，并返回处理结果。
+
+    Args:
+        container: ServiceContainer，调用方传入的 container 参数。
+        request: Request，调用方传入的 request 参数。
+        ticket_id: str，调用方传入的 ticket_id 参数。
+        body: dict[str, Any]，调用方传入的 body 参数。
+        decision: str，调用方传入的 decision 参数。
+
+    Returns:
+        dict[str, Any]，函数执行后的结果。
+
+    Raises:
+        HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+    """
     tenant_id = body.get("tenant_id")
     decided_by = body.get("decided_by")
     if not isinstance(tenant_id, str) or not isinstance(decided_by, str):

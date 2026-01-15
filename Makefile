@@ -1,6 +1,8 @@
 # AgentForge Makefile — 常用命令
 
-.PHONY: install dev-install test test-unit test-integration lint format type-check run docker-build docker-up docker-down clean help
+.PHONY: install dev-install test test-unit test-integration lint format type-check run run-dev \
+	docker-build docker-up docker-down platform-up platform-down platform-lite-up platform-lite-down \
+	clean help
 
 # Python 虚拟环境
 VENV = .venv
@@ -36,10 +38,10 @@ test-integration: ## 运行集成测试
 lint: ## 代码风格检查
 	flake8 --max-line-length=100 --extend-ignore=E203,W503 agentforge/ tests/
 	isort --check-only --profile black agentforge/ tests/
-	black --check --line-length 100 agentforge/ tests/
+	black --check --line-length 100 --target-version py310 agentforge/ tests/
 
 format: ## 格式化代码
-	black --line-length 100 agentforge/ tests/
+	black --line-length 100 --target-version py310 agentforge/ tests/
 	isort --profile black agentforge/ tests/
 
 type-check: ## 类型检查
@@ -63,6 +65,22 @@ docker-up: ## 启动完整服务（Docker Compose）
 
 docker-down: ## 停止所有服务
 	docker-compose down
+
+# ===== 平台层（deploy/platform）两套集群 =====
+# 注意：编排层(docker-compose.yml) 与平台层(platform compose) 是两套独立系统，
+# API 端口均为 8000、状态存储 6379 重复，同机不可同时启用；先 down 一套再用另一套。
+
+platform-up: ## 启动平台层完整服务（api/worker/outbox-worker + 基础设施）
+	docker-compose -f deploy/platform/docker-compose.platform.yml up -d
+
+platform-down: ## 停止平台层完整服务
+	docker-compose -f deploy/platform/docker-compose.platform.yml down
+
+platform-lite-up: ## 仅启动平台层基础设施（postgres/valkey/temporal/minio，无 api/worker）
+	docker-compose -f deploy/platform/docker-compose.lite.yml up -d
+
+platform-lite-down: ## 停止平台层基础设施
+	docker-compose -f deploy/platform/docker-compose.lite.yml down
 
 clean: ## 清理缓存文件
 	find . -type d -name "__pycache__" -exec rm -rf {} +

@@ -36,6 +36,16 @@ class RedisStateStore:
         key_prefix: str = "agentforge:snapshot",
         default_ttl: int = 86400,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            redis_url: str，调用方传入的 redis_url 参数。
+            key_prefix: str，调用方传入的 key_prefix 参数。
+            default_ttl: int，调用方传入的 default_ttl 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.redis_url = redis_url
         self.key_prefix = key_prefix
         self.default_ttl = default_ttl
@@ -188,13 +198,13 @@ class RedisStateStore:
             return len(keys_to_delete)
 
     def _make_key(self, correlation_id: str, version: int) -> str:
-        """构造 Redis Key。
+        """执行 _make_key 对应的逻辑，并返回处理结果。
 
         Args:
-            correlation_id: 工作流关联 ID。
-            version: 快照版本号。
+            correlation_id: str，调用方传入的 correlation_id 参数。
+            version: int，调用方传入的 version 参数。
 
         Returns:
-            格式为 "agentforge:snapshot:{correlation_id}:{version}" 的 Key。
+            str，函数执行后的结果。
         """
         return f"{self.key_prefix}:{correlation_id}:{version}"

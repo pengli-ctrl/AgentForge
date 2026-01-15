@@ -61,6 +61,15 @@ class FileIOTool(BaseTool):
         root_dir: str = ".",
         max_file_size: int = 10 * 1024 * 1024,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            root_dir: str，调用方传入的 root_dir 参数。
+            max_file_size: int，调用方传入的 max_file_size 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.root_dir = os.path.abspath(root_dir)
         self.max_file_size = max_file_size
 
@@ -70,7 +79,11 @@ class FileIOTool(BaseTool):
         return "file_io"
 
     def schema(self) -> dict:
-        """返回 JSON Schema。"""
+        """执行 schema 对应的逻辑，并返回处理结果。
+
+        Returns:
+            dict，函数执行后的结果。
+        """
         return {
             "type": "function",
             "function": {

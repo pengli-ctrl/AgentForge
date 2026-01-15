@@ -1,3 +1,15 @@
+"""AgentForge 平台测试层：test_rbac_api。
+
+本测试模块验证 test_rbac_api 覆盖的业务路径、边界条件和回归场景。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+-
+主要函数：test_create_role_and_list、test_set_permissions_and_assign、test_assign_unknown_role_404、test_authorize_endpoint。
+"""
+
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
@@ -7,12 +19,22 @@ from agentforge.platform.runtime import build_memory_container
 
 
 def _client() -> TestClient:
+    """执行 _client 对应的逻辑，并返回处理结果。
+
+    Returns:
+        TestClient，函数执行后的结果。
+    """
     container = build_memory_container()
     app = create_platform_app(container)
     return TestClient(app)
 
 
 def test_create_role_and_list() -> None:
+    """验证 create_role_and_list 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     client = _client()
     r = client.post("/v1/rbac/roles", params={"tenant_id": "t1", "name": "support_admin"})
     assert r.status_code == 200
@@ -26,6 +48,11 @@ def test_create_role_and_list() -> None:
 
 
 def test_set_permissions_and_assign() -> None:
+    """验证 set_permissions_and_assign 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     client = _client()
     role = client.post("/v1/rbac/roles", params={"tenant_id": "t1", "name": "support_agent"}).json()
     role_id = role["role_id"]
@@ -52,6 +79,11 @@ def test_set_permissions_and_assign() -> None:
 
 
 def test_assign_unknown_role_404() -> None:
+    """验证 assign_unknown_role_404 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     client = _client()
     r = client.post(
         "/v1/rbac/assignments",
@@ -61,6 +93,11 @@ def test_assign_unknown_role_404() -> None:
 
 
 def test_authorize_endpoint() -> None:
+    """验证 authorize_endpoint 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     client = _client()
     role = client.post("/v1/rbac/roles", params={"tenant_id": "t1", "name": "support_admin"}).json()
     role_id = role["role_id"]
@@ -79,7 +116,7 @@ def test_authorize_endpoint() -> None:
         params={"tenant_id": "t1", "principal": "user-1", "action": "ticket.writeback"},
         json={"resource_type": "ticket", "resource_id": "tk-1"},
     ).json()
-    # writeback is high-risk -> requires approval even when authorized
+    # 验证审批边界，确保高风险动作必须经过审批。
     assert decision["outcome"] == "requires_approval"
 
     view = client.post(

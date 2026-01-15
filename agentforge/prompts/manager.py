@@ -30,6 +30,14 @@ class PromptManager:
     """
 
     def __init__(self, template_dir: str = "") -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            template_dir: str，调用方传入的 template_dir 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         if not template_dir:
             # 默认使用本模块下的 templates 目录
             template_dir = os.path.join(os.path.dirname(__file__), "templates")

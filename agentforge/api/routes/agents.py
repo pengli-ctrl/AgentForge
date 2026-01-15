@@ -30,6 +30,14 @@ class AgentRoutes:
     """
 
     def __init__(self, registry: AgentRegistry) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            registry: AgentRegistry，调用方传入的 registry 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.registry = registry
 
     async def list_agents(self) -> dict[str, Any]:

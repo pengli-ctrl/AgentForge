@@ -20,15 +20,26 @@ from agentforge.core.event_types import AgentEvent, EventType
 from agentforge.llm.gateway import LLMGateway, LLMResponse, ToolCall
 from tests.conftest import MockLLMGateway
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 测试用 Agent 和 Tool
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class SimpleAgent(Agent):
     """简单的测试用 Agent — 用于 ReAct 循环测试。"""
 
     def __init__(self, llm_gateway, tool_registry=None, max_iterations=5, token_budget=8000):
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            llm_gateway: Any，调用方传入的 llm_gateway 参数。
+            tool_registry: Any，调用方传入的 tool_registry 参数。
+            max_iterations: Any，调用方传入的 max_iterations 参数。
+            token_budget: Any，调用方传入的 token_budget 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         super().__init__(
             llm_gateway=llm_gateway,
             name="simple-agent",
@@ -39,9 +50,25 @@ class SimpleAgent(Agent):
         self.prompt_template = "Task: {task}\nContext: {context}"
 
     def _extract_context(self, context_snapshot: dict[str, Any]) -> dict[str, Any]:
+        """执行 _extract_context 对应的逻辑，并返回处理结果。
+
+        Args:
+            context_snapshot: dict[str, Any]，调用方传入的 context_snapshot 参数。
+
+        Returns:
+            dict[str, Any]，函数执行后的结果。
+        """
         return context_snapshot
 
     def _build_initial_messages(self, task: str) -> list[dict[str, str]]:
+        """执行 _build_initial_messages 对应的逻辑，并返回处理结果。
+
+        Args:
+            task: str，调用方传入的 task 参数。
+
+        Returns:
+            list[dict[str, str]]，函数执行后的结果。
+        """
         return [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": task},
@@ -53,9 +80,19 @@ class EchoTool(BaseTool):
 
     @property
     def name(self) -> str:
+        """执行 name 对应的逻辑，并返回处理结果。
+
+        Returns:
+            str，函数执行后的结果。
+        """
         return "echo"
 
     def schema(self) -> dict:
+        """执行 schema 对应的逻辑，并返回处理结果。
+
+        Returns:
+            dict，函数执行后的结果。
+        """
         return {
             "type": "function",
             "function": {
@@ -72,13 +109,21 @@ class EchoTool(BaseTool):
         }
 
     async def execute(self, **kwargs: Any) -> ToolResult:
+        """执行 execute 对应的逻辑，并返回处理结果。
+
+        Args:
+            **kwargs: Any，调用方传入的 **kwargs 参数。
+
+        Returns:
+            ToolResult，函数执行后的结果。
+        """
         text = kwargs.get("text", "")
         return ToolResult(success=True, output=f"Echo: {text}")
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 单轮 ReAct 测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestReActSingleIteration:
@@ -155,9 +200,9 @@ class TestReActSingleIteration:
         assert llm.call_count == 1
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 多轮 ReAct 测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestReActMultipleIterations:
@@ -254,7 +299,24 @@ class TestReActMultipleIterations:
         received_messages: list[Any] = []
 
         class CapturingGateway(LLMGateway):
+            """CapturingGateway。
+
+            CapturingGateway 封装外部系统或基础设施协议，向上提供稳定、可测试的接口。
+
+            主要成员：
+            - 方法 chat()。
+
+            设计约束：
+            - 保持接口稳定，避免调用方依赖内部实现细节。
+            - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+            """
+
             def __init__(self):
+                """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+                Returns:
+                    None，函数执行后的结果。
+                """
                 super().__init__(model="capture")
                 self._responses = [
                     LLMResponse(
@@ -270,6 +332,17 @@ class TestReActMultipleIterations:
 
             async def chat(self, messages, tools=None, max_tokens=None, temperature=None):
                 # 深拷贝 messages，因为 ReAct 循环会原地修改同一个列表
+                """执行 chat 对应的逻辑，并返回处理结果。
+
+                Args:
+                    messages: Any，调用方传入的 messages 参数。
+                    tools: Any，调用方传入的 tools 参数。
+                    max_tokens: Any，调用方传入的 max_tokens 参数。
+                    temperature: Any，调用方传入的 temperature 参数。
+
+                Returns:
+                    None，函数执行后的结果。
+                """
                 import copy
 
                 received_messages.append(copy.deepcopy(messages))
@@ -304,9 +377,9 @@ class TestReActMultipleIterations:
         assert "Echo: check" in received_messages[1][3]["content"]
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 终止条件测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestReActTermination:
@@ -420,9 +493,9 @@ class TestReActTermination:
         assert llm.call_count == 1
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 与现有 Agent 子类兼容性测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestReActWithExistingAgents:

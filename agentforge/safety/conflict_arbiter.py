@@ -43,9 +43,19 @@ class ConflictArbiter:
     """
 
     def __init__(self, max_rounds: int = 3) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            max_rounds: int，调用方传入的 max_rounds 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.max_rounds = max_rounds
-        self.round_count: dict[str, int] = {}  # {correlation_id: count}
-        self.prev_outputs: dict[str, dict[str, Any]] = {}  # {correlation_id: last_output}
+        self.round_count: dict[str, int] = {}  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+        self.prev_outputs: dict[str, dict[str, Any]] = (
+            {}
+        )  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
     async def on_agent_complete(
         self,

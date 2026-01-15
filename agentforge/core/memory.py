@@ -1,21 +1,12 @@
-"""
-Three-tier Memory system — runtime layer core component.
+"""AgentForge 核心运行时层：memory。
 
-Architecture analogy (CPU hierarchy):
-    WorkingMemory    = CPU Registers   → fastest, smallest, current context only
-    ShortTermMemory  = RAM             -> session-scoped, cleared on session end
-    LongTermMemory   = Disk (FAISS+BM25) -> persistent knowledge base
+本模块负责 memory 相关能力，是 核心运行时层 的组成部分。
 
-Why three tiers?
-    LLM Agents need different memory horizons. A single dict is too simple —
-    there's no distinction between "what we're doing right now" and "what we
-    learned last week". The three-tier model mirrors how human cognition and
-    computer architecture both handle memory: fast-local for hot data,
-    slower-remote for cold data, with explicit promotion/demotion paths.
-
-Integration:
-    MemoryManager composes all three tiers. BaseAgent uses MemoryManager to
-    read/write memory. DAG nodes can share short-term memory via ContextStore.
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
+- 关键路径应保留日志、指标或链路追踪信息。
+- 主要类：MemoryConfig、WorkingMemory、ShortTermMemory、LongTermMemory、MemoryManager。
 """
 
 import asyncio
@@ -27,46 +18,90 @@ from typing import Any, Optional
 
 @dataclass
 class MemoryConfig:
-    """Per-agent memory configuration. Each Agent declares which tiers it needs."""
+    """MemoryConfig。
+
+    MemoryConfig 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - enable_working: bool。
+    - enable_short_term: bool。
+    - enable_long_term: bool。
+    - max_working_items: int。
+    - max_short_term_items: int。
+    - max_long_term_items: int。
+    - long_term_collection: str。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    """
 
     enable_working: bool = True
     enable_short_term: bool = True
     enable_long_term: bool = False
-    max_working_items: int = 20  # Small: current turn context only
-    max_short_term_items: int = 200  # Medium: full session history
-    max_long_term_items: int = 50000  # Large: persistent knowledge base
-    long_term_collection: str = "default"  # FAISS collection name
+    max_working_items: int = 20  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    max_short_term_items: int = 200  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    max_long_term_items: int = 50000  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    long_term_collection: str = "default"  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class WorkingMemory:
-    """
-    CPU Register analogy — fastest, smallest, current context only.
+    """WorkingMemory。
 
-    Stores the immediate context for a single Agent execution turn:
-    current input, intermediate results, tool outputs. Cleared after
-    each execute() call returns.
+    WorkingMemory 封装相关领域行为，保持职责单一并降低调用方复杂度。
 
-    Why OrderedDict? Maintains insertion order for predictable iteration,
-    and supports O(1) move-to-end for LRU-style access tracking.
+    主要成员：
+    - 方法 write()。
+    - 方法 read()。
+    - 方法 get_all()。
+    - 方法 clear()。
+    - 方法 size()。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
     """
 
     def __init__(self, max_items: int = 20):
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            max_items: int，调用方传入的 max_items 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._store: OrderedDict[str, Any] = OrderedDict()
         self._max_items = max_items
         self._lock = asyncio.Lock()
 
     async def write(self, key: str, value: Any) -> None:
-        """Write a key-value pair. Evicts oldest if at capacity."""
+        """执行 write 对应的逻辑，并返回处理结果。
+
+        Args:
+            key: str，调用方传入的 key 参数。
+            value: Any，调用方传入的 value 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         async with self._lock:
             if key in self._store:
                 self._store.move_to_end(key)
             self._store[key] = value
-            # Evict oldest entries if over capacity
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             while len(self._store) > self._max_items:
                 self._store.popitem(last=False)
 
     async def read(self, key: str) -> Optional[Any]:
-        """Read a value. Marks as recently accessed (LRU tracking)."""
+        """执行 read 对应的逻辑，并返回处理结果。
+
+        Args:
+            key: str，调用方传入的 key 参数。
+
+        Returns:
+            Optional[Any]，函数执行后的结果。
+        """
         async with self._lock:
             if key not in self._store:
                 return None
@@ -74,43 +109,76 @@ class WorkingMemory:
             return self._store[key]
 
     async def get_all(self) -> dict[str, Any]:
-        """Snapshot all current working memory entries."""
+        """读取并返回指定数据，并返回调用方需要的结果。
+
+        Returns:
+            dict[str, Any]，函数执行后的结果。
+        """
         async with self._lock:
             return dict(self._store)
 
     async def clear(self) -> None:
-        """Clear all working memory. Called after Agent execute() completes."""
+        """执行 clear 对应的逻辑，并返回处理结果。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         async with self._lock:
             self._store.clear()
 
     @property
     def size(self) -> int:
+        """执行 size 对应的逻辑，并返回处理结果。
+
+        Returns:
+            int，函数执行后的结果。
+        """
         return len(self._store)
 
 
 class ShortTermMemory:
-    """
-    RAM analogy — session-scoped, cross-turn retention, cleared on session end.
+    """ShortTermMemory。
 
-    Stores conversation history, intermediate agent outputs, and user
-    preferences within a single session. Survives across multiple turns
-    but is volatile — lost when session ends.
+    ShortTermMemory 封装相关领域行为，保持职责单一并降低调用方复杂度。
 
-    Why separate from WorkingMemory?
-        Working memory is per-execution (cleared after each Agent call).
-        Short-term memory is per-session (survives across multiple Agent calls
-        within the same conversation). This distinction prevents context
-        pollution while maintaining conversational continuity.
+    主要成员：
+    - 方法 write()。
+    - 方法 read()。
+    - 方法 delete()。
+    - 方法 clear()。
+    - 方法 session_id()。
+    - 方法 size()。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
     """
 
     def __init__(self, session_id: str, max_items: int = 200):
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            session_id: str，调用方传入的 session_id 参数。
+            max_items: int，调用方传入的 max_items 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._session_id = session_id
-        self._store: dict[str, dict] = {}  # key → {value, created_at, last_accessed}
+        self._store: dict[str, dict] = {}  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         self._max_items = max_items
         self._lock = asyncio.Lock()
 
     async def write(self, key: str, value: Any) -> None:
-        """Store a value with metadata. Overwrites existing entries."""
+        """执行 write 对应的逻辑，并返回处理结果。
+
+        Args:
+            key: str，调用方传入的 key 参数。
+            value: Any，调用方传入的 value 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         async with self._lock:
             now = time.time()
             self._store[key] = {
@@ -119,12 +187,19 @@ class ShortTermMemory:
                 "last_accessed": now,
                 "access_count": 0,
             }
-            # Evict least-recently-accessed if over capacity
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             if len(self._store) > self._max_items:
                 await self._evict_lru()
 
     async def read(self, key: str) -> Optional[Any]:
-        """Read a value. Updates access metadata."""
+        """执行 read 对应的逻辑，并返回处理结果。
+
+        Args:
+            key: str，调用方传入的 key 参数。
+
+        Returns:
+            Optional[Any]，函数执行后的结果。
+        """
         async with self._lock:
             entry = self._store.get(key)
             if entry is None:
@@ -134,56 +209,86 @@ class ShortTermMemory:
             return entry["value"]
 
     async def delete(self, key: str) -> bool:
-        """Remove a key. Returns True if key existed."""
+        """执行 delete 对应的核心操作，并保持调用契约稳定。
+
+        Args:
+            key: str，调用方传入的 key 参数。
+
+        Returns:
+            bool，函数执行后的结果。
+        """
         async with self._lock:
             return self._store.pop(key, None) is not None
 
     async def _evict_lru(self) -> None:
-        """Evict the least-recently-accessed entry. Called under lock."""
+        """执行 _evict_lru 对应的逻辑，并返回处理结果。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         if not self._store:
             return
         lru_key = min(self._store, key=lambda k: self._store[k]["last_accessed"])
         del self._store[lru_key]
 
     async def clear(self) -> None:
-        """Clear entire session memory. Called on session end."""
+        """执行 clear 对应的逻辑，并返回处理结果。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         async with self._lock:
             self._store.clear()
 
     @property
     def session_id(self) -> str:
+        """执行 session_id 对应的逻辑，并返回处理结果。
+
+        Returns:
+            str，函数执行后的结果。
+        """
         return self._session_id
 
     @property
     def size(self) -> int:
+        """执行 size 对应的逻辑，并返回处理结果。
+
+        Returns:
+            int，函数执行后的结果。
+        """
         return len(self._store)
 
 
 class LongTermMemory:
-    """
-    Disk analogy (FAISS + BM25) — persistent vector-indexed knowledge base.
+    """LongTermMemory。
 
-    Provides semantic search over stored knowledge using embedding similarity.
-    In production, this wraps FAISS for dense retrieval and BM25 for sparse
-    retrieval, with hybrid scoring (0.7 * dense + 0.3 * sparse).
+    LongTermMemory 封装相关领域行为，保持职责单一并降低调用方复杂度。
 
-    Current implementation uses in-memory vector storage for portability.
-    Production deployments should replace _vectors with a persistent FAISS index
-    and optionally add a BM25 index (e.g., rank_bm25 library).
+    主要成员：
+    - 方法 store()。
+    - 方法 search()。
+    - 方法 delete()。
+    - 方法 size()。
 
-    Why hybrid retrieval?
-        Dense (embedding) search excels at semantic similarity but can miss
-        exact keyword matches. Sparse (BM25) search excels at keyword matches
-        but misses synonyms. Combining both gives robust retrieval.
-        The 0.7/0.3 weighting favors semantic similarity as it's generally
-        more useful for Agent knowledge retrieval.
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
     """
 
     def __init__(self, collection: str = "default", max_items: int = 50000):
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            collection: str，调用方传入的 collection 参数。
+            max_items: int，调用方传入的 max_items 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._collection = collection
         self._max_items = max_items
-        # In-memory storage; production: replace with FAISS index file
-        self._vectors: dict[str, dict] = {}  # key → {embedding, metadata, text}
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+        self._vectors: dict[str, dict] = {}  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         self._lock = asyncio.Lock()
 
     async def store(
@@ -193,14 +298,16 @@ class LongTermMemory:
         embedding: list[float],
         metadata: Optional[dict] = None,
     ) -> None:
-        """
-        Store a document with its embedding for later retrieval.
+        """执行 store 对应的逻辑，并返回处理结果。
 
         Args:
-            key: Unique identifier for this document.
-            text: Original text content (for BM25 and display).
-            embedding: Dense vector representation (from embedding model).
-            metadata: Optional metadata (source, timestamp, tags, etc.).
+            key: str，调用方传入的 key 参数。
+            text: str，调用方传入的 text 参数。
+            embedding: list[float]，调用方传入的 embedding 参数。
+            metadata: Optional[dict]，调用方传入的 metadata 参数。
+
+        Returns:
+            None，函数执行后的结果。
         """
         async with self._lock:
             self._vectors[key] = {
@@ -216,16 +323,15 @@ class LongTermMemory:
         top_k: int = 5,
         min_similarity: float = 0.7,
     ) -> list[dict]:
-        """
-        Search for similar documents using cosine similarity.
+        """执行 search 对应的核心操作，并保持调用契约稳定。
 
         Args:
-            query_embedding: Query vector from embedding model.
-            top_k: Maximum number of results.
-            min_similarity: Minimum cosine similarity threshold.
+            query_embedding: list[float]，调用方传入的 query_embedding 参数。
+            top_k: int，调用方传入的 top_k 参数。
+            min_similarity: float，调用方传入的 min_similarity 参数。
 
         Returns:
-            List of {key, text, score, metadata} sorted by score descending.
+            list[dict]，函数执行后的结果。
         """
         async with self._lock:
             results = []
@@ -241,18 +347,33 @@ class LongTermMemory:
                         }
                     )
 
-        # Sort by score descending, return top_k
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         results.sort(key=lambda x: x["score"], reverse=True)
         return results[:top_k]
 
     async def delete(self, key: str) -> bool:
-        """Remove a document from the knowledge base."""
+        """执行 delete 对应的核心操作，并保持调用契约稳定。
+
+        Args:
+            key: str，调用方传入的 key 参数。
+
+        Returns:
+            bool，函数执行后的结果。
+        """
         async with self._lock:
             return self._vectors.pop(key, None) is not None
 
     @staticmethod
     def _cosine_similarity(v1: list[float], v2: list[float]) -> float:
-        """Compute cosine similarity between two vectors."""
+        """执行 _cosine_similarity 对应的逻辑，并返回处理结果。
+
+        Args:
+            v1: list[float]，调用方传入的 v1 参数。
+            v2: list[float]，调用方传入的 v2 参数。
+
+        Returns:
+            float，函数执行后的结果。
+        """
         if len(v1) != len(v2) or not v1:
             return 0.0
         dot = sum(a * b for a, b in zip(v1, v2))
@@ -264,21 +385,29 @@ class LongTermMemory:
 
     @property
     def size(self) -> int:
+        """执行 size 对应的逻辑，并返回处理结果。
+
+        Returns:
+            int，函数执行后的结果。
+        """
         return len(self._vectors)
 
 
 class MemoryManager:
-    """
-    Composes three memory tiers into a unified interface.
+    """MemoryManager。
 
-    BaseAgent instantiates one MemoryManager per agent, configured via
-    MemoryConfig. The manager routes read/write/search calls to the
-    appropriate tier based on the `level` parameter.
+    MemoryManager 是核心运行时组件，负责状态管理、调度和跨模块协作。
 
-    Cross-tier operations:
-        - search() queries long-term memory (only tier with vector index)
-        - promote() moves data from working → short-term (explicit)
-        - No automatic promotion to long-term (requires explicit embedding)
+    主要成员：
+    - 方法 read()。
+    - 方法 write()。
+    - 方法 search()。
+    - 方法 clear_working()。
+    - 方法 clear_session()。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
     """
 
     def __init__(
@@ -286,6 +415,15 @@ class MemoryManager:
         config: MemoryConfig,
         session_id: str = "default",
     ):
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            config: MemoryConfig，调用方传入的 config 参数。
+            session_id: str，调用方传入的 session_id 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._config = config
         self.working = (
             WorkingMemory(max_items=config.max_working_items) if config.enable_working else None
@@ -302,31 +440,41 @@ class MemoryManager:
         )
 
     async def read(self, level: str, key: str) -> Optional[Any]:
-        """
-        Read from a specific memory tier.
+        """执行 read 对应的逻辑，并返回处理结果。
 
         Args:
-            level: "working", "short_term", or "long_term"
-            key: The key to look up.
+            level: str，调用方传入的 level 参数。
+            key: str，调用方传入的 key 参数。
+
+        Returns:
+            Optional[Any]，函数执行后的结果。
+
+        Raises:
+            ValueError: 当输入、状态或外部依赖不满足要求时抛出。
         """
         if level == "working" and self.working:
             return await self.working.read(key)
         elif level == "short_term" and self.short_term:
             return await self.short_term.read(key)
         elif level == "long_term":
-            # Long-term requires vector search, not direct key lookup
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             raise ValueError("Use search() for long-term memory retrieval")
         return None
 
     async def write(self, level: str, key: str, value: Any, **kwargs) -> None:
-        """
-        Write to a specific memory tier.
+        """执行 write 对应的逻辑，并返回处理结果。
 
         Args:
-            level: "working", "short_term", or "long_term"
-            key: The key to store under.
-            value: The value to store.
-            **kwargs: For long_term, requires `embedding` and `text`.
+            level: str，调用方传入的 level 参数。
+            key: str，调用方传入的 key 参数。
+            value: Any，调用方传入的 value 参数。
+            **kwargs: Any，调用方传入的 **kwargs 参数。
+
+        Returns:
+            None，函数执行后的结果。
+
+        Raises:
+            ValueError: 当输入、状态或外部依赖不满足要求时抛出。
         """
         if level == "working" and self.working:
             await self.working.write(key, value)
@@ -343,21 +491,34 @@ class MemoryManager:
             raise ValueError(f"Memory tier '{level}' is not enabled")
 
     async def search(self, query_embedding: list[float], top_k: int = 5) -> list[dict]:
-        """
-        Semantic search across long-term memory.
-        Returns list of {key, text, score, metadata}.
+        """执行 search 对应的核心操作，并保持调用契约稳定。
+
+        Args:
+            query_embedding: list[float]，调用方传入的 query_embedding 参数。
+            top_k: int，调用方传入的 top_k 参数。
+
+        Returns:
+            list[dict]，函数执行后的结果。
         """
         if not self.long_term:
             return []
         return await self.long_term.search(query_embedding, top_k=top_k)
 
     async def clear_working(self) -> None:
-        """Clear working memory. Called after each Agent execution."""
+        """执行 clear_working 对应的逻辑，并返回处理结果。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         if self.working:
             await self.working.clear()
 
     async def clear_session(self) -> None:
-        """Clear all session-scoped memory. Called on session end."""
+        """执行 clear_session 对应的逻辑，并返回处理结果。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         if self.working:
             await self.working.clear()
         if self.short_term:

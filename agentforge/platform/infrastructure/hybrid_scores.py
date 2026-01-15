@@ -1,3 +1,14 @@
+"""AgentForge 平台基础设施层：hybrid_scores。
+
+本模块负责 hybrid_scores 相关的平台能力，是 平台基础设施层 的组成部分。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+- 主要函数：fuse_scores、merge_retrieved_chunks。
+"""
+
 from __future__ import annotations
 
 from agentforge.platform.domain.knowledge import (
@@ -7,6 +18,7 @@ from agentforge.platform.domain.knowledge import (
 )
 
 # RRF 融合常数，与 agentforge/rag/hybrid_retriever.py 保持一致。
+# 常量：RRF_K。
 RRF_K = 60.0
 
 
@@ -28,6 +40,14 @@ def fuse_scores(
         return {}
 
     def _normalize(scores: dict[str, float]) -> dict[str, float]:
+        """执行 _normalize 对应的逻辑，并返回处理结果。
+
+        Args:
+            scores: dict[str, float]，调用方传入的 scores 参数。
+
+        Returns:
+            dict[str, float]，函数执行后的结果。
+        """
         if not scores:
             return {}
         max_value = max(scores.values())
@@ -49,10 +69,15 @@ def merge_retrieved_chunks(
     fused_scores: dict[str, float],
     mode: str,
 ) -> list[RetrievedChunk]:
-    """按融合分数排序返回最终结果，并把各维分数回填到 RetrievedChunk。
+    """执行 merge_retrieved_chunks 对应的逻辑，并返回处理结果。
 
-    chunks_by_id 提供每个候选 chunk 的完整信息；fused_scores 提供最终排序分。
-    返回按 score 降序排列的列表。
+    Args:
+        chunks_by_id: dict[str, RetrievedChunk]，调用方传入的 chunks_by_id 参数。
+        fused_scores: dict[str, float]，调用方传入的 fused_scores 参数。
+        mode: str，调用方传入的 mode 参数。
+
+    Returns:
+        list[RetrievedChunk]，函数执行后的结果。
     """
     results: list[RetrievedChunk] = []
     for chunk_id, score in fused_scores.items():

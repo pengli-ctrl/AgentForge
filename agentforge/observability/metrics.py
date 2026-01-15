@@ -35,6 +35,14 @@ class MetricsCollector:
     """
 
     def __init__(self, namespace: str = "agentforge") -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            namespace: str，调用方传入的 namespace 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.namespace = namespace
         self._prometheus: Any = None
         self._metrics: dict[str, Any] = {}

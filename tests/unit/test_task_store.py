@@ -13,10 +13,23 @@ from agentforge.storage.task_store import TaskStore
 
 @pytest.fixture
 def store() -> TaskStore:
+    """执行 store 对应的逻辑，并返回处理结果。
+
+    Returns:
+        TaskStore，函数执行后的结果。
+    """
     return TaskStore()
 
 
 def _make_task(workflow: str = "code-review-pipeline") -> Task:
+    """执行 _make_task 对应的逻辑，并返回处理结果。
+
+    Args:
+        workflow: str，调用方传入的 workflow 参数。
+
+    Returns:
+        Task，函数执行后的结果。
+    """
     return Task(
         workflow_name=workflow,
         input_data={"code_content": "print('hello')"},
@@ -29,6 +42,14 @@ class TestCreate:
 
     @pytest.mark.asyncio
     async def test_create_returns_task(self, store: TaskStore) -> None:
+        """验证 create_returns_task 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: TaskStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         task = _make_task()
         result = await store.create(task)
         assert result.task_id == task.task_id
@@ -36,6 +57,14 @@ class TestCreate:
 
     @pytest.mark.asyncio
     async def test_create_stores_task(self, store: TaskStore) -> None:
+        """验证 create_stores_task 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: TaskStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         task = _make_task()
         await store.create(task)
         retrieved = await store.get(task.task_id)
@@ -48,11 +77,27 @@ class TestGet:
 
     @pytest.mark.asyncio
     async def test_get_nonexistent_returns_none(self, store: TaskStore) -> None:
+        """验证 get_nonexistent_returns_none 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: TaskStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         result = await store.get("nonexistent-id")
         assert result is None
 
     @pytest.mark.asyncio
     async def test_get_by_correlation_id(self, store: TaskStore) -> None:
+        """验证 get_by_correlation_id 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: TaskStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         task = _make_task()
         await store.create(task)
         result = await store.get_by_correlation_id("corr-test-001")
@@ -61,6 +106,14 @@ class TestGet:
 
     @pytest.mark.asyncio
     async def test_get_by_correlation_id_not_found(self, store: TaskStore) -> None:
+        """验证 get_by_correlation_id_not_found 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: TaskStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         result = await store.get_by_correlation_id("no-such-corr")
         assert result is None
 
@@ -70,6 +123,14 @@ class TestStatusTransition:
 
     @pytest.mark.asyncio
     async def test_pending_to_running(self, store: TaskStore) -> None:
+        """验证 pending_to_running 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: TaskStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         task = _make_task()
         await store.create(task)
         updated = await store.update_status(task.task_id, TaskStatus.RUNNING)
@@ -79,6 +140,14 @@ class TestStatusTransition:
 
     @pytest.mark.asyncio
     async def test_running_to_completed(self, store: TaskStore) -> None:
+        """验证 running_to_completed 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: TaskStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         task = _make_task()
         await store.create(task)
         await store.update_status(task.task_id, TaskStatus.RUNNING)
@@ -91,6 +160,14 @@ class TestStatusTransition:
 
     @pytest.mark.asyncio
     async def test_running_to_failed(self, store: TaskStore) -> None:
+        """验证 running_to_failed 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: TaskStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         task = _make_task()
         await store.create(task)
         await store.update_status(task.task_id, TaskStatus.RUNNING)
@@ -100,6 +177,14 @@ class TestStatusTransition:
 
     @pytest.mark.asyncio
     async def test_invalid_transition_raises(self, store: TaskStore) -> None:
+        """验证 invalid_transition_raises 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: TaskStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         task = _make_task()
         await store.create(task)
         with pytest.raises(ValueError, match="Invalid status transition"):
@@ -107,6 +192,14 @@ class TestStatusTransition:
 
     @pytest.mark.asyncio
     async def test_update_nonexistent_returns_none(self, store: TaskStore) -> None:
+        """验证 update_nonexistent_returns_none 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: TaskStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         result = await store.update_status("no-such-id", TaskStatus.RUNNING)
         assert result is None
 
@@ -116,6 +209,14 @@ class TestCancel:
 
     @pytest.mark.asyncio
     async def test_cancel_pending_task(self, store: TaskStore) -> None:
+        """验证 cancel_pending_task 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: TaskStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         task = _make_task()
         await store.create(task)
         cancelled = await store.cancel(task.task_id)
@@ -124,6 +225,14 @@ class TestCancel:
 
     @pytest.mark.asyncio
     async def test_cancel_completed_task_returns_none(self, store: TaskStore) -> None:
+        """验证 cancel_completed_task_returns_none 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: TaskStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         task = _make_task()
         await store.create(task)
         await store.update_status(task.task_id, TaskStatus.RUNNING)
@@ -133,6 +242,14 @@ class TestCancel:
 
     @pytest.mark.asyncio
     async def test_cancel_nonexistent(self, store: TaskStore) -> None:
+        """验证 cancel_nonexistent 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: TaskStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         result = await store.cancel("nonexistent")
         assert result is None
 
@@ -142,6 +259,14 @@ class TestListAndDelete:
 
     @pytest.mark.asyncio
     async def test_list_all_tasks(self, store: TaskStore) -> None:
+        """验证 list_all_tasks 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: TaskStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         for i in range(3):
             await store.create(_make_task(f"wf-{i}"))
         tasks = await store.list_tasks()
@@ -149,6 +274,14 @@ class TestListAndDelete:
 
     @pytest.mark.asyncio
     async def test_list_filter_by_status(self, store: TaskStore) -> None:
+        """验证 list_filter_by_status 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: TaskStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         t1 = _make_task()
         t2 = _make_task()
         await store.create(t1)
@@ -161,6 +294,14 @@ class TestListAndDelete:
 
     @pytest.mark.asyncio
     async def test_delete_task(self, store: TaskStore) -> None:
+        """验证 delete_task 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: TaskStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         task = _make_task()
         await store.create(task)
         deleted = await store.delete(task.task_id)
@@ -169,5 +310,13 @@ class TestListAndDelete:
 
     @pytest.mark.asyncio
     async def test_delete_nonexistent(self, store: TaskStore) -> None:
+        """验证 delete_nonexistent 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: TaskStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         result = await store.delete("nonexistent")
         assert result is False

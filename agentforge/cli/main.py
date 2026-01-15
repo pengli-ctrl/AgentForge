@@ -1,18 +1,13 @@
-"""CLI 入口 — 基于 typer 的命令行工具。
+"""AgentForge AgentForge 项目：main。
 
-支持以下命令：
-    agentforge submit <workflow> <input_file>  — 提交任务
-    agentforge status <task_id>                 — 查看任务状态
-    agentforge result <task_id>                 — 获取任务结果
-    agentforge agents                           — 查看 Agent 列表
-    agentforge metrics                          — 查看 Metrics
-    agentforge workflows                        — 查看可用工作流
-    agentforge serve                            — 启动 API 服务
+本模块负责 main 相关能力，是 AgentForge 项目 的组成部分。
 
-使用方式：
-    agentforge submit code-review-pipeline --input '{"code_content": "..."}'
-    agentforge status task-abc-123
-    agentforge agents
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
+- 关键路径应保留日志、指标或链路追踪信息。
+- 主要类：CLIClient。
+- 主要函数：main。
 """
 
 from __future__ import annotations
@@ -42,6 +37,15 @@ class CLIClient:
         base_url: str = "http://localhost:8000",
         api_key: str = "",
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            base_url: str，调用方传入的 base_url 参数。
+            api_key: str，调用方传入的 api_key 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.base_url = base_url
         self.api_key = api_key
 
@@ -91,7 +95,7 @@ class CLIClient:
 
         subparsers = parser.add_subparsers(dest="command")
 
-        # submit
+        # 提交任务。
         submit_parser = subparsers.add_parser("submit", help="Submit a new task")
         submit_parser.add_argument("workflow", help="Workflow name")
         submit_parser.add_argument(
@@ -105,28 +109,28 @@ class CLIClient:
             help="Task priority (default: task_primary)",
         )
 
-        # status
+        # 查询状态。
         status_parser = subparsers.add_parser("status", help="Get task status")
         status_parser.add_argument("task_id", help="Task ID")
 
-        # result
+        # 获取结果。
         result_parser = subparsers.add_parser("result", help="Get task result")
         result_parser.add_argument("task_id", help="Task ID")
 
-        # cancel
+        # 取消任务。
         cancel_parser = subparsers.add_parser("cancel", help="Cancel a task")
         cancel_parser.add_argument("task_id", help="Task ID")
 
-        # agents
+        # Agent 注册与查询。
         subparsers.add_parser("agents", help="List registered agents")
 
-        # metrics
+        # 指标采集。
         subparsers.add_parser("metrics", help="Show Prometheus metrics")
 
-        # workflows
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         subparsers.add_parser("workflows", help="List available workflows")
 
-        # serve
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         serve_parser = subparsers.add_parser("serve", help="Start API server")
         serve_parser.add_argument("--host", default="0.0.0.0", help="Host (default: 0.0.0.0)")
         serve_parser.add_argument("--port", type=int, default=8000, help="Port (default: 8000)")

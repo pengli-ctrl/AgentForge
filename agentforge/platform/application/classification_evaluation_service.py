@@ -1,3 +1,14 @@
+"""AgentForge 平台应用服务层：classification_evaluation_service。
+
+本模块实现 classification_evaluation_service 应用服务，编排多个领域对象和基础设施组件完成业务流程。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+- 主要类：ClassificationEvaluationService。
+"""
+
 from __future__ import annotations
 
 from agentforge.platform.application.classifier import StructuredClassifier
@@ -9,23 +20,52 @@ from agentforge.platform.domain.quality import (
 
 
 def _average(values: list[float]) -> float:
+    """执行 _average 对应的逻辑，并返回处理结果。
+
+    Args:
+        values: list[float]，调用方传入的 values 参数。
+
+    Returns:
+        float，函数执行后的结果。
+    """
     if not values:
         return 0.0
     return sum(values) / len(values)
 
 
 class ClassificationEvaluationService:
-    """离线分类质量评估。
+    """ClassificationEvaluationService。
 
-    对每条 Golden 样本执行结构化分类，计算分类准确率 / 优先级准确率 /
-    风险等级准确率 / 结构化输出合法率 / 高风险漏报率。
-    评估为在线计算，不落库；如需持久化回归结果，可在此基础上扩展仓储。
+    ClassificationEvaluationService 编排业务流程，协调仓储、模型、策略和外部连接器完成用例。
+
+    主要成员：
+    - 方法 evaluate()。
+
+    设计约束：
+    - 保持接口稳定，不向调用方暴露不必要的数据结构。
+    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
     """
 
     def __init__(self, classifier: StructuredClassifier) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            classifier: StructuredClassifier，调用方传入的 classifier 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._classifier = classifier
 
     async def evaluate(self, samples: list[ClassificationGoldenItem]) -> ClassificationReport:
+        """执行 evaluate 对应的逻辑，并返回处理结果。
+
+        Args:
+            samples: list[ClassificationGoldenItem]，调用方传入的 samples 参数。
+
+        Returns:
+            ClassificationReport，函数执行后的结果。
+        """
         evaluations: list[ClassificationEvaluation] = []
         for item in samples:
             model = await self._classifier.classify_structured(item.query)

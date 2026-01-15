@@ -184,7 +184,7 @@ class ConditionParser:
         if literal.lower() == "false":
             return False
 
-        # None/null
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         if literal.lower() in ("none", "null"):
             return None
 

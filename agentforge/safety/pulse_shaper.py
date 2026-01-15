@@ -52,6 +52,15 @@ class PulseShaper:
         window_seconds: float = 5.0,
         max_batch_size: int = 10,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            window_seconds: float，调用方传入的 window_seconds 参数。
+            max_batch_size: int，调用方传入的 max_batch_size 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.window = window_seconds  # 对齐窗口：窗口内的事件合并发送
         self.max_batch = max_batch_size  # 单批最大事件数
         self.pending: list[AgentEvent] = []  # 待发送事件缓冲

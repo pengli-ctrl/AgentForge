@@ -1,3 +1,15 @@
+"""AgentForge 平台测试层：test_authorization_api。
+
+本测试模块验证 test_authorization_api 覆盖的业务路径、边界条件和回归场景。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+-
+主要函数：client、test_authorize_endpoint_denied_unapproved、test_authorize_endpoint_requires_tenant、test_authorize_endpoint_records_audit、test_writeback_403_unapproved。
+"""
+
 import asyncio
 
 import pytest
@@ -11,6 +23,14 @@ from agentforge.platform.runtime import build_memory_container
 
 
 async def _seed_admin(rbac: MemoryRbacRepository) -> None:
+    """执行 _seed_admin 对应的逻辑，并返回处理结果。
+
+    Args:
+        rbac: MemoryRbacRepository，调用方传入的 rbac 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     await rbac.save_role(
         Role(
             role_id="r-admin",
@@ -28,6 +48,11 @@ async def _seed_admin(rbac: MemoryRbacRepository) -> None:
 
 @pytest.fixture(scope="module")
 def client():
+    """执行 client 对应的逻辑，并返回处理结果。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     container = build_memory_container()
     asyncio.run(_seed_admin(container.rbac_repository))
     app = create_platform_app(container)
@@ -35,6 +60,14 @@ def client():
 
 
 def test_authorize_endpoint_denied_unapproved(client):
+    """验证 authorize_endpoint_denied_unapproved 对应的业务行为、边界条件和回归场景。
+
+    Args:
+        client: Any，调用方传入的 client 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc, _container = client
     res = tc.post(
         "/v1/authorize",
@@ -52,12 +85,28 @@ def test_authorize_endpoint_denied_unapproved(client):
 
 
 def test_authorize_endpoint_requires_tenant(client):
+    """验证 authorize_endpoint_requires_tenant 对应的业务行为、边界条件和回归场景。
+
+    Args:
+        client: Any，调用方传入的 client 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc, _container = client
     res = tc.post("/v1/authorize", json={"principal": "alice", "action": "ticket.writeback"})
     assert res.status_code == 422
 
 
 def test_authorize_endpoint_records_audit(client):
+    """验证 authorize_endpoint_records_audit 对应的业务行为、边界条件和回归场景。
+
+    Args:
+        client: Any，调用方传入的 client 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc, container = client
     tc.post(
         "/v1/authorize",
@@ -74,6 +123,14 @@ def test_authorize_endpoint_records_audit(client):
 
 
 def test_writeback_403_unapproved(client):
+    """验证 writeback_403_unapproved 对应的业务行为、边界条件和回归场景。
+
+    Args:
+        client: Any，调用方传入的 client 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc, container = client
     ticket = Ticket(
         ticket_id="tk-unapprove",

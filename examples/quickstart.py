@@ -35,6 +35,17 @@ class MockLLMGateway(LLMGateway):
     """Mock LLM Gateway — 用于示例演示，返回预设响应。"""
 
     async def chat(self, messages, tools=None, max_tokens=None, temperature=None):
+        """执行 chat 对应的逻辑，并返回处理结果。
+        
+        Args:
+            messages: Any，调用方传入的 messages 参数。
+            tools: Any，调用方传入的 tools 参数。
+            max_tokens: Any，调用方传入的 max_tokens 参数。
+            temperature: Any，调用方传入的 temperature 参数。
+        
+        Returns:
+            None，函数执行后的结果。
+        """
         return LLMResponse(
             content="Mock LLM response: code review completed successfully.",
             model="mock-model",

@@ -18,11 +18,21 @@ class TestRouterInit:
     """初始化测试。"""
 
     def test_default_agent(self) -> None:
+        """验证 default_agent 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         llm = MockLLMGateway()
         router = LLMRouter(llm_gateway=llm)
         assert router.default_agent == "code-review"
 
     def test_custom_default_agent(self) -> None:
+        """验证 custom_default_agent 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         llm = MockLLMGateway()
         router = LLMRouter(llm_gateway=llm, default_agent="security-scan")
         assert router.default_agent == "security-scan"
@@ -40,11 +50,21 @@ class TestRouteDecision:
     """RouteDecision 数据类测试。"""
 
     def test_create_decision(self) -> None:
+        """验证 create_decision 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         decision = RouteDecision(agent_name="security-scan", reason="critical issue")
         assert decision.agent_name == "security-scan"
         assert decision.reason == "critical issue"
 
     def test_to_dict(self) -> None:
+        """验证 to_dict 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         decision = RouteDecision(agent_name="test-execution", reason="tests needed")
         d = decision.to_dict()
         assert d["agent_name"] == "test-execution"
@@ -178,7 +198,30 @@ class TestRoute:
         captured_messages: list = []
 
         class _CapturingLLM(MockLLMGateway):
+            """_CapturingLLM。
+
+            _CapturingLLM 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+            主要成员：
+            - 方法 chat()。
+
+            设计约束：
+            - 保持接口稳定，避免调用方依赖内部实现细节。
+            - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+            """
+
             async def chat(self, messages, tools=None, max_tokens=None, temperature=None):
+                """执行 chat 对应的逻辑，并返回处理结果。
+
+                Args:
+                    messages: Any，调用方传入的 messages 参数。
+                    tools: Any，调用方传入的 tools 参数。
+                    max_tokens: Any，调用方传入的 max_tokens 参数。
+                    temperature: Any，调用方传入的 temperature 参数。
+
+                Returns:
+                    None，函数执行后的结果。
+                """
                 captured_messages.extend(messages)
                 return LLMResponse(
                     content=json.dumps(
@@ -227,6 +270,11 @@ class TestParseRoute:
     """_parse_route 方法测试。"""
 
     def test_parse_valid_json(self) -> None:
+        """验证 parse_valid_json 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         llm = MockLLMGateway()
         router = LLMRouter(llm_gateway=llm)
         content = json.dumps({"agent_name": "test-execution", "reason": "need tests"})
@@ -236,6 +284,11 @@ class TestParseRoute:
         assert decision.reason == "need tests"
 
     def test_parse_missing_reason(self) -> None:
+        """验证 parse_missing_reason 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         llm = MockLLMGateway()
         router = LLMRouter(llm_gateway=llm)
         content = json.dumps({"agent_name": "test-execution"})
@@ -245,6 +298,11 @@ class TestParseRoute:
         assert decision.reason == ""
 
     def test_parse_no_json_returns_default(self) -> None:
+        """验证 parse_no_json_returns_default 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         llm = MockLLMGateway()
         router = LLMRouter(llm_gateway=llm, default_agent="code-review")
 

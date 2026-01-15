@@ -1,20 +1,12 @@
-"""
-Agent Registry — hot-pluggable registration for 12+ Agent types.
+"""AgentForge 核心运行时层：agent_registry。
 
-Adding a new Agent requires exactly 3 steps:
-    1. Inherit BaseAgent
-    2. Implement execute()
-    3. Register with AgentRegistry.register()
+本模块负责 agent_registry 相关能力，是 核心运行时层 的组成部分。
 
-No modification to DAG engine code is needed. The registry acts as a
-service locator — the DAG engine looks up agents by name at execution time.
-
-Design rationale:
-    Why a registry instead of direct instantiation?
-    1. Hot-plug: add/remove agents at runtime without restarting
-    2. Testability: swap real agents with mocks in tests
-    3. Decoupling: DAG definition only references agent names, not classes
-    4. Discovery: list_agents() provides runtime introspection
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
+- 关键路径应保留日志、指标或链路追踪信息。
+- 主要类：AgentRegistry。
 """
 
 import logging
@@ -26,27 +18,35 @@ logger = logging.getLogger(__name__)
 
 
 class AgentRegistry:
-    """
-    Singleton-style registry mapping agent names to their classes/instances.
+    """AgentRegistry。
 
-    Supports both class registration (lazy instantiation) and instance
-    registration (pre-configured agents). Thread-safe via asyncio.Lock
-    for concurrent DAG node lookups.
+    AgentRegistry 是核心运行时组件，负责状态管理、调度和跨模块协作。
 
-    Usage:
-        # Class registration (lazy)
-        registry.register("classifier", ClassifierAgent)
-        agent = await registry.get("classifier")  # instantiated on first call
+    主要成员：
+    - 方法 register()。
+    - 方法 register_instance()。
+    - 方法 get()。
+    - 方法 unregister()。
+    - 方法 list_agents()。
+    - 方法 get_agent_info()。
+    - 方法 get_all_stats()。
+    - 方法 reset_all()。
+    - 方法 count()。
 
-        # Instance registration (eager)
-        agent_instance = ClassifierAgent(name="classifier_v2")
-        registry.register_instance("classifier_v2", agent_instance)
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
     """
 
     def __init__(self):
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._classes: dict[str, Type[BaseAgent]] = {}
         self._instances: dict[str, BaseAgent] = {}
-        self._metadata: dict[str, dict] = {}  # agent_name → {registered_at, version, ...}
+        self._metadata: dict[str, dict] = {}  # Agent 注册与查询。
         import asyncio
 
         self._lock = asyncio.Lock()
@@ -57,17 +57,19 @@ class AgentRegistry:
         agent_class: Type[BaseAgent],
         metadata: Optional[dict] = None,
     ) -> None:
-        """
-        Register an Agent class by name. Instantiated lazily on first get().
+        """执行 register 对应的逻辑，并返回处理结果。
 
         Args:
-            name: Unique agent identifier (e.g., "classifier", "planner").
-            agent_class: Must be a subclass of BaseAgent.
-            metadata: Optional metadata (version, description, etc.).
+            name: str，调用方传入的 name 参数。
+            agent_class: Type[BaseAgent]，调用方传入的 agent_class 参数。
+            metadata: Optional[dict]，调用方传入的 metadata 参数。
+
+        Returns:
+            None，函数执行后的结果。
 
         Raises:
-            ValueError: If agent_class is not a BaseAgent subclass.
-            KeyError: If name is already registered.
+            ValueError: 当输入、状态或外部依赖不满足要求时抛出。
+            KeyError: 当输入、状态或外部依赖不满足要求时抛出。
         """
         if not issubclass(agent_class, BaseAgent):
             raise ValueError(
@@ -89,11 +91,19 @@ class AgentRegistry:
         agent: BaseAgent,
         metadata: Optional[dict] = None,
     ) -> None:
-        """
-        Register a pre-configured Agent instance.
+        """执行 register_instance 对应的逻辑，并返回处理结果。
 
-        Use this when you need custom initialization (specific memory config,
-        tools, etc.) before registration.
+        Args:
+            name: str，调用方传入的 name 参数。
+            agent: BaseAgent，调用方传入的 agent 参数。
+            metadata: Optional[dict]，调用方传入的 metadata 参数。
+
+        Returns:
+            None，函数执行后的结果。
+
+        Raises:
+            ValueError: 当输入、状态或外部依赖不满足要求时抛出。
+            KeyError: 当输入、状态或外部依赖不满足要求时抛出。
         """
         if not isinstance(agent, BaseAgent):
             raise ValueError(f"Cannot register '{name}': instance is not a BaseAgent")
@@ -107,24 +117,23 @@ class AgentRegistry:
             logger.info("Registered agent instance: %s", name)
 
     async def get(self, name: str) -> BaseAgent:
-        """
-        Get an Agent instance by name. Creates from class if not yet instantiated.
+        """执行 get 对应的核心操作，并保持调用契约稳定。
 
         Args:
-            name: The registered agent name.
+            name: str，调用方传入的 name 参数。
 
         Returns:
-            BaseAgent instance ready for execution.
+            BaseAgent，函数执行后的结果。
 
         Raises:
-            KeyError: If name is not registered.
+            KeyError: 当输入、状态或外部依赖不满足要求时抛出。
         """
         async with self._lock:
-            # Already instantiated?
+            # 就绪状态。
             if name in self._instances:
                 return self._instances[name]
 
-            # Registered as class? Instantiate now (lazy init).
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             if name in self._classes:
                 agent_class = self._classes[name]
                 instance = agent_class(name=name)
@@ -135,12 +144,13 @@ class AgentRegistry:
             raise KeyError(f"Agent '{name}' is not registered")
 
     async def unregister(self, name: str) -> bool:
-        """
-        Remove an agent from the registry. Supports hot-unplug.
+        """执行 unregister 对应的逻辑，并返回处理结果。
 
-        Returns True if agent was found and removed, False otherwise.
-        Warning: if the agent is currently running in a DAG, this may
-        cause that DAG execution to fail on next node referencing it.
+        Args:
+            name: str，调用方传入的 name 参数。
+
+        Returns:
+            bool，函数执行后的结果。
         """
         async with self._lock:
             removed = False
@@ -157,11 +167,22 @@ class AgentRegistry:
             return removed
 
     def list_agents(self) -> list[str]:
-        """List all registered agent names (both classes and instances)."""
+        """查询并返回列表结果，并返回调用方需要的结果。
+
+        Returns:
+            list[str]，函数执行后的结果。
+        """
         return sorted(set(self._classes.keys()) | set(self._instances.keys()))
 
     def get_agent_info(self, name: str) -> Optional[dict]:
-        """Get metadata and status for a specific agent."""
+        """读取并返回指定数据，并返回调用方需要的结果。
+
+        Args:
+            name: str，调用方传入的 name 参数。
+
+        Returns:
+            Optional[dict]，函数执行后的结果。
+        """
         if name not in self._metadata and name not in self._classes:
             return None
         info = dict(self._metadata.get(name, {}))
@@ -173,19 +194,31 @@ class AgentRegistry:
         return info
 
     async def get_all_stats(self) -> dict[str, dict]:
-        """Get execution stats for all instantiated agents."""
+        """读取并返回指定数据，并返回调用方需要的结果。
+
+        Returns:
+            dict[str, dict]，函数执行后的结果。
+        """
         stats = {}
         for name, agent in self._instances.items():
             stats[name] = agent.stats
         return stats
 
     async def reset_all(self) -> None:
-        """Reset all agents to IDLE state. Used for system recovery."""
+        """执行 reset_all 对应的逻辑，并返回处理结果。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         for agent in self._instances.values():
             agent.reset()
         logger.info("Reset all %d agents to IDLE", len(self._instances))
 
     @property
     def count(self) -> int:
-        """Total number of registered agents (unique names)."""
+        """执行 count 对应的逻辑，并返回处理结果。
+
+        Returns:
+            int，函数执行后的结果。
+        """
         return len(set(self._classes.keys()) | set(self._instances.keys()))

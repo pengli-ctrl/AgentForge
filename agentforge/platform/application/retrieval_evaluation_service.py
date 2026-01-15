@@ -1,3 +1,14 @@
+"""AgentForge 平台应用服务层：retrieval_evaluation_service。
+
+本模块实现 retrieval_evaluation_service 应用服务，编排多个领域对象和基础设施组件完成业务流程。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+- 主要类：RetrievalEvaluationService。
+"""
+
 from __future__ import annotations
 
 from agentforge.platform.application.ports import KnowledgeRepository
@@ -18,11 +29,16 @@ from agentforge.platform.domain.retrieval import (
 
 
 class RetrievalEvaluationService:
-    """离线检索与引用质量评估服务。
+    """RetrievalEvaluationService。
 
-    对每条 GoldenQuery 依次执行：混合检索 -> 可选重排 -> 计算 Recall@K /
-    Precision@K / 倒数排名 / 引用正确率，最后聚合为整体报告。
-    评估为在线计算，不落库；如需持久化回归结果，可在此基础上扩展仓储。
+    RetrievalEvaluationService 编排业务流程，协调仓储、模型、策略和外部连接器完成用例。
+
+    主要成员：
+    - 方法 evaluate()。
+
+    设计约束：
+    - 保持接口稳定，不向调用方暴露不必要的数据结构。
+    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
     """
 
     def __init__(
@@ -30,6 +46,15 @@ class RetrievalEvaluationService:
         repository: KnowledgeRepository,
         reranker: Reranker | None = None,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            repository: KnowledgeRepository，调用方传入的 repository 参数。
+            reranker: Reranker | None，调用方传入的 reranker 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._repository = repository
         self._reranker = reranker
 
@@ -40,6 +65,17 @@ class RetrievalEvaluationService:
         rerank: bool = True,
         mode: SearchMode = "hybrid",
     ) -> RetrievalReport:
+        """执行 evaluate 对应的逻辑，并返回处理结果。
+
+        Args:
+            queries: list[GoldenQuery]，调用方传入的 queries 参数。
+            k: int，调用方传入的 k 参数。
+            rerank: bool，调用方传入的 rerank 参数。
+            mode: SearchMode，调用方传入的 mode 参数。
+
+        Returns:
+            RetrievalReport，函数执行后的结果。
+        """
         evaluations: list[QueryEvaluation] = []
         for golden in queries:
             results = await self._repository.search(

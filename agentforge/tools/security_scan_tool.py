@@ -78,6 +78,14 @@ class SecurityScanTool(BaseTool):
     ]
 
     def __init__(self, rules_path: str | None = None) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            rules_path: str | None，调用方传入的 rules_path 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.rules_path = rules_path
 
     @property
@@ -86,7 +94,11 @@ class SecurityScanTool(BaseTool):
         return "security_scan"
 
     def schema(self) -> dict:
-        """返回 JSON Schema。"""
+        """执行 schema 对应的逻辑，并返回处理结果。
+
+        Returns:
+            dict，函数执行后的结果。
+        """
         return {
             "type": "function",
             "function": {

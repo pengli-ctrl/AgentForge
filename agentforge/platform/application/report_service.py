@@ -1,3 +1,14 @@
+"""AgentForge 平台应用服务层：report_service。
+
+本模块实现 report_service 应用服务，编排多个领域对象和基础设施组件完成业务流程。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+- 主要类：ReportService。
+"""
+
 from __future__ import annotations
 
 import json
@@ -17,15 +28,23 @@ from agentforge.platform.domain.ticket import RiskLevel
 
 
 def _now() -> datetime:
+    """执行 _now 对应的逻辑，并返回处理结果。
+
+    Returns:
+        datetime，函数执行后的结果。
+    """
     return datetime.now(timezone.utc)
 
 
 def _advance_next_run(cadence: str, last_run: datetime) -> datetime:
-    """Advance next_run_at by the schedule cadence.
+    """执行 _advance_next_run 对应的逻辑，并返回处理结果。
 
-    Supports simplified labels (daily / weekly / monthly) and standard 5-field
-    cron expressions (e.g. "0 2 * * *"); the cron form computes the next match
-    strictly after the last run.
+    Args:
+        cadence: str，调用方传入的 cadence 参数。
+        last_run: datetime，调用方传入的 last_run 参数。
+
+    Returns:
+        datetime，函数执行后的结果。
     """
     if is_cron_cadence(cadence):
         return CronSchedule(cadence).next_run_from(last_run=last_run, now=_now())
@@ -33,17 +52,32 @@ def _advance_next_run(cadence: str, last_run: datetime) -> datetime:
         return last_run + timedelta(days=7)
     if cadence == "monthly":
         return last_run + timedelta(days=30)
-    return last_run + timedelta(days=1)  # daily (default)
+    return last_run + timedelta(days=1)  # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
 
 
 class ReportService:
-    """Operational report generation and scheduling.
+    """ReportService。
 
-    Aggregates cost / audit / quality data into row-oriented exports (JSON or
-    CSV) and manages recurring schedules (due detection + next_run advance).
-    Successful generations are persisted as immutable report runs for later
-    historical retrieval. Delegates to injected repositories so it works on
-    both memory and SQLAlchemy backends.
+    ReportService 编排业务流程，协调仓储、模型、策略和外部连接器完成用例。
+
+    主要成员：
+    - 方法 generate()。
+    - 方法 list_runs()。
+    - 方法 list_runs_paginated()。
+    - 方法 get_run()。
+    - 方法 archive_run()。
+    - 方法 export_archive()。
+    - 方法 export_archive_to()。
+    - 方法 prune_runs()。
+    - 方法 schedule()。
+    - 方法 list_schedules()。
+    - 方法 delete_schedule()。
+    - 方法 set_schedule_enabled()。
+    - 方法 run_due()。
+
+    设计约束：
+    - 保持接口稳定，不向调用方暴露不必要的数据结构。
+    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
     """
 
     def __init__(
@@ -55,17 +89,38 @@ class ReportService:
         run_repository,
         default_retention_days: int | None = None,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            cost_repository: Any，调用方传入的 cost_repository 参数。
+            audit_repository: Any，调用方传入的 audit_repository 参数。
+            regression_repository: Any，调用方传入的 regression_repository 参数。
+            schedule_repository: Any，调用方传入的 schedule_repository 参数。
+            run_repository: Any，调用方传入的 run_repository 参数。
+            default_retention_days: int | None，调用方传入的 default_retention_days 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._cost = cost_repository
         self._audit = audit_repository
         self._regression = regression_repository
         self._schedules = schedule_repository
         self._runs = run_repository
-        # Global default retention window applied to due schedules that do not
-        # define an explicit retention_days, so auto-prune never leaves history
-        # unbounded even when an operator didn't configure per-schedule policy.
+        # 验证数据保留策略，确保不会无限累积。
+        # 验证数据保留策略，确保不会无限累积。
+        # 调度任务管理。
         self._default_retention_days = default_retention_days
 
     async def _persist(self, report: OperationsReport) -> ReportRun:
+        """执行 _persist 对应的逻辑，并返回处理结果。
+
+        Args:
+            report: OperationsReport，调用方传入的 report 参数。
+
+        Returns:
+            ReportRun，函数执行后的结果。
+        """
         run = ReportRun.from_operations(report)
         await self._runs.save(run)
         return run
@@ -79,6 +134,19 @@ class ReportService:
         risk_level: RiskLevel = RiskLevel.LOW,
         payload: dict | None = None,
     ) -> None:
+        """执行 _record_audit 对应的逻辑，并返回处理结果。
+
+        Args:
+            tenant_id: str | None，调用方传入的 tenant_id 参数。
+            action: str，调用方传入的 action 参数。
+            resource_type: str，调用方传入的 resource_type 参数。
+            resource_id: str，调用方传入的 resource_id 参数。
+            risk_level: RiskLevel，调用方传入的 risk_level 参数。
+            payload: dict | None，调用方传入的 payload 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         if self._audit is None:
             return
         await self._audit.save(
@@ -104,12 +172,25 @@ class ReportService:
         report_id: str | None = None,
         scheduled_report_id: str | None = None,
     ) -> OperationsReport:
+        """执行 generate 对应的逻辑，并返回处理结果。
+
+        Args:
+            report_type: ReportType，调用方传入的 report_type 参数。
+            tenant_id: str，调用方传入的 tenant_id 参数。
+            fmt: ReportFormat，调用方传入的 fmt 参数。
+            days: int，调用方传入的 days 参数。
+            report_id: str | None，调用方传入的 report_id 参数。
+            scheduled_report_id: str | None，调用方传入的 scheduled_report_id 参数。
+
+        Returns:
+            OperationsReport，函数执行后的结果。
+        """
         report_id = report_id or uuid.uuid4().hex[:16]
         if report_type == ReportType.COST:
             rows, summary = await self._build_cost(tenant_id, days)
         elif report_type == ReportType.AUDIT:
             rows, summary = await self._build_audit(tenant_id)
-        else:  # QUALITY
+        else:  # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
             rows, summary = await self._build_quality(tenant_id)
 
         report = OperationsReport(
@@ -143,6 +224,17 @@ class ReportService:
         limit: int = 100,
         archived: bool | None = None,
     ) -> list[dict]:
+        """查询并返回列表结果，并返回调用方需要的结果。
+
+        Args:
+            tenant_id: str | None，调用方传入的 tenant_id 参数。
+            report_type: str | None，调用方传入的 report_type 参数。
+            limit: int，调用方传入的 limit 参数。
+            archived: bool | None，调用方传入的 archived 参数。
+
+        Returns:
+            list[dict]，函数执行后的结果。
+        """
         items = await self._runs.list(
             tenant_id=tenant_id,
             report_type=report_type.value if isinstance(report_type, ReportType) else report_type,
@@ -159,6 +251,18 @@ class ReportService:
         archived: bool | None = None,
         cursor: str | None = None,
     ) -> tuple[list[dict], str | None]:
+        """查询并返回列表结果，并返回调用方需要的结果。
+
+        Args:
+            tenant_id: str | None，调用方传入的 tenant_id 参数。
+            report_type: str | None，调用方传入的 report_type 参数。
+            limit: int，调用方传入的 limit 参数。
+            archived: bool | None，调用方传入的 archived 参数。
+            cursor: str | None，调用方传入的 cursor 参数。
+
+        Returns:
+            tuple[list[dict], str | None]，函数执行后的结果。
+        """
         items, next_cursor = await self._runs.list_page(
             tenant_id=tenant_id,
             report_type=report_type.value if isinstance(report_type, ReportType) else report_type,
@@ -169,13 +273,28 @@ class ReportService:
         return [self._run_meta(i) for i in items], next_cursor
 
     async def get_run(self, run_id: str) -> ReportRun | None:
+        """读取并返回指定数据，并返回调用方需要的结果。
+
+        Args:
+            run_id: str，调用方传入的 run_id 参数。
+
+        Returns:
+            ReportRun | None，函数执行后的结果。
+        """
         return await self._runs.get(run_id)
 
     async def archive_run(self, run_id: str, archived: bool) -> dict:
-        """Mark (or unmark) a persisted report run as archived.
+        """执行 archive_run 对应的逻辑，并返回处理结果。
 
-        Archived runs are excluded from the default (active) listing but
-        retained for compliance / later retrieval.
+        Args:
+            run_id: str，调用方传入的 run_id 参数。
+            archived: bool，调用方传入的 archived 参数。
+
+        Returns:
+            dict，函数执行后的结果。
+
+        Raises:
+            KeyError: 当输入、状态或外部依赖不满足要求时抛出。
         """
         run = await self._runs.get(run_id)
         if run is None:
@@ -193,12 +312,14 @@ class ReportService:
     async def export_archive(
         self, tenant_id: str | None = None, limit: int = 100
     ) -> tuple[bytes, str]:
-        """Bundle persisted report runs into an in-memory ZIP archive.
+        """执行 export_archive 对应的逻辑，并返回处理结果。
 
-        Convenience wrapper over :meth:`_write_archive` that buffers the ZIP
-        into memory and returns raw bytes plus an ArchiveInfo JSON payload.
-        For large archives prefer :meth:`export_archive_to` with a disk sink
-        so the payload is streamed and not held in memory.
+        Args:
+            tenant_id: str | None，调用方传入的 tenant_id 参数。
+            limit: int，调用方传入的 limit 参数。
+
+        Returns:
+            tuple[bytes, str]，函数执行后的结果。
         """
         import io
 
@@ -212,20 +333,28 @@ class ReportService:
         tenant_id: str | None = None,
         limit: int = 100,
     ) -> str:
-        """Bundle persisted report runs into a ZIP written to ``sink``.
+        """执行 export_archive_to 对应的逻辑，并返回处理结果。
 
-        ``sink`` must be a writeable binary file object (e.g. an open temp
-        file). The ZIP is written incrementally so the full archive never
-        needs to be buffered in memory. Returns the ArchiveInfo JSON payload.
+        Args:
+            sink: Any，调用方传入的 sink 参数。
+            tenant_id: str | None，调用方传入的 tenant_id 参数。
+            limit: int，调用方传入的 limit 参数。
+
+        Returns:
+            str，函数执行后的结果。
         """
         return await self._write_archive(sink, tenant_id=tenant_id, limit=limit)
 
     async def _write_archive(self, sink, tenant_id: str | None = None, limit: int = 100) -> str:
-        """Serialize persisted runs into a ZIP written to ``sink``.
+        """执行 _write_archive 对应的逻辑，并返回处理结果。
 
-        Each run is serialized in its native format (JSON/CSV) into a file
-        named ``run_{run_id}.{ext}`` under the archive. Returns the
-        ArchiveInfo JSON payload describing the bundled files.
+        Args:
+            sink: Any，调用方传入的 sink 参数。
+            tenant_id: str | None，调用方传入的 tenant_id 参数。
+            limit: int，调用方传入的 limit 参数。
+
+        Returns:
+            str，函数执行后的结果。
         """
         import zipfile
 
@@ -261,13 +390,15 @@ class ReportService:
         tenant_id: str | None = None,
         include_archived: bool = False,
     ) -> dict:
-        """Delete report runs older than retention_days (retention policy).
+        """执行 prune_runs 对应的逻辑，并返回处理结果。
 
-        By default archived runs are preserved (archiving is an intent to retain
-        for compliance); pass ``include_archived=True`` to also remove them.
-        Returns summary of removed count. Runs with enabled retention policy
-        (older than the threshold) are removed so historical runs don't accrue
-        unbounded.
+        Args:
+            retention_days: int，调用方传入的 retention_days 参数。
+            tenant_id: str | None，调用方传入的 tenant_id 参数。
+            include_archived: bool，调用方传入的 include_archived 参数。
+
+        Returns:
+            dict，函数执行后的结果。
         """
         cutoff = _now() - timedelta(days=retention_days)
         removed = await self._runs.delete_older_than(
@@ -294,6 +425,14 @@ class ReportService:
 
     @staticmethod
     def _run_meta(run: ReportRun) -> dict:
+        """执行 _run_meta 对应的逻辑，并返回处理结果。
+
+        Args:
+            run: ReportRun，调用方传入的 run 参数。
+
+        Returns:
+            dict，函数执行后的结果。
+        """
         return {
             "run_id": run.run_id,
             "tenant_id": run.tenant_id,
@@ -307,6 +446,15 @@ class ReportService:
         }
 
     async def _build_cost(self, tenant_id: str, days: int) -> tuple[list[dict], dict]:
+        """执行 _build_cost 对应的逻辑，并返回处理结果。
+
+        Args:
+            tenant_id: str，调用方传入的 tenant_id 参数。
+            days: int，调用方传入的 days 参数。
+
+        Returns:
+            tuple[list[dict], dict]，函数执行后的结果。
+        """
         daily = await self._cost.daily_summary(tenant_id, days=days)
         rows = [
             {
@@ -326,6 +474,14 @@ class ReportService:
         return rows, summary
 
     async def _build_audit(self, tenant_id: str) -> tuple[list[dict], dict]:
+        """执行 _build_audit 对应的逻辑，并返回处理结果。
+
+        Args:
+            tenant_id: str，调用方传入的 tenant_id 参数。
+
+        Returns:
+            tuple[list[dict], dict]，函数执行后的结果。
+        """
         events, _ = await self._audit.query_events(tenant_id=tenant_id, limit=500)
         rows = [
             {
@@ -343,6 +499,14 @@ class ReportService:
         return rows, summary
 
     async def _build_quality(self, tenant_id: str) -> tuple[list[dict], dict]:
+        """执行 _build_quality 对应的逻辑，并返回处理结果。
+
+        Args:
+            tenant_id: str，调用方传入的 tenant_id 参数。
+
+        Returns:
+            tuple[list[dict], dict]，函数执行后的结果。
+        """
         runs = await self._regression.list_runs(tenant_id, limit=100)
         rows = [
             {
@@ -377,7 +541,7 @@ class ReportService:
         summary = {"tenant_id": tenant_id, "run_count": len(rows), "averages": avg}
         return rows, summary
 
-    # --- schedule management ---
+    # 调度任务管理。
 
     async def schedule(
         self,
@@ -387,6 +551,18 @@ class ReportService:
         report_id: str | None = None,
         retention_days: int | None = None,
     ) -> ScheduledReport:
+        """执行 schedule 对应的逻辑，并返回处理结果。
+
+        Args:
+            tenant_id: str，调用方传入的 tenant_id 参数。
+            report_type: ReportType，调用方传入的 report_type 参数。
+            cadence: str，调用方传入的 cadence 参数。
+            report_id: str | None，调用方传入的 report_id 参数。
+            retention_days: int | None，调用方传入的 retention_days 参数。
+
+        Returns:
+            ScheduledReport，函数执行后的结果。
+        """
         report_id = report_id or uuid.uuid4().hex[:16]
         now = _now()
         sched = ScheduledReport(
@@ -414,10 +590,27 @@ class ReportService:
         return sched
 
     async def list_schedules(self, tenant_id: str | None = None, limit: int = 100) -> list[dict]:
+        """查询并返回列表结果，并返回调用方需要的结果。
+
+        Args:
+            tenant_id: str | None，调用方传入的 tenant_id 参数。
+            limit: int，调用方传入的 limit 参数。
+
+        Returns:
+            list[dict]，函数执行后的结果。
+        """
         items = await self._schedules.list_schedules(tenant_id=tenant_id, limit=limit)
         return [i.model_dump(mode="json") for i in items]
 
     async def delete_schedule(self, report_id: str) -> None:
+        """删除指定数据，并返回调用方需要的结果。
+
+        Args:
+            report_id: str，调用方传入的 report_id 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         sched = await self._schedules.get(report_id)
         await self._schedules.delete(report_id)
         await self._record_audit(
@@ -427,10 +620,17 @@ class ReportService:
         )
 
     async def set_schedule_enabled(self, report_id: str, enabled: bool) -> ScheduledReport:
-        """Pause (disabled) or resume (enabled) a report schedule.
+        """执行 set_schedule_enabled 对应的逻辑，并返回处理结果。
 
-        Disabled schedules are skipped by list_due / run_due so they no longer
-        generate runs, without deleting the schedule or losing its config.
+        Args:
+            report_id: str，调用方传入的 report_id 参数。
+            enabled: bool，调用方传入的 enabled 参数。
+
+        Returns:
+            ScheduledReport，函数执行后的结果。
+
+        Raises:
+            KeyError: 当输入、状态或外部依赖不满足要求时抛出。
         """
         sched = await self._schedules.get(report_id)
         if sched is None:
@@ -450,15 +650,14 @@ class ReportService:
         fmt: ReportFormat = ReportFormat.JSON,
         default_retention_days: int | None = None,
     ) -> dict:
-        """Generate reports for all due schedules and advance next_run_at.
+        """执行完整流程，并返回调用方需要的结果。
 
-        Idempotent: each due schedule is generated exactly once and its
-        next_run_at is advanced, so a repeated invocation won't regenerate
-        unless the schedule has become due again. After generation, old runs
-        for each affected tenant are pruned per the schedule's retention
-        policy (retention_days); schedules without an explicit policy fall
-        back to the service/global default retention window so history doesn't
-        accrue unbounded.
+        Args:
+            fmt: ReportFormat，调用方传入的 fmt 参数。
+            default_retention_days: int | None，调用方传入的 default_retention_days 参数。
+
+        Returns:
+            dict，函数执行后的结果。
         """
         effective_default = (
             default_retention_days
@@ -475,7 +674,7 @@ class ReportService:
             if retention is None:
                 retention = effective_default
             if retention:
-                # keep the strictest (smallest) retention per tenant
+                # 验证数据保留策略，确保不会无限累积。
                 current = retention_tenants.get(sched.tenant_id)
                 if current is None or retention < current:
                     retention_tenants[sched.tenant_id] = retention

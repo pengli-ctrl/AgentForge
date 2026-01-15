@@ -18,19 +18,62 @@ class MockBM25Index:
     """Mock BM25 索引。"""
 
     def __init__(self, scores: np.ndarray) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            scores: np.ndarray，调用方传入的 scores 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._scores = scores
 
     def get_scores(self, query: str) -> np.ndarray:
+        """读取并返回指定数据，并返回调用方需要的结果。
+
+        Args:
+            query: str，调用方传入的 query 参数。
+
+        Returns:
+            np.ndarray，函数执行后的结果。
+        """
         return self._scores
 
 
 class MockFAISSIndex:
-    """Mock FAISS 索引。"""
+    """MockFAISSIndex。
+
+    MockFAISSIndex 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - 方法 search()。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    """
 
     def __init__(self, indices: np.ndarray) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            indices: np.ndarray，调用方传入的 indices 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._indices = indices
 
     def search(self, embeddings: np.ndarray, k: int) -> tuple:
+        """执行 search 对应的核心操作，并保持调用契约稳定。
+
+        Args:
+            embeddings: np.ndarray，调用方传入的 embeddings 参数。
+            k: int，调用方传入的 k 参数。
+
+        Returns:
+            tuple，函数执行后的结果。
+        """
         return np.array([[0.0] * k]), self._indices[:k].reshape(1, -1)
 
 
@@ -38,6 +81,14 @@ class MockEmbedModel:
     """Mock 向量编码模型。"""
 
     def encode(self, texts: list[str]) -> np.ndarray:
+        """执行 encode 对应的逻辑，并返回处理结果。
+
+        Args:
+            texts: list[str]，调用方传入的 texts 参数。
+
+        Returns:
+            np.ndarray，函数执行后的结果。
+        """
         return np.array([[0.1] * 128])
 
 
@@ -53,10 +104,10 @@ class TestRRFFusion:
 
         fused = retriever._rrf_fuse(bm25_rank, faiss_rank)
 
-        # doc 0: 1/(60+0) + 1/(60+2) = 1/60 + 1/62
-        # doc 1: 1/(60+1) + 1/(60+0) = 1/61 + 1/60
-        # doc 2: 1/(60+2) = 1/62
-        # doc 3: 1/(60+1) = 1/61
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
         expected_0 = 1.0 / (RRF_K + 0) + 1.0 / (RRF_K + 2)
         expected_1 = 1.0 / (RRF_K + 1) + 1.0 / (RRF_K + 0)

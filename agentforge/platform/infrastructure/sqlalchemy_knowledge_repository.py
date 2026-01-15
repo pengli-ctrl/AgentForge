@@ -1,3 +1,14 @@
+"""AgentForge 平台基础设施层：sqlalchemy_knowledge_repository。
+
+本模块提供 sqlalchemy_knowledge_repository 的数据库持久化实现，负责事务、查询、租户隔离和一致性约束。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+- 主要类：SQLAlchemyKnowledgeRepository。
+"""
+
 from __future__ import annotations
 
 from sqlalchemy import func, or_, select
@@ -32,6 +43,15 @@ class SQLAlchemyKnowledgeRepository:
         session_factory: async_sessionmaker[AsyncSession],
         embedder: Embedder | None = None,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            session_factory: async_sessionmaker[AsyncSession]，调用方传入的 session_factory 参数。
+            embedder: Embedder | None，调用方传入的 embedder 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._session_factory = session_factory
         self._embedder = embedder or HashEmbedder()
 
@@ -40,6 +60,15 @@ class SQLAlchemyKnowledgeRepository:
         document: KnowledgeDocument,
         chunks: list[KnowledgeChunk],
     ) -> None:
+        """保存业务数据，并返回调用方需要的结果。
+
+        Args:
+            document: KnowledgeDocument，调用方传入的 document 参数。
+            chunks: list[KnowledgeChunk]，调用方传入的 chunks 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         async with self._session_factory() as session:
             async with session.begin():
                 session.add(
@@ -72,6 +101,14 @@ class SQLAlchemyKnowledgeRepository:
                     )
 
     async def backfill_embeddings(self, tenant_id: str | None = None) -> int:
+        """回填缺失数据，并返回调用方需要的结果。
+
+        Args:
+            tenant_id: str | None，调用方传入的 tenant_id 参数。
+
+        Returns:
+            int，函数执行后的结果。
+        """
         backfilled = 0
         async with self._session_factory() as session:
             async with session.begin():
@@ -99,6 +136,19 @@ class SQLAlchemyKnowledgeRepository:
         fts_weight: float = 0.5,
         vector_weight: float = 0.5,
     ) -> list[RetrievedChunk]:
+        """执行 search 对应的核心操作，并保持调用契约稳定。
+
+        Args:
+            tenant_id: str，调用方传入的 tenant_id 参数。
+            query: str，调用方传入的 query 参数。
+            limit: int，调用方传入的 limit 参数。
+            mode: str，调用方传入的 mode 参数。
+            fts_weight: float，调用方传入的 fts_weight 参数。
+            vector_weight: float，调用方传入的 vector_weight 参数。
+
+        Returns:
+            list[RetrievedChunk]，函数执行后的结果。
+        """
         query_vector = self._embedder.embed(query)
         async with self._session_factory() as session:
             dialect = session.get_bind().dialect.name
@@ -129,6 +179,17 @@ class SQLAlchemyKnowledgeRepository:
         query_vector: list[float],
     ) -> tuple[dict[str, float], dict[str, float], dict[str, RetrievedChunk]]:
         # 路径 1：PostgreSQL FTS rank
+        """执行 _search_postgres 对应的逻辑，并返回处理结果。
+
+        Args:
+            session: AsyncSession，调用方传入的 session 参数。
+            tenant_id: str，调用方传入的 tenant_id 参数。
+            query: str，调用方传入的 query 参数。
+            query_vector: list[float]，调用方传入的 query_vector 参数。
+
+        Returns:
+            tuple[dict[str, float], dict[str, float], dict[str, RetrievedChunk]]，函数执行后的结果。
+        """
         fts_doc = func.to_tsvector("english", KnowledgeChunkRecord.content)
         fts_query = func.plainto_tsquery("english", query)
         fts_row = select(
@@ -172,6 +233,17 @@ class SQLAlchemyKnowledgeRepository:
         query: str,
         query_vector: list[float],
     ) -> tuple[dict[str, float], dict[str, float], dict[str, RetrievedChunk]]:
+        """执行 _search_backport 对应的逻辑，并返回处理结果。
+
+        Args:
+            session: AsyncSession，调用方传入的 session 参数。
+            tenant_id: str，调用方传入的 tenant_id 参数。
+            query: str，调用方传入的 query 参数。
+            query_vector: list[float]，调用方传入的 query_vector 参数。
+
+        Returns:
+            tuple[dict[str, float], dict[str, float], dict[str, RetrievedChunk]]，函数执行后的结果。
+        """
         from agentforge.platform.application.knowledge_embedder import cosine_similarity
 
         terms = [term for term in query.split() if len(term) > 2]
@@ -226,6 +298,16 @@ class SQLAlchemyKnowledgeRepository:
         tenant_id: str,
         chunk_ids: set[str],
     ) -> dict[str, RetrievedChunk]:
+        """执行 _load_candidates 对应的逻辑，并返回处理结果。
+
+        Args:
+            session: AsyncSession，调用方传入的 session 参数。
+            tenant_id: str，调用方传入的 tenant_id 参数。
+            chunk_ids: set[str]，调用方传入的 chunk_ids 参数。
+
+        Returns:
+            dict[str, RetrievedChunk]，函数执行后的结果。
+        """
         if not chunk_ids:
             return {}
         statement = (

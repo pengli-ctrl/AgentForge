@@ -1,3 +1,15 @@
+"""AgentForge 平台测试层：test_reports。
+
+本测试模块验证 test_reports 覆盖的业务路径、边界条件和回归场景。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+-
+主要函数：test_memory_schedule_repository_crud_and_due、test_sqlalchemy_schedule_repository_crud_and_due、test_memory_schedule_repository_retention_persisted、test_sqlalchemy_schedule_repository_retention_persisted、test_report_service_generate_json_cost、test_report_service_generate_csv_cost、test_report_service_generate_audit、test_report_service_schedule_and_run_due_idempotent。
+"""
+
 from __future__ import annotations
 
 import csv
@@ -49,6 +61,16 @@ from agentforge.platform.runtime import ServiceContainer
 
 
 def _cost(tenant_id: str, amount: float, days_ago: int = 0) -> CostRecord:
+    """执行 _cost 对应的逻辑，并返回处理结果。
+
+    Args:
+        tenant_id: str，调用方传入的 tenant_id 参数。
+        amount: float，调用方传入的 amount 参数。
+        days_ago: int，调用方传入的 days_ago 参数。
+
+    Returns:
+        CostRecord，函数执行后的结果。
+    """
     return CostRecord(
         tenant_id=tenant_id,
         task_id=f"task-{tenant_id}-{amount}-{days_ago}",
@@ -62,6 +84,15 @@ def _cost(tenant_id: str, amount: float, days_ago: int = 0) -> CostRecord:
 
 
 def _event(tenant_id: str, action: str) -> AuditEvent:
+    """执行 _event 对应的逻辑，并返回处理结果。
+
+    Args:
+        tenant_id: str，调用方传入的 tenant_id 参数。
+        action: str，调用方传入的 action 参数。
+
+    Returns:
+        AuditEvent，函数执行后的结果。
+    """
     return AuditEvent(
         event_id=f"ev-{tenant_id}-{action}",
         tenant_id=tenant_id,
@@ -75,6 +106,16 @@ def _event(tenant_id: str, action: str) -> AuditEvent:
 
 
 def _sched(report_id: str, tenant_id: str, *, next_in_hours: int = -1) -> ScheduledReport:
+    """执行 _sched 对应的逻辑，并返回处理结果。
+
+    Args:
+        report_id: str，调用方传入的 report_id 参数。
+        tenant_id: str，调用方传入的 tenant_id 参数。
+        next_in_hours: int，调用方传入的 next_in_hours 参数。
+
+    Returns:
+        ScheduledReport，函数执行后的结果。
+    """
     return ScheduledReport(
         report_id=report_id,
         tenant_id=tenant_id,
@@ -87,11 +128,16 @@ def _sched(report_id: str, tenant_id: str, *, next_in_hours: int = -1) -> Schedu
     )
 
 
-# --- repository tests ---
+# 仓储层行为验证。
 
 
 @pytest.mark.asyncio
 async def test_memory_schedule_repository_crud_and_due() -> None:
+    """验证 memory_schedule_repository_crud_and_due 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     repo = MemoryScheduledReportRepository()
     await repo.save(_sched("r1", "t1", next_in_hours=-2))
     await repo.save(_sched("r2", "t2", next_in_hours=5))
@@ -110,6 +156,11 @@ async def test_memory_schedule_repository_crud_and_due() -> None:
 
 @pytest.mark.asyncio
 async def test_sqlalchemy_schedule_repository_crud_and_due() -> None:
+    """验证 sqlalchemy_schedule_repository_crud_and_due 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     engine = create_async_engine(
         "sqlite+aiosqlite://",
         poolclass=StaticPool,
@@ -133,6 +184,11 @@ async def test_sqlalchemy_schedule_repository_crud_and_due() -> None:
 
 @pytest.mark.asyncio
 async def test_memory_schedule_repository_retention_persisted() -> None:
+    """验证 memory_schedule_repository_retention_persisted 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     repo = MemoryScheduledReportRepository()
     sched = _sched("r1", "t1", next_in_hours=-1)
     sched.retention_days = 14
@@ -143,6 +199,11 @@ async def test_memory_schedule_repository_retention_persisted() -> None:
 
 @pytest.mark.asyncio
 async def test_sqlalchemy_schedule_repository_retention_persisted() -> None:
+    """验证 sqlalchemy_schedule_repository_retention_persisted 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     engine = create_async_engine(
         "sqlite+aiosqlite://",
         poolclass=StaticPool,
@@ -159,10 +220,18 @@ async def test_sqlalchemy_schedule_repository_retention_persisted() -> None:
     assert fetched is not None and fetched.retention_days == 7
 
 
-# --- service tests ---
+# 服务层行为验证。
 
 
 def _service(seed_audit: bool = True) -> ReportService:
+    """执行 _service 对应的逻辑，并返回处理结果。
+
+    Args:
+        seed_audit: bool，调用方传入的 seed_audit 参数。
+
+    Returns:
+        ReportService，函数执行后的结果。
+    """
     cost = MemoryCostRepository()
     cost.records.append(_cost("t1", 1.5, days_ago=1))
     cost.records.append(_cost("t1", 0.5, days_ago=0))
@@ -179,13 +248,27 @@ def _service(seed_audit: bool = True) -> ReportService:
 
 
 def _save_sync(repo, event: AuditEvent) -> None:
-    # MemoryAuditRepository.save only appends to .events; call it directly to
-    # avoid an asyncio.run inside a running test event loop.
+    # 验证审计记录，确保关键行为可追踪。
+    # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
+    """执行 _save_sync 对应的逻辑，并返回处理结果。
+
+    Args:
+        repo: Any，调用方传入的 repo 参数。
+        event: AuditEvent，调用方传入的 event 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     repo.events.append(event)
 
 
 @pytest.mark.asyncio
 async def test_report_service_generate_json_cost() -> None:
+    """验证 report_service_generate_json_cost 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=False)
     report = await svc.generate(report_type=ReportType.COST, tenant_id="t1", fmt=ReportFormat.JSON)
     assert report.summary["total_amount"] == pytest.approx(2.0, rel=1e-3)
@@ -197,6 +280,11 @@ async def test_report_service_generate_json_cost() -> None:
 
 @pytest.mark.asyncio
 async def test_report_service_generate_csv_cost() -> None:
+    """验证 report_service_generate_csv_cost 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=False)
     report = await svc.generate(report_type=ReportType.COST, tenant_id="t1", fmt=ReportFormat.CSV)
     reader = csv.DictReader(io.StringIO(report.to_csv()))
@@ -207,6 +295,11 @@ async def test_report_service_generate_csv_cost() -> None:
 
 @pytest.mark.asyncio
 async def test_report_service_generate_audit() -> None:
+    """验证 report_service_generate_audit 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=True)
     report = await svc.generate(report_type=ReportType.AUDIT, tenant_id="t1")
     assert report.summary["event_count"] >= 1
@@ -215,9 +308,14 @@ async def test_report_service_generate_audit() -> None:
 
 @pytest.mark.asyncio
 async def test_report_service_schedule_and_run_due_idempotent() -> None:
+    """验证 report_service_schedule_and_run_due_idempotent 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service()
     sched = await svc.schedule(tenant_id="t1", report_type=ReportType.AUDIT, cadence="daily")
-    # force it due
+    # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     sched.next_run_at = datetime.now(timezone.utc) - timedelta(hours=1)
     await svc._schedules.save(sched)
 
@@ -225,13 +323,18 @@ async def test_report_service_schedule_and_run_due_idempotent() -> None:
     assert result["generated"] == 1
     assert result["reports"][0]["report_type"] == "audit"
 
-    # second run: schedule advanced, not due anymore -> 0
+    # 调度任务管理。
     again = await svc.run_due()
     assert again["generated"] == 0
 
 
 @pytest.mark.asyncio
 async def test_report_run_repository_memory_crud_and_list() -> None:
+    """验证 report_run_repository_memory_crud_and_list 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     repo = MemoryReportRunRepository()
     report = await _service().generate(report_type=ReportType.COST, tenant_id="t1")
     run = ReportRun.from_operations(report)
@@ -244,6 +347,11 @@ async def test_report_run_repository_memory_crud_and_list() -> None:
 
 @pytest.mark.asyncio
 async def test_report_run_repository_sqlalchemy_crud_and_list() -> None:
+    """验证 report_run_repository_sqlalchemy_crud_and_list 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     engine = create_async_engine(
         "sqlite+aiosqlite://",
         poolclass=StaticPool,
@@ -264,6 +372,11 @@ async def test_report_run_repository_sqlalchemy_crud_and_list() -> None:
 
 @pytest.mark.asyncio
 async def test_report_service_persists_runs_and_history() -> None:
+    """验证 report_service_persists_runs_and_history 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=False)
     await svc.generate(report_type=ReportType.COST, tenant_id="t1", fmt=ReportFormat.CSV)
     await svc.generate(report_type=ReportType.AUDIT, tenant_id="t1")
@@ -277,8 +390,13 @@ async def test_report_service_persists_runs_and_history() -> None:
 
 @pytest.mark.asyncio
 async def test_report_run_repository_delete_older_than_memory() -> None:
+    """验证 report_run_repository_delete_older_than_memory 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     repo = MemoryReportRunRepository()
-    # brand-new runs
+    # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     fresh = ReportRun.from_operations(
         await _service().generate(report_type=ReportType.COST, tenant_id="t1")
     )
@@ -295,10 +413,10 @@ async def test_report_run_repository_delete_older_than_memory() -> None:
     await repo.save(old)
     await repo.save(other)
 
-    # cutoff at 30 days: removes old (t1) and other (t2) when unscoped
+    # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     removed_all = await repo.delete_older_than(datetime.now(timezone.utc) - timedelta(days=30))
     assert removed_all == 2
-    # tenant-scoped
+    # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     margin = ReportRun.from_operations(
         await _service().generate(report_type=ReportType.COST, tenant_id="t1")
     )
@@ -312,6 +430,11 @@ async def test_report_run_repository_delete_older_than_memory() -> None:
 
 @pytest.mark.asyncio
 async def test_report_run_repository_delete_older_than_sqlalchemy() -> None:
+    """验证 report_run_repository_delete_older_than_sqlalchemy 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     engine = create_async_engine(
         "sqlite+aiosqlite://",
         poolclass=StaticPool,
@@ -338,9 +461,14 @@ async def test_report_run_repository_delete_older_than_sqlalchemy() -> None:
 
 @pytest.mark.asyncio
 async def test_report_service_prune_runs() -> None:
+    """验证 report_service_prune_runs 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=False)
     await svc.generate(report_type=ReportType.COST, tenant_id="t1")
-    # force age by direct repo mutation
+    # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     for run in svc._runs._runs.values():
         run.generated_at = datetime.now(timezone.utc) - timedelta(days=100)
     result = await svc.prune_runs(retention_days=30)
@@ -350,6 +478,11 @@ async def test_report_service_prune_runs() -> None:
 
 @pytest.mark.asyncio
 async def test_report_service_run_due_auto_prunes_old_runs() -> None:
+    """验证 report_service_run_due_auto_prunes_old_runs 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=False)
     sched = await svc.schedule(
         tenant_id="t1",
@@ -357,27 +490,35 @@ async def test_report_service_run_due_auto_prunes_old_runs() -> None:
         cadence="daily",
         retention_days=30,
     )
-    # a prior old run exists for t1
+    # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     old = ReportRun.from_operations(await svc.generate(report_type=ReportType.COST, tenant_id="t1"))
     old.generated_at = datetime.now(timezone.utc) - timedelta(days=60)
     await svc._runs.save(old)
 
-    # force schedule due
+    # 调度任务管理。
     sched.next_run_at = datetime.now(timezone.utc) - timedelta(hours=1)
     await svc._schedules.save(sched)
 
     result = await svc.run_due()
     assert result["generated"] == 1
-    # the 60-day-old run should have been pruned (retention 30)
+    # 验证数据保留策略，确保不会无限累积。
     assert result["pruned"] == 1
     runs = await svc.list_runs(tenant_id="t1")
-    assert len(runs) == 1  # only the just-generated run survives
+    assert len(runs) == 1  # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
 
 
-# --- endpoint tests ---
+# 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
 
 
 def _memory_container(**overrides) -> ServiceContainer:
+    """执行 _memory_container 对应的逻辑，并返回处理结果。
+
+    Args:
+        **overrides: Any，调用方传入的 **overrides 参数。
+
+    Returns:
+        ServiceContainer，函数执行后的结果。
+    """
     cost = MemoryCostRepository()
     cost.records.append(_cost("t1", 1.0))
     audit = MemoryAuditRepository()
@@ -395,10 +536,20 @@ def _memory_container(**overrides) -> ServiceContainer:
 
 
 def _app() -> TestClient:
+    """执行 _app 对应的逻辑，并返回处理结果。
+
+    Returns:
+        TestClient，函数执行后的结果。
+    """
     return TestClient(create_platform_app(_memory_container()))
 
 
 def test_export_report_json() -> None:
+    """验证 export_report_json 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc = _app()
     r = tc.get("/v1/console/reports/export", params={"report_type": "cost", "tenant_id": "t1"})
     assert r.status_code == 200
@@ -409,6 +560,11 @@ def test_export_report_json() -> None:
 
 
 def test_export_report_csv() -> None:
+    """验证 export_report_csv 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc = _app()
     r = tc.get(
         "/v1/console/reports/export",
@@ -420,12 +576,22 @@ def test_export_report_csv() -> None:
 
 
 def test_export_report_invalid_type() -> None:
+    """验证 export_report_invalid_type 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc = _app()
     r = tc.get("/v1/console/reports/export", params={"report_type": "bogus", "tenant_id": "t1"})
     assert r.status_code == 400
 
 
 def test_schedule_lifecycle() -> None:
+    """验证 schedule_lifecycle 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc = _app()
     create = tc.post(
         "/v1/console/reports/schedule",
@@ -445,6 +611,11 @@ def test_schedule_lifecycle() -> None:
 
 
 def test_run_due_endpoint() -> None:
+    """验证 run_due_endpoint 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc = _app()
     created = tc.post(
         "/v1/console/reports/schedule",
@@ -452,8 +623,8 @@ def test_run_due_endpoint() -> None:
     ).json()
     rid = created["report_id"]
 
-    # force due via direct service is awkward through HTTP; instead assert the
-    # endpoint returns 200 and reports metadata shape for any due schedule.
+    # 服务层行为验证。
+    # 调度任务管理。
     r = tc.post("/v1/console/reports/run-due")
     assert r.status_code == 200
     data = r.json()
@@ -466,8 +637,13 @@ def test_run_due_endpoint() -> None:
 
 
 def test_report_runs_history_and_retrieve() -> None:
+    """验证 report_runs_history_and_retrieve 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc = _app()
-    # export persists a run; capture its run_id
+    # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     exported = tc.get(
         "/v1/console/reports/export",
         params={"report_type": "cost", "tenant_id": "t1", "format": "csv"},
@@ -491,6 +667,11 @@ def test_report_runs_history_and_retrieve() -> None:
 
 
 def test_report_runs_history_filter_and_missing() -> None:
+    """验证 report_runs_history_filter_and_missing 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc = _app()
     filtered = tc.get(
         "/v1/console/reports/runs", params={"tenant_id": "t1", "report_type": "audit"}
@@ -502,12 +683,17 @@ def test_report_runs_history_filter_and_missing() -> None:
 
 
 def test_prune_runs_endpoint() -> None:
+    """验证 prune_runs_endpoint 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc = _app()
-    # create some runs first
+    # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     tc.get("/v1/console/reports/export", params={"report_type": "cost", "tenant_id": "t1"})
     before = tc.get("/v1/console/reports/runs", params={"tenant_id": "t1"}).json()["runs"]
     assert len(before) >= 1
-    # prune with a tiny retention window -> should remove those runs
+    # 验证数据保留策略，确保不会无限累积。
     r = tc.post(
         "/v1/console/reports/runs/prune",
         json={"retention_days": 0, "tenant_id": "t1"},
@@ -521,6 +707,11 @@ def test_prune_runs_endpoint() -> None:
 
 
 def test_schedule_with_retention_days() -> None:
+    """验证 schedule_with_retention_days 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc = _app()
     r = tc.post(
         "/v1/console/reports/schedule",
@@ -541,18 +732,23 @@ def test_schedule_with_retention_days() -> None:
     assert bad.status_code == 400
 
 
-# --- increment 9: schedule enable/disable + global default retention ---
+# 验证数据保留策略，确保不会无限累积。
 
 
 @pytest.mark.asyncio
 async def test_report_service_set_schedule_enabled_memory() -> None:
+    """验证 report_service_set_schedule_enabled_memory 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=False)
     sched = await svc.schedule(tenant_id="t1", report_type=ReportType.COST)
     assert sched.enabled is True
 
     paused = await svc.set_schedule_enabled(sched.report_id, enabled=False)
     assert paused.enabled is False
-    # a disabled schedule must not appear as due even if next_run is in the past
+    # 验证禁用状态下策略和功能不会意外生效。
     paused.next_run_at = datetime.now(timezone.utc) - timedelta(hours=1)
     await svc._schedules.save(paused)
     due = await svc._schedules.list_due()
@@ -564,6 +760,11 @@ async def test_report_service_set_schedule_enabled_memory() -> None:
 
 @pytest.mark.asyncio
 async def test_report_service_set_schedule_enabled_missing_raises() -> None:
+    """验证 report_service_set_schedule_enabled_missing_raises 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=False)
     with pytest.raises(KeyError):
         await svc.set_schedule_enabled("nope", enabled=False)
@@ -571,25 +772,35 @@ async def test_report_service_set_schedule_enabled_missing_raises() -> None:
 
 @pytest.mark.asyncio
 async def test_report_service_run_due_global_default_retention() -> None:
+    """验证 report_service_run_due_global_default_retention 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=False)
-    # schedule without explicit retention_days -> falls back to global default
+    # 验证数据保留策略，确保不会无限累积。
     sched = await svc.schedule(tenant_id="t1", report_type=ReportType.COST)
-    # a prior old run beyond the global default window exists for t1
+    # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     old = ReportRun.from_operations(await svc.generate(report_type=ReportType.COST, tenant_id="t1"))
     old.generated_at = datetime.now(timezone.utc) - timedelta(days=60)
     await svc._runs.save(old)
 
-    # service-level default applies when run_due has no explicit override
+    # 服务层行为验证。
     sched.next_run_at = datetime.now(timezone.utc) - timedelta(hours=1)
     await svc._schedules.save(sched)
     result = await svc.run_due(default_retention_days=30)
     assert result["generated"] == 1
     assert result["pruned"] == 1
     runs = await svc.list_runs(tenant_id="t1")
-    assert len(runs) == 1  # only the fresh run survives
+    assert len(runs) == 1  # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
 
 
 def test_schedule_toggle_enabled_endpoint() -> None:
+    """验证 schedule_toggle_enabled_endpoint 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc = _app()
     created = tc.post(
         "/v1/console/reports/schedule",
@@ -610,6 +821,11 @@ def test_schedule_toggle_enabled_endpoint() -> None:
 
 
 def test_schedule_enabled_disabled_skipped_by_run_due() -> None:
+    """验证 schedule_enabled_disabled_skipped_by_run_due 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc = _app()
     created = tc.post(
         "/v1/console/reports/schedule",
@@ -618,21 +834,26 @@ def test_schedule_enabled_disabled_skipped_by_run_due() -> None:
     rid = created["report_id"]
     tc.post(f"/v1/console/reports/schedule/{rid}/enabled", json={"enabled": False})
 
-    # run-due with a bad default retention days returns 400
+    # 验证数据保留策略，确保不会无限累积。
     bad = tc.post("/v1/console/reports/run-due", json={"default_retention_days": "x"})
     assert bad.status_code == 400
 
-    # valid run-due accepts the default retention override and returns shape
+    # 验证数据保留策略，确保不会无限累积。
     r = tc.post("/v1/console/reports/run-due", json={"default_retention_days": 30})
     assert r.status_code == 200
     assert "generated" in r.json() and "reports" in r.json()
 
 
-# --- increment 10: cron expression scheduling ---
+# 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
 
 
 @pytest.mark.asyncio
 async def test_cron_parse_and_next() -> None:
+    """验证 cron_parse_and_next 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     daily = CronSchedule("0 2 * * *")
     base = datetime(2026, 9, 18, 10, 30, tzinfo=timezone.utc)
     nxt = daily.next_after(base)
@@ -646,28 +867,43 @@ async def test_cron_parse_and_next() -> None:
 
 @pytest.mark.asyncio
 async def test_cron_invalid_expression() -> None:
+    """验证 cron_invalid_expression 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     with pytest.raises(CronExpressionError):
         CronSchedule("61 * * * *")
     with pytest.raises(CronExpressionError):
-        CronSchedule("0 2 * * * *")  # six fields
+        CronSchedule("0 2 * * * *")  # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     with pytest.raises(CronExpressionError):
         CronSchedule("")
 
 
 @pytest.mark.asyncio
 async def test_cron_weekday_restriction() -> None:
-    mon = CronSchedule("0 2 * * 1")  # Monday only (cron dow 1)
+    """验证 cron_weekday_restriction 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
+    mon = CronSchedule("0 2 * * 1")  # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     monday = datetime(2026, 9, 21, 2, 0, tzinfo=timezone.utc)
     sunday = datetime(2026, 9, 20, 2, 0, tzinfo=timezone.utc)
     assert mon.matches(monday) is True
     assert mon.matches(sunday) is False
     nxt = mon.next_after(monday)
-    assert nxt is not None and nxt.day == 28  # next Monday
+    assert nxt is not None and nxt.day == 28  # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
 
 
 @pytest.mark.asyncio
 async def test_cron_or_rule_when_both_day_fields_restricted() -> None:
-    both = CronSchedule("0 2 1 * 1")  # 1st of month OR Monday
+    """验证 cron_or_rule_when_both_day_fields_restricted 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
+    both = CronSchedule("0 2 1 * 1")  # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     first_sunday = datetime(2026, 11, 1, 2, 0, tzinfo=timezone.utc)
     assert both.matches(first_sunday) is True
     monday_10th = datetime(2026, 11, 9, 2, 0, tzinfo=timezone.utc)
@@ -676,6 +912,11 @@ async def test_cron_or_rule_when_both_day_fields_restricted() -> None:
 
 @pytest.mark.asyncio
 async def test_is_cron_cadence() -> None:
+    """验证 is_cron_cadence 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     assert is_cron_cadence("0 2 * * *") is True
     assert is_cron_cadence("*/15 * * * *") is True
     assert is_cron_cadence("daily") is False
@@ -684,6 +925,11 @@ async def test_is_cron_cadence() -> None:
 
 @pytest.mark.asyncio
 async def test_report_service_cron_schedule_advances() -> None:
+    """验证 report_service_cron_schedule_advances 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=False)
     sched = await svc.schedule(
         tenant_id="t1",
@@ -701,6 +947,11 @@ async def test_report_service_cron_schedule_advances() -> None:
 
 
 def test_schedule_cron_cadence_endpoint() -> None:
+    """验证 schedule_cron_cadence_endpoint 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc = _app()
     ok = tc.post(
         "/v1/console/reports/schedule",
@@ -724,6 +975,11 @@ def test_schedule_cron_cadence_endpoint() -> None:
 
 @pytest.mark.asyncio
 async def test_report_service_archive_run() -> None:
+    """验证 report_service_archive_run 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=False)
     await svc.generate(report_type=ReportType.COST, tenant_id="t1")
     runs = await svc.list_runs(tenant_id="t1")
@@ -743,6 +999,11 @@ async def test_report_service_archive_run() -> None:
 
 @pytest.mark.asyncio
 async def test_report_service_archive_run_missing_raises() -> None:
+    """验证 report_service_archive_run_missing_raises 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=False)
     with pytest.raises(KeyError):
         await svc.archive_run("nope", archived=True)
@@ -750,6 +1011,11 @@ async def test_report_service_archive_run_missing_raises() -> None:
 
 @pytest.mark.asyncio
 async def test_report_service_export_archive_zip() -> None:
+    """验证 report_service_export_archive_zip 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=False)
     await svc.generate(report_type=ReportType.COST, tenant_id="t1", fmt=ReportFormat.CSV)
     await svc.generate(report_type=ReportType.AUDIT, tenant_id="t1")
@@ -758,7 +1024,7 @@ async def test_report_service_export_archive_zip() -> None:
     assert parsed["count"] == 2
     assert len(parsed["files"]) == 2
     assert {f["format"] for f in parsed["files"]} == {"csv", "json"}
-    # validate zip contents
+    # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     import io
     import zipfile
 
@@ -769,6 +1035,11 @@ async def test_report_service_export_archive_zip() -> None:
 
 
 def test_report_run_archive_and_export_endpoints() -> None:
+    """验证 report_run_archive_and_export_endpoints 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc = _app()
     tc.get("/v1/console/reports/export", params={"report_type": "cost", "tenant_id": "t1"})
     listed = tc.get("/v1/console/reports/runs", params={"tenant_id": "t1"}).json()["runs"]
@@ -800,23 +1071,28 @@ def test_report_run_archive_and_export_endpoints() -> None:
 
 @pytest.mark.asyncio
 async def test_prune_skips_archived_runs_by_default() -> None:
+    """验证 prune_skips_archived_runs_by_default 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=False)
     await svc.generate(report_type=ReportType.COST, tenant_id="t1")
     runs = await svc.list_runs(tenant_id="t1")
     run_id = runs[0]["run_id"]
-    # force age
+    # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     for run in svc._runs._runs.values():
         run.generated_at = datetime.now(timezone.utc) - timedelta(days=100)
-    # archive it to protect it from retention pruning
+    # 验证数据保留策略，确保不会无限累积。
     await svc.archive_run(run_id, archived=True)
 
     result = await svc.prune_runs(retention_days=30, tenant_id="t1")
     assert result["removed"] == 0
     assert result["include_archived"] is False
-    # archived run survives
+    # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     assert len(await svc.list_runs(tenant_id="t1")) == 1
 
-    # explicit forced cleanup deletes it
+    # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     forced = await svc.prune_runs(retention_days=30, tenant_id="t1", include_archived=True)
     assert forced["removed"] == 1
     assert await svc.list_runs(tenant_id="t1") == []
@@ -824,6 +1100,11 @@ async def test_prune_skips_archived_runs_by_default() -> None:
 
 @pytest.mark.asyncio
 async def test_prune_archived_behavior_memory_repo() -> None:
+    """验证 prune_archived_behavior_memory_repo 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     repo = MemoryReportRunRepository()
     old_archived = ReportRun.from_operations(
         await _service().generate(report_type=ReportType.COST, tenant_id="t1")
@@ -839,16 +1120,21 @@ async def test_prune_archived_behavior_memory_repo() -> None:
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=30)
     removed_default = await repo.delete_older_than(cutoff)
-    assert removed_default == 1  # only the non-archived one
+    assert removed_default == 1  # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     assert await repo.get(old_archived.run_id) is not None
 
     removed_forced = await repo.delete_older_than(cutoff, include_archived=True)
-    assert removed_forced == 1  # the archived one now
+    assert removed_forced == 1  # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     assert await repo.get(old_archived.run_id) is None
 
 
 @pytest.mark.asyncio
 async def test_prune_archived_behavior_sqlalchemy_repo() -> None:
+    """验证 prune_archived_behavior_sqlalchemy_repo 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     engine = create_async_engine(
         "sqlite+aiosqlite://",
         poolclass=StaticPool,
@@ -882,13 +1168,18 @@ async def test_prune_archived_behavior_sqlalchemy_repo() -> None:
 
 
 def test_prune_endpoint_respects_archived() -> None:
+    """验证 prune_endpoint_respects_archived 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc = _app()
     tc.get("/v1/console/reports/export", params={"report_type": "cost", "tenant_id": "t1"})
     listed = tc.get("/v1/console/reports/runs", params={"tenant_id": "t1"}).json()["runs"]
     run_id = listed[0]["run_id"]
     tc.post(f"/v1/console/reports/runs/{run_id}/archive", json={"archived": True})
 
-    # default prune keeps archived
+    # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     preserved = tc.post(
         "/v1/console/reports/runs/prune", json={"retention_days": 0, "tenant_id": "t1"}
     )
@@ -896,7 +1187,7 @@ def test_prune_endpoint_respects_archived() -> None:
     assert preserved.json()["removed"] == 0
     assert preserved.json()["include_archived"] is False
 
-    # forced prune deletes archived
+    # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     forced = tc.post(
         "/v1/console/reports/runs/prune",
         json={"retention_days": 0, "tenant_id": "t1", "include_archived": True},
@@ -907,11 +1198,24 @@ def test_prune_endpoint_respects_archived() -> None:
 
 
 def _actions(svc: ReportService) -> list[str]:
+    """执行 _actions 对应的逻辑，并返回处理结果。
+
+    Args:
+        svc: ReportService，调用方传入的 svc 参数。
+
+    Returns:
+        list[str]，函数执行后的结果。
+    """
     return [e.action for e in svc._audit.events]
 
 
 @pytest.mark.asyncio
 async def test_report_service_schedule_writes_audit() -> None:
+    """验证 report_service_schedule_writes_audit 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=False)
     await svc.schedule(tenant_id="t1", report_type=ReportType.COST, cadence="daily")
     actions = _actions(svc)
@@ -924,6 +1228,11 @@ async def test_report_service_schedule_writes_audit() -> None:
 
 @pytest.mark.asyncio
 async def test_report_service_delete_schedule_writes_audit() -> None:
+    """验证 report_service_delete_schedule_writes_audit 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=False)
     sched = await svc.schedule(tenant_id="t1", report_type=ReportType.COST, cadence="daily")
     await svc.delete_schedule(sched.report_id)
@@ -936,6 +1245,11 @@ async def test_report_service_delete_schedule_writes_audit() -> None:
 
 @pytest.mark.asyncio
 async def test_report_service_set_schedule_enabled_writes_audit() -> None:
+    """验证 report_service_set_schedule_enabled_writes_audit 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=False)
     sched = await svc.schedule(tenant_id="t1", report_type=ReportType.COST, cadence="daily")
     await svc.set_schedule_enabled(sched.report_id, False)
@@ -947,6 +1261,11 @@ async def test_report_service_set_schedule_enabled_writes_audit() -> None:
 
 @pytest.mark.asyncio
 async def test_report_service_generate_writes_audit() -> None:
+    """验证 report_service_generate_writes_audit 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=False)
     await svc.generate(report_type=ReportType.COST, tenant_id="t1", fmt=ReportFormat.JSON)
     actions = _actions(svc)
@@ -958,6 +1277,11 @@ async def test_report_service_generate_writes_audit() -> None:
 
 @pytest.mark.asyncio
 async def test_report_service_archive_run_writes_audit() -> None:
+    """验证 report_service_archive_run_writes_audit 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=False)
     report = await svc.generate(report_type=ReportType.COST, tenant_id="t1")
     run = ReportRun.from_operations(report)
@@ -971,6 +1295,11 @@ async def test_report_service_archive_run_writes_audit() -> None:
 
 @pytest.mark.asyncio
 async def test_report_service_prune_writes_audit() -> None:
+    """验证 report_service_prune_writes_audit 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=False)
     report = await svc.generate(report_type=ReportType.COST, tenant_id="t1")
     run = ReportRun.from_operations(report)
@@ -987,6 +1316,11 @@ async def test_report_service_prune_writes_audit() -> None:
 
 @pytest.mark.asyncio
 async def test_report_service_run_due_writes_audit() -> None:
+    """验证 report_service_run_due_writes_audit 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=False)
     sched = await svc.schedule(tenant_id="t1", report_type=ReportType.COST, cadence="daily")
     sched.next_run_at = datetime.now(timezone.utc) - timedelta(hours=1)
@@ -1001,6 +1335,14 @@ async def test_report_service_run_due_writes_audit() -> None:
 
 @pytest.mark.asyncio
 async def test_report_service_export_archive_to_writes_zip_to_sink(tmp_path) -> None:
+    """验证 report_service_export_archive_to_writes_zip_to_sink 对应的业务行为、边界条件和回归场景。
+
+    Args:
+        tmp_path: Any，调用方传入的 tmp_path 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=False)
     await svc.generate(report_type=ReportType.COST, tenant_id="t1", fmt=ReportFormat.CSV)
     await svc.generate(report_type=ReportType.AUDIT, tenant_id="t1")
@@ -1018,6 +1360,14 @@ async def test_report_service_export_archive_to_writes_zip_to_sink(tmp_path) -> 
 
 
 def test_report_archive_export_endpoint_streams_valid_zip(tmp_path) -> None:
+    """验证 report_archive_export_endpoint_streams_valid_zip 对应的业务行为、边界条件和回归场景。
+
+    Args:
+        tmp_path: Any，调用方传入的 tmp_path 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc = _app()
     tc.get("/v1/console/reports/export", params={"report_type": "cost", "tenant_id": "t1"})
     exported = tc.get("/v1/console/reports/runs/archive", params={"tenant_id": "t1"})
@@ -1033,6 +1383,11 @@ def test_report_archive_export_endpoint_streams_valid_zip(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_report_run_repository_list_page_memory() -> None:
+    """验证 report_run_repository_list_page_memory 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     repo = MemoryReportRunRepository()
     svc = _service(seed_audit=False)
     for _ in range(5):
@@ -1047,17 +1402,17 @@ async def test_report_run_repository_list_page_memory() -> None:
     page3, c3 = await repo.list_page(tenant_id="t1", limit=2, cursor=c2)
     assert len(page3) == 1
     assert c3 is None
-    # no overlap across pages
+    # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     ids = [r.run_id for r in page1 + page2 + page3]
     assert len(ids) == len(set(ids)) == 5
 
 
 @pytest.mark.asyncio
 async def test_report_run_keyset_cursor_stable_under_duplicate_timestamps() -> None:
-    """Keyset cursor must page stably even when rows share generated_at.
+    """验证 report_run_keyset_cursor_stable_under_duplicate_timestamps 对应的业务行为、边界条件和回归场景。
 
-    Offsets drift when rows before the cursor change; a keyset anchored on
-    (generated_at, run_id) must return disjoint, complete pages regardless.
+    Returns:
+        None，函数执行后的结果。
     """
     repo = MemoryReportRunRepository()
     fixed_ts = datetime(2026, 9, 18, 12, 0, 0, tzinfo=timezone.utc)
@@ -1082,7 +1437,11 @@ async def test_report_run_keyset_cursor_stable_under_duplicate_timestamps() -> N
 
 
 def test_report_run_keyset_cursor_roundtrip() -> None:
-    """The opaque keyset cursor must round-trip (generated_at, run_id)."""
+    """验证 report_run_keyset_cursor_roundtrip 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     ts = datetime(2026, 9, 18, 13, 0, 0, tzinfo=timezone.utc)
     cursor = _encode_run_cursor(ts, "abc123")
     decoded_ts, decoded_id = _decode_run_cursor(cursor)
@@ -1094,6 +1453,11 @@ def test_report_run_keyset_cursor_roundtrip() -> None:
 
 @pytest.mark.asyncio
 async def test_report_run_repository_list_page_sqlalchemy() -> None:
+    """验证 report_run_repository_list_page_sqlalchemy 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     engine = create_async_engine(
         "sqlite+aiosqlite://",
         poolclass=StaticPool,
@@ -1120,6 +1484,11 @@ async def test_report_run_repository_list_page_sqlalchemy() -> None:
 
 @pytest.mark.asyncio
 async def test_report_service_list_runs_paginated() -> None:
+    """验证 report_service_list_runs_paginated 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     svc = _service(seed_audit=False)
     for _ in range(5):
         await svc.generate(report_type=ReportType.COST, tenant_id="t1")
@@ -1132,6 +1501,11 @@ async def test_report_service_list_runs_paginated() -> None:
 
 
 def test_report_list_runs_endpoint_cursor_pagination() -> None:
+    """验证 report_list_runs_endpoint_cursor_pagination 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc = _app()
     for _ in range(3):
         tc.get("/v1/console/reports/export", params={"report_type": "cost", "tenant_id": "t1"})

@@ -23,6 +23,11 @@ class TestConditionParser:
 
     @pytest.fixture
     def parser(self) -> ConditionParser:
+        """执行 parser 对应的逻辑，并返回处理结果。
+
+        Returns:
+            ConditionParser，函数执行后的结果。
+        """
         return ConditionParser()
 
     def test_equal_string(self, parser: ConditionParser) -> None:
@@ -165,7 +170,7 @@ class TestWorkflowEngine:
         next_agent = engine.get_next_agent(
             workflow,
             "test-execution",
-            {"pass_rate": 0.6},  # < 0.8
+            {"pass_rate": 0.6},  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         )
 
         assert next_agent == "code-review"
@@ -177,7 +182,7 @@ class TestWorkflowEngine:
         next_agent = engine.get_next_agent(
             workflow,
             "test-execution",
-            {"pass_rate": 0.95},  # >= 0.8
+            {"pass_rate": 0.95},  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         )
 
         assert next_agent == "doc-generator"

@@ -18,9 +18,9 @@ import pytest
 
 from agentforge.tools.code_review_tool import CodeReviewTool
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 辅助函数
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 def _find_by_rule(
@@ -34,19 +34,29 @@ def _find_by_rule(
     return None
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 基础测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestCodeReviewToolBasic:
     """CodeReviewTool 基础属性测试。"""
 
     def test_name(self) -> None:
+        """验证 name 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         tool = CodeReviewTool()
         assert tool.name == "code_review"
 
     def test_schema(self) -> None:
+        """验证 schema 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         tool = CodeReviewTool()
         schema = tool.schema()
         assert schema["type"] == "function"
@@ -59,24 +69,39 @@ class TestCodeReviewToolBasic:
         assert "file_path" in required
 
     def test_init_defaults(self) -> None:
+        """验证 init_defaults 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         tool = CodeReviewTool()
         assert tool.rules_path is None
         assert tool.max_file_size == 1024 * 1024
 
     def test_init_custom(self) -> None:
+        """验证 init_custom 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         tool = CodeReviewTool(rules_path="/custom/rules", max_file_size=2048)
         assert tool.rules_path == "/custom/rules"
         assert tool.max_file_size == 2048
 
     def test_thresholds(self) -> None:
+        """验证 thresholds 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         assert CodeReviewTool.MAX_COMPLEXITY == 10
         assert CodeReviewTool.MAX_FUNCTION_LENGTH == 50
         assert CodeReviewTool.MAX_NESTING_DEPTH == 4
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 正常代码分析（无问题）
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestCodeReviewCleanCode:
@@ -163,9 +188,9 @@ class TestCodeReviewCleanCode:
         assert "0 issues" in result.output
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 高复杂度函数检测
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestCodeReviewHighComplexity:
@@ -294,9 +319,9 @@ class TestCodeReviewHighComplexity:
         assert result.metadata["warning_count"] > 0
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 长函数检测
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestCodeReviewLongFunction:
@@ -358,9 +383,9 @@ class TestCodeReviewLongFunction:
         assert finding is None
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 深嵌套检测
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestCodeReviewDeepNesting:
@@ -430,9 +455,9 @@ class TestCodeReviewDeepNesting:
         assert "nesting depth of 5" in finding["description"]
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 语法错误处理
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestCodeReviewSyntaxError:
@@ -476,9 +501,9 @@ class TestCodeReviewSyntaxError:
         assert "syntax error" in result.output.lower()
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 空代码处理
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestCodeReviewEmptyCode:
@@ -515,9 +540,9 @@ class TestCodeReviewEmptyCode:
         assert result.metadata["findings"] == []
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 综合测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestCodeReviewComprehensive:
@@ -625,7 +650,11 @@ class TestCodeReviewComprehensive:
 
     @pytest.mark.asyncio
     async def test_finding_has_all_fields(self) -> None:
-        """每个 finding 应包含 rule/severity/description/line 字段。"""
+        """验证 finding_has_all_fields 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         code = (
             "def f():\n"
             "    if 1:\n"

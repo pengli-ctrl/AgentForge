@@ -1,3 +1,15 @@
+"""AgentForge 平台测试层：test_knowledge_api。
+
+本测试模块验证 test_knowledge_api 覆盖的业务路径、边界条件和回归场景。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+-
+主要函数：test_knowledge_ingest_and_search、test_knowledge_search_modes_and_weights、test_knowledge_search_respects_tenant_isolation。
+"""
+
 from fastapi.testclient import TestClient
 
 from agentforge.platform.api.app import create_platform_app
@@ -5,6 +17,11 @@ from agentforge.platform.runtime import build_memory_container
 
 
 def test_knowledge_ingest_and_search() -> None:
+    """验证 knowledge_ingest_and_search 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     client = TestClient(create_platform_app(build_memory_container()))
     response = client.post(
         "/v1/knowledge/documents",
@@ -28,6 +45,11 @@ def test_knowledge_ingest_and_search() -> None:
 
 
 def test_knowledge_search_modes_and_weights() -> None:
+    """验证 knowledge_search_modes_and_weights 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     client = TestClient(create_platform_app(build_memory_container()))
     client.post(
         "/v1/knowledge/documents",
@@ -56,6 +78,11 @@ def test_knowledge_search_modes_and_weights() -> None:
 
 
 def test_knowledge_search_respects_tenant_isolation() -> None:
+    """验证 knowledge_search_respects_tenant_isolation 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     client = TestClient(create_platform_app(build_memory_container()))
     client.post(
         "/v1/knowledge/documents",

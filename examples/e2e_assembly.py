@@ -48,9 +48,9 @@ logging.basicConfig(
 logger = logging.getLogger("e2e_assembly")
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # Mock LLM Gateway — 模拟 LLM 推理服务（生产环境替换为 VLLMGateway）
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 class MockLLMGateway(LLMGateway):
     """Mock LLM Gateway — 返回预设的审查结果。
@@ -60,6 +60,11 @@ class MockLLMGateway(LLMGateway):
     """
 
     def __init__(self) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        
+        Returns:
+            None，函数执行后的结果。
+        """
         super().__init__(model="mock-llm-v1")
         self._call_count = 0
 
@@ -70,6 +75,17 @@ class MockLLMGateway(LLMGateway):
         max_tokens: int | None = None,
         temperature: float | None = None,
     ) -> LLMResponse:
+        """执行 chat 对应的逻辑，并返回处理结果。
+        
+        Args:
+            messages: list[dict[str, str]] | str，调用方传入的 messages 参数。
+            tools: list[dict] | None，调用方传入的 tools 参数。
+            max_tokens: int | None，调用方传入的 max_tokens 参数。
+            temperature: float | None，调用方传入的 temperature 参数。
+        
+        Returns:
+            LLMResponse，函数执行后的结果。
+        """
         self._call_count += 1
         # 模拟 LLM 返回结构化的审查结果
         return LLMResponse(
@@ -87,9 +103,9 @@ class MockLLMGateway(LLMGateway):
         )
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 示例 1：EventBus + Agent 协同 — 事件驱动的 Agent 间通信
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 async def demo_event_bus_agent_communication() -> None:
     """演示 EventBus 驱动的 Agent 间通信。
@@ -177,9 +193,9 @@ async def demo_event_bus_agent_communication() -> None:
     logger.info("")
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 示例 2：WorkflowEngine — 完整工作流编排
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 async def demo_workflow_engine() -> None:
     """演示 WorkflowEngine 编排多 Agent 工作流。
@@ -234,9 +250,9 @@ async def demo_workflow_engine() -> None:
     logger.info("")
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 示例 3：Context Snapshot 状态隔离
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 async def demo_context_snapshot_isolation() -> None:
     """演示 Context Snapshot 状态隔离机制。
@@ -290,9 +306,9 @@ async def demo_context_snapshot_isolation() -> None:
     logger.info("")
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 示例 4：CircuitBreaker 熔断保护
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 async def demo_circuit_breaker() -> None:
     """演示 CircuitBreaker 熔断器保护 Agent 调用。
@@ -357,19 +373,39 @@ async def demo_circuit_breaker() -> None:
     logger.info("")
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 示例 5：CircuitBreaker 保护 Agent 调用（完整场景）
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 class FailingAgent:
     """模拟一个会失败的 Agent，用于演示熔断器保护。"""
 
     def __init__(self, name: str, fail_times: int) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        
+        Args:
+            name: str，调用方传入的 name 参数。
+            fail_times: int，调用方传入的 fail_times 参数。
+        
+        Returns:
+            None，函数执行后的结果。
+        """
         self.name = name
         self._fail_times = fail_times
         self._call_count = 0
 
     async def execute(self, event: AgentEvent) -> AgentEvent:
+        """执行 execute 对应的逻辑，并返回处理结果。
+        
+        Args:
+            event: AgentEvent，调用方传入的 event 参数。
+        
+        Returns:
+            AgentEvent，函数执行后的结果。
+        
+        Raises:
+            RuntimeError: 当输入、状态或外部依赖不满足要求时抛出。
+        """
         self._call_count += 1
         if self._call_count <= self._fail_times:
             raise RuntimeError(f"Agent {self.name} simulated failure #{self._call_count}")
@@ -455,9 +491,9 @@ async def demo_circuit_breaker_protecting_agent() -> None:
     logger.info("")
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 主入口
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 async def main() -> None:
     """运行所有端到端组装示例。"""

@@ -1,3 +1,15 @@
+"""AgentForge 平台测试层：test_policy_engine。
+
+本测试模块验证 test_policy_engine 覆盖的业务路径、边界条件和回归场景。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+-
+主要函数：test_unknown_action_fails_closed、test_writeback_requires_approval_even_for_admin、test_view_allowed_with_permission_and_role、test_writeback_without_view_permission_denied、test_disabled_policy_denied、test_relation_check_gates_resource_access、test_custom_tenant_policy、test_policy_file_loader_parses_valid_document。
+"""
+
 from __future__ import annotations
 
 from agentforge.platform.application.builtin_policies import builtin_policies
@@ -12,6 +24,11 @@ from agentforge.platform.domain.policy import (
 
 
 async def test_unknown_action_fails_closed() -> None:
+    """验证 unknown_action_fails_closed 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     engine = PolicyEngine(policies=builtin_policies())
     decision = await engine.authorize(
         tenant_id="t1",
@@ -24,6 +41,11 @@ async def test_unknown_action_fails_closed() -> None:
 
 
 async def test_writeback_requires_approval_even_for_admin() -> None:
+    """验证 writeback_requires_approval_even_for_admin 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     engine = PolicyEngine(policies=builtin_policies())
     decision = await engine.authorize(
         tenant_id="t1",
@@ -36,6 +58,11 @@ async def test_writeback_requires_approval_even_for_admin() -> None:
 
 
 async def test_view_allowed_with_permission_and_role() -> None:
+    """验证 view_allowed_with_permission_and_role 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     engine = PolicyEngine(policies=builtin_policies())
     decision = await engine.authorize(
         tenant_id="t1",
@@ -49,6 +76,11 @@ async def test_view_allowed_with_permission_and_role() -> None:
 
 
 async def test_writeback_without_view_permission_denied() -> None:
+    """验证 writeback_without_view_permission_denied 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     engine = PolicyEngine(policies=builtin_policies())
     decision = await engine.authorize(
         tenant_id="t1",
@@ -61,6 +93,11 @@ async def test_writeback_without_view_permission_denied() -> None:
 
 
 async def test_disabled_policy_denied() -> None:
+    """验证 disabled_policy_denied 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     engine = PolicyEngine(
         policies=[
             ActionPolicy(
@@ -83,6 +120,11 @@ async def test_disabled_policy_denied() -> None:
 
 
 async def test_relation_check_gates_resource_access() -> None:
+    """验证 relation_check_gates_resource_access 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     client = OpenFGAClient()
     client.write(
         "t1",
@@ -130,6 +172,11 @@ async def test_relation_check_gates_resource_access() -> None:
 
 
 async def test_custom_tenant_policy() -> None:
+    """验证 custom_tenant_policy 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     engine = PolicyEngine(
         policies=[
             ActionPolicy(
@@ -152,6 +199,11 @@ async def test_custom_tenant_policy() -> None:
 
 
 def test_policy_file_loader_parses_valid_document() -> None:
+    """验证 policy_file_loader_parses_valid_document 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     doc = (
         "["
         '{"name": "ticket_writeback", "tenant_id": "*", "action": "ticket.writeback",'
@@ -169,20 +221,28 @@ def test_policy_file_loader_parses_valid_document() -> None:
 
 
 def test_policy_file_loader_rejects_invalid_or_unknown_fields() -> None:
-    # unknown field => extra="forbid" must raise validation error
+    # 验证未知输入场景，确保系统不会静默放行。
+    """验证 policy_file_loader_rejects_invalid_or_unknown_fields 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+
+    Raises:
+        AssertionError: 当输入、状态或外部依赖不满足要求时抛出。
+    """
     bad_unknown = '[{"name":"x","tenant_id":"*","action":"a","unknown":1}]'
     try:
         PolicyFileLoader.from_string(bad_unknown)
         raise AssertionError("expected validation error")
     except Exception:
         pass
-    # not a list
+    # 验证非列表输入，确保类型校验有效。
     try:
         PolicyFileLoader.from_string('{"name":"x"}')
         raise AssertionError("expected ValueError")
     except ValueError:
         pass
-    # not JSON
+    # 验证非 JSON 输入，确保解析异常被正确处理。
     try:
         PolicyFileLoader.from_string("not-json{")
         raise AssertionError("expected ValueError")
@@ -191,6 +251,11 @@ def test_policy_file_loader_rejects_invalid_or_unknown_fields() -> None:
 
 
 async def test_policy_engine_reload_atomically_replaces_policies() -> None:
+    """验证 policy_engine_reload_atomically_replaces_policies 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     engine = PolicyEngine(policies=[])
     doc1 = (
         '[{"name": "p1", "tenant_id": "*", "action": "ticket.ping",'
@@ -202,7 +267,7 @@ async def test_policy_engine_reload_atomically_replaces_policies() -> None:
     d = await engine.authorize(
         tenant_id="t1", principal="u1", action="ticket.ping", roles=["admin"]
     )
-    assert d.outcome == ValidationOutcome.DENIED  # disabled policy stays denied
+    assert d.outcome == ValidationOutcome.DENIED  # 验证禁用状态下策略和功能不会意外生效。
 
     doc2 = (
         '[{"name": "p1", "tenant_id": "*", "action": "ticket.ping",'
@@ -217,6 +282,15 @@ async def test_policy_engine_reload_atomically_replaces_policies() -> None:
 
 
 async def test_policy_engine_keep_previous_on_bad_reload() -> None:
+    """验证 policy_engine_keep_previous_on_bad_reload 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+
+    Raises:
+        ValueError: 当输入、状态或外部依赖不满足要求时抛出。
+        AssertionError: 当输入、状态或外部依赖不满足要求时抛出。
+    """
     engine = PolicyEngine(
         policies=PolicyFileLoader.from_string(
             '[{"name":"p","tenant_id":"*","action":"a","enabled":true}]'
@@ -227,6 +301,14 @@ async def test_policy_engine_keep_previous_on_bad_reload() -> None:
     assert before_d.outcome == ValidationOutcome.ALLOWED
 
     def bad_loader():
+        """执行 bad_loader 对应的逻辑，并返回处理结果。
+
+        Returns:
+            None，函数执行后的结果。
+
+        Raises:
+            ValueError: 当输入、状态或外部依赖不满足要求时抛出。
+        """
         raise ValueError("config source unavailable")
 
     try:
@@ -240,6 +322,14 @@ async def test_policy_engine_keep_previous_on_bad_reload() -> None:
 
 
 def test_policy_engine_reload_rejects_duplicate_key() -> None:
+    """验证 policy_engine_reload_rejects_duplicate_key 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+
+    Raises:
+        AssertionError: 当输入、状态或外部依赖不满足要求时抛出。
+    """
     engine = PolicyEngine(policies=[])
     dup = '[{"name":"a","tenant_id":"t1","action":"x"},{"name":"b","tenant_id":"t1","action":"x"}]'
     try:
@@ -251,6 +341,11 @@ def test_policy_engine_reload_rejects_duplicate_key() -> None:
 
 
 def test_policy_engine_emits_versioned_reload_event() -> None:
+    """验证 policy_engine_emits_versioned_reload_event 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     events: list[tuple] = []
     engine = PolicyEngine(
         policies=[],
@@ -273,6 +368,11 @@ def test_policy_engine_emits_versioned_reload_event() -> None:
 
 
 def test_policy_engine_reload_from_loader_emits_source_label() -> None:
+    """验证 policy_engine_reload_from_loader_emits_source_label 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     events: list[str] = []
     engine = PolicyEngine(
         policies=[],
@@ -288,6 +388,15 @@ def test_policy_engine_reload_from_loader_emits_source_label() -> None:
 
 
 def test_policy_engine_bad_reload_emits_no_event() -> None:
+    """验证 policy_engine_bad_reload_emits_no_event 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+
+    Raises:
+        ValueError: 当输入、状态或外部依赖不满足要求时抛出。
+        AssertionError: 当输入、状态或外部依赖不满足要求时抛出。
+    """
     events: list[int] = []
     engine = PolicyEngine(
         policies=PolicyFileLoader.from_string(
@@ -298,6 +407,14 @@ def test_policy_engine_bad_reload_emits_no_event() -> None:
     base_rev = engine.source_revision
 
     def bad_loader():
+        """执行 bad_loader 对应的逻辑，并返回处理结果。
+
+        Returns:
+            None，函数执行后的结果。
+
+        Raises:
+            ValueError: 当输入、状态或外部依赖不满足要求时抛出。
+        """
         raise ValueError("config source unavailable")
 
     try:
@@ -306,4 +423,4 @@ def test_policy_engine_bad_reload_emits_no_event() -> None:
     except ValueError:
         pass
     assert engine.source_revision == base_rev
-    assert events == []  # no audit event on failed swap
+    assert events == []  # 验证失败场景，确保异常路径能够被正确处理。

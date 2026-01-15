@@ -1,23 +1,12 @@
-"""
-Unified Agent base class — runtime layer core component.
+"""AgentForge 核心运行时层：agent。
 
-ABC abstract base + 5 standard interfaces enabling hot-pluggable registration
-of 12+ Agent types. Any concrete Agent inherits BaseAgent and implements
-execute() — the DAG engine calls Agents uniformly regardless of their
-internal logic.
+本模块负责 agent 相关能力，是 核心运行时层 的组成部分。
 
-Design rationale:
-    Why a base class instead of duck typing?
-    1. Type safety: DAG engine can verify Agent interfaces at registration time
-    2. Cross-cutting concerns: timeout, degradation, tracing, memory — all
-       Agent subclasses inherit these automatically via the template method pattern
-    3. Consistent error handling: on_error() provides a uniform degradation path
-
-    Why 5 methods instead of just execute()?
-    - get_tools() lets the runtime inject appropriate tools per agent
-    - get_memory_config() lets each agent declare its memory needs
-    - validate_input() catches bad data early, before expensive LLM calls
-    - on_error() enables graceful degradation per agent type
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
+- 关键路径应保留日志、指标或链路追踪信息。
+- 主要类：AgentState、Tool、AgentResult、BaseAgent、Agent。
 """
 
 import asyncio
@@ -36,18 +25,32 @@ logger = logging.getLogger(__name__)
 
 
 class AgentState(Enum):
-    """Agent lifecycle states. State transitions are enforced."""
+    """AgentState。
 
-    IDLE = "idle"  # Ready to accept work
-    RUNNING = "running"  # Currently executing
-    DEGRADED = "degraded"  # Running with degraded capabilities
-    FAILED = "failed"  # Terminal failure, needs reset
-    TIMEOUT = "timeout"  # Timed out, can retry
+    AgentState 是状态或类型枚举，用于约束系统内部取值，避免散落的字符串常量。
+
+    主要成员：
+    - IDLE: 'idle'。
+    - RUNNING: 'running'。
+    - DEGRADED: 'degraded'。
+    - FAILED: 'failed'。
+    - TIMEOUT: 'timeout'。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    """
+
+    IDLE = "idle"  # 就绪状态。
+    RUNNING = "running"  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    DEGRADED = "degraded"  # 执行中状态。
+    FAILED = "failed"  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    TIMEOUT = "timeout"  # 失败重试。
 
 
-# Valid state transitions (enforced in _transition_to). Kept OUTSIDE the Enum
-# body because Python's EnumMeta rewrites class-namespace dicts whose keys are
-# enum members, which would corrupt a member-keyed mapping into the class itself.
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 _AGENT_STATE_TRANSITIONS = {
     AgentState.IDLE: {AgentState.RUNNING},
     AgentState.RUNNING: {
@@ -64,46 +67,79 @@ _AGENT_STATE_TRANSITIONS = {
 
 @dataclass
 class Tool:
-    """
-    Tool descriptor for Agent tool-use.
-    Agents declare which tools they need via get_tools().
+    """Tool。
+
+    Tool 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - name: str。
+    - description: str。
+    - parameters: dict。
+    - required: bool。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
     """
 
     name: str
     description: str
-    parameters: dict = field(default_factory=dict)  # JSON Schema for params
+    parameters: dict = field(default_factory=dict)  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
     required: bool = True
 
 
 @dataclass
 class AgentResult:
-    """Standardized result returned by Agent.execute()."""
+    """AgentResult。
+
+    AgentResult 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - success: bool。
+    - data: dict。
+    - error: Optional[str]。
+    - degraded: bool。
+    - token_usage: dict。
+    - cost: float。
+    - latency_ms: float。
+    - span: Optional[Span]。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    """
 
     success: bool
     data: dict = field(default_factory=dict)
     error: Optional[str] = None
-    degraded: bool = False  # True if result used fallback/degraded path
-    token_usage: dict = field(default_factory=dict)  # {prompt_tokens, completion_tokens, total}
+    degraded: bool = False  # 获取结果。
+    token_usage: dict = field(default_factory=dict)  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
     cost: float = 0.0
     latency_ms: float = 0.0
-    span: Optional[Span] = None  # The AGENT span for this execution
+    span: Optional[Span] = None  # Agent 注册与查询。
 
 
 class BaseAgent(ABC):
-    """
-    Abstract base class for all Agent types.
+    """BaseAgent。
 
-    Template method pattern: run() orchestrates the full lifecycle
-    (validate → memory read → execute → memory write → trace).
-    Subclasses only implement execute() and optionally override the others.
+    BaseAgent 是核心运行时组件，负责状态管理、调度和跨模块协作。
 
-    Lifecycle per call:
-        1. validate_input() — reject bad data early
-        2. Memory read — populate working memory from short/long-term
-        3. execute() — core Agent logic (abstract, subclass implements)
-        4. Memory write — persist results to appropriate tier
-        5. Error handling — on_error() if any step fails
-        6. Tracing — record AgentSpan with full attributes
+    主要成员：
+    - 方法 execute()。
+    - 方法 get_tools()。
+    - 方法 get_memory_config()。
+    - 方法 validate_input()。
+    - 方法 on_error()。
+    - 方法 run()。
+    - 方法 name()。
+    - 方法 state()。
+    - 方法 memory()。
+    - 方法 stats()。
+    - 方法 reset()。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
     """
 
     def __init__(
@@ -112,6 +148,16 @@ class BaseAgent(ABC):
         memory_config: Optional[MemoryConfig] = None,
         timeout_config: Optional[TimeoutConfig] = None,
     ):
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            name: str，调用方传入的 name 参数。
+            memory_config: Optional[MemoryConfig]，调用方传入的 memory_config 参数。
+            timeout_config: Optional[TimeoutConfig]，调用方传入的 timeout_config 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._name = name
         self._state = AgentState.IDLE
         self._memory = MemoryManager(
@@ -123,57 +169,60 @@ class BaseAgent(ABC):
         self._error_count = 0
         self._last_error: Optional[str] = None
 
-    # ── Core interface (subclass must implement) ────────────────────────
+    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
     @abstractmethod
     async def execute(self, input_data: dict) -> dict:
-        """
-        Core Agent logic. Subclasses implement their specific behavior here.
+        """执行 execute 对应的逻辑，并返回处理结果。
 
         Args:
-            input_data: Validated input dict. Always contains at least:
-                - "query": str — the user/system query
-                - "context": dict — contextual data from upstream nodes
+            input_data: dict，调用方传入的 input_data 参数。
 
         Returns:
-            Result dict. Must contain at least:
-                - "result": Any — the primary output
-                - Optionally: "tokens", "cost", "metadata"
+            dict，函数执行后的结果。
         """
         ...
 
-    # ── Optional overrides (default implementations provided) ───────────
+    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
     def get_tools(self) -> list[Tool]:
-        """
-        Return list of tools this Agent can use.
-        Override to declare agent-specific tools (search, code_exec, etc.).
-        Default: no tools (pure reasoning agent).
+        """读取并返回指定数据，并返回调用方需要的结果。
+
+        Returns:
+            list[Tool]，函数执行后的结果。
         """
         return []
 
     def get_memory_config(self) -> MemoryConfig:
-        """
-        Return this Agent's memory configuration.
-        Override to customize which memory tiers are enabled.
-        Default: working + short-term, no long-term.
+        """读取并返回指定数据，并返回调用方需要的结果。
+
+        Returns:
+            MemoryConfig，函数执行后的结果。
         """
         return MemoryConfig()
 
     def validate_input(self, input_data: dict) -> bool:
-        """
-        Validate input before execution. Reject early to avoid expensive LLM calls.
-        Default: check required keys exist.
+        """校验输入或状态，并返回调用方需要的结果。
+
+        Args:
+            input_data: dict，调用方传入的 input_data 参数。
+
+        Returns:
+            bool，函数执行后的结果。
         """
         if not isinstance(input_data, dict):
             return False
-        # Every agent expects at least a "query" field
+        # Agent 注册与查询。
         return "query" in input_data
 
     def on_error(self, error: Exception) -> dict:
-        """
-        Handle execution errors. Default: return degraded result.
-        Override for agent-specific error recovery.
+        """执行 on_error 对应的逻辑，并返回处理结果。
+
+        Args:
+            error: Exception，调用方传入的 error 参数。
+
+        Returns:
+            dict，函数执行后的结果。
         """
         logger.warning("Agent[%s] error: %s", self._name, str(error), exc_info=True)
         return {
@@ -183,22 +232,29 @@ class BaseAgent(ABC):
             "fallback": "default_error_response",
         }
 
-    # ── Template method: full execution lifecycle ───────────────────────
+    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
     async def run(
         self,
         input_data: dict,
         span: Optional[Span] = None,
     ) -> AgentResult:
-        """
-        Full Agent lifecycle: validate → execute → trace.
+        """执行 run 对应的逻辑，并返回处理结果。
 
-        This is what the DAG engine calls. Not meant to be overridden.
+        Args:
+            input_data: dict，调用方传入的 input_data 参数。
+            span: Optional[Span]，调用方传入的 span 参数。
+
+        Returns:
+            AgentResult，函数执行后的结果。
+
+        Raises:
+            ValueError: 当输入、状态或外部依赖不满足要求时抛出。
         """
         start_time = time.monotonic()
         self._execution_count += 1
 
-        # State check
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         if self._state == AgentState.RUNNING:
             return AgentResult(
                 success=False,
@@ -210,21 +266,21 @@ class BaseAgent(ABC):
         status = SpanStatus.OK
 
         try:
-            # Step 1: Input validation
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             if not self.validate_input(input_data):
                 raise ValueError(f"Invalid input for Agent[{self._name}]")
 
-            # Step 2: Read from short-term memory (if enabled)
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             session_context = await self._memory.read("short_term", "session_context")
             if session_context:
                 input_data["session_context"] = session_context
 
-            # Step 3: Execute with agent-level timeout (30s default)
+            # Agent 注册与查询。
             result_data = await self._timeout_mgr.execute_with_agent_timeout(
                 self.execute(input_data)
             )
 
-            # Step 4: Write result to short-term memory
+            # 获取结果。
             await self._memory.write("short_term", f"last_output_{self._name}", result_data)
 
         except asyncio.TimeoutError:
@@ -242,27 +298,27 @@ class BaseAgent(ABC):
             result_data = self.on_error(e)
 
         finally:
-            # Step 5: Clear working memory after each execution
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             await self._memory.clear_working()
 
-            # Step 6: End span if provided
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             if span:
                 await self._end_agent_span(span, result_data, status)
 
-        # Compute result
+        # 获取结果。
         elapsed_ms = (time.monotonic() - start_time) * 1000
         success = status == SpanStatus.OK or status == SpanStatus.DEGRADED
         degraded = result_data.get("degraded", False)
 
-        # Resolve an accurate terminal/lifecycle state. If an exception already
-        # moved us to TIMEOUT or FAILED, we must NOT overwrite it back to IDLE —
-        # otherwise the failure state would be lost (a real correctness bug).
+        # 就绪状态。
+        # 失败状态。
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         if self._state == AgentState.TIMEOUT or status == SpanStatus.TIMEOUT:
-            # Keep the timeout state so the caller/retry layer can observe and
-            # decide whether to retry. TIMEOUT → IDLE happens via reset().
+            # 超时状态。
+            # 超时状态。
             pass
         elif self._state == AgentState.FAILED or status == SpanStatus.ERROR:
-            # Keep the terminal failure state; caller must call reset() to reuse.
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             pass
         elif degraded:
             status = SpanStatus.DEGRADED
@@ -281,17 +337,18 @@ class BaseAgent(ABC):
             span=span,
         )
 
-    # ── Internal helpers ────────────────────────────────────────────────
+    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
     def _transition_to(self, new_state: AgentState) -> None:
-        """
-        Enforce valid state transitions.
+        """执行 _transition_to 对应的逻辑，并返回处理结果。
 
-        If the requested transition is not in the allowed set, the current
-        state is preserved (and a warning logged) rather than silently
-        overwritten.
+        Args:
+            new_state: AgentState，调用方传入的 new_state 参数。
+
+        Returns:
+            None，函数执行后的结果。
         """
-        # mypy: Enum member-keyed dict is fine to read via .get at runtime.
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         valid = _AGENT_STATE_TRANSITIONS.get(self._state, set())
 
         if new_state not in valid:
@@ -302,12 +359,21 @@ class BaseAgent(ABC):
                 new_state.value,
                 {s.value for s in valid},
             )
-            return  # Keep the original state — enforce the transition guard.
+            return  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
         self._state = new_state
 
     async def _end_agent_span(self, span: Span, result: dict, status: SpanStatus) -> None:
-        """Finalize the Agent span with execution metrics."""
+        """执行 _end_agent_span 对应的逻辑，并返回处理结果。
+
+        Args:
+            span: Span，调用方传入的 span 参数。
+            result: dict，调用方传入的 result 参数。
+            status: SpanStatus，调用方传入的 status 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         span.set_attribute("agent_name", self._name)
         span.set_attribute("execution_count", self._execution_count)
         span.set_attribute("error_count", self._error_count)
@@ -315,22 +381,42 @@ class BaseAgent(ABC):
             span.set_attribute("tokens", result["tokens"])
         span.status = status
 
-    # ── Properties ──────────────────────────────────────────────────────
+    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
     @property
     def name(self) -> str:
+        """执行 name 对应的逻辑，并返回处理结果。
+
+        Returns:
+            str，函数执行后的结果。
+        """
         return self._name
 
     @property
     def state(self) -> AgentState:
+        """执行 state 对应的逻辑，并返回处理结果。
+
+        Returns:
+            AgentState，函数执行后的结果。
+        """
         return self._state
 
     @property
     def memory(self) -> MemoryManager:
+        """执行 memory 对应的逻辑，并返回处理结果。
+
+        Returns:
+            MemoryManager，函数执行后的结果。
+        """
         return self._memory
 
     @property
     def stats(self) -> dict:
+        """执行 stats 对应的逻辑，并返回处理结果。
+
+        Returns:
+            dict，函数执行后的结果。
+        """
         return {
             "name": self._name,
             "state": self._state.value,
@@ -340,17 +426,27 @@ class BaseAgent(ABC):
         }
 
     def reset(self) -> None:
-        """Reset agent to IDLE state. Used after FAILED/TIMEOUT recovery."""
+        """执行 reset 对应的逻辑，并返回处理结果。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._state = AgentState.IDLE
         self._last_error = None
 
 
 class Agent:
-    """Compatibility event-driven Agent used by the legacy workflow layer.
+    """Agent。
 
-    The platform runtime uses :class:`BaseAgent`. The code-review workflow and
-    SDK builder still exchange ``AgentEvent`` objects, so this class preserves
-    that contract without forcing the newer runtime to inherit legacy behavior.
+    Agent 是核心运行时组件，负责状态管理、调度和跨模块协作。
+
+    主要成员：
+    - 方法 name()。
+    - 方法 execute()。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
     """
 
     def __init__(
@@ -361,6 +457,18 @@ class Agent:
         max_iterations: int = 5,
         token_budget: int = 8000,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            llm_gateway: Any，调用方传入的 llm_gateway 参数。
+            name: str，调用方传入的 name 参数。
+            tool_registry: Any，调用方传入的 tool_registry 参数。
+            max_iterations: int，调用方传入的 max_iterations 参数。
+            token_budget: int，调用方传入的 token_budget 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._llm_gateway = llm_gateway
         self._name = name
         self._tool_registry = tool_registry
@@ -370,9 +478,22 @@ class Agent:
 
     @property
     def name(self) -> str:
+        """执行 name 对应的逻辑，并返回处理结果。
+
+        Returns:
+            str，函数执行后的结果。
+        """
         return self._name
 
     async def execute(self, event):
+        """执行 execute 对应的逻辑，并返回处理结果。
+
+        Args:
+            event: Any，调用方传入的 event 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         from agentforge.core.event_types import AgentEvent, EventType
 
         try:
@@ -436,9 +557,25 @@ class Agent:
             )
 
     def _extract_context(self, context_snapshot: dict) -> dict:
+        """执行 _extract_context 对应的逻辑，并返回处理结果。
+
+        Args:
+            context_snapshot: dict，调用方传入的 context_snapshot 参数。
+
+        Returns:
+            dict，函数执行后的结果。
+        """
         return context_snapshot
 
     def _build_initial_messages(self, task: str) -> list[dict[str, str]]:
+        """执行 _build_initial_messages 对应的逻辑，并返回处理结果。
+
+        Args:
+            task: str，调用方传入的 task 参数。
+
+        Returns:
+            list[dict[str, str]]，函数执行后的结果。
+        """
         system_prompt = self.prompt_template or "You are a helpful assistant."
         try:
             system_prompt = system_prompt.format(task=task, context="{}")
@@ -455,20 +592,52 @@ class Agent:
         relevant_context: dict,
         tool_results: list,
     ) -> dict:
+        """执行 _build_downstream_context 对应的逻辑，并返回处理结果。
+
+        Args:
+            original_snapshot: dict，调用方传入的 original_snapshot 参数。
+            relevant_context: dict，调用方传入的 relevant_context 参数。
+            tool_results: list，调用方传入的 tool_results 参数。
+
+        Returns:
+            dict，函数执行后的结果。
+        """
         return {"agent_result": {"summary": self._summarize(None, tool_results)}}
 
     def _summarize(self, response, tool_results: list) -> str:
+        """执行 _summarize 对应的逻辑，并返回处理结果。
+
+        Args:
+            response: Any，调用方传入的 response 参数。
+            tool_results: list，调用方传入的 tool_results 参数。
+
+        Returns:
+            str，函数执行后的结果。
+        """
         if response is not None and bool(getattr(response, "content", None)):
             return response.content
         outputs = [result.output for result in tool_results if result.output]
         return "; ".join(outputs) if outputs else ""
 
     def _get_tool_schemas(self) -> list[dict]:
+        """执行 _get_tool_schemas 对应的逻辑，并返回处理结果。
+
+        Returns:
+            list[dict]，函数执行后的结果。
+        """
         if self._tool_registry is None:
             return []
         return self._tool_registry.get_schemas()
 
     async def _execute_tool(self, tool_call):
+        """执行 _execute_tool 对应的逻辑，并返回处理结果。
+
+        Args:
+            tool_call: Any，调用方传入的 tool_call 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         if self._tool_registry is None:
             from agentforge.core.base_tool import ToolResult
 
@@ -481,6 +650,14 @@ class Agent:
 
     @staticmethod
     def _usage_tokens(usage: dict) -> int:
+        """执行 _usage_tokens 对应的逻辑，并返回处理结果。
+
+        Args:
+            usage: dict，调用方传入的 usage 参数。
+
+        Returns:
+            int，函数执行后的结果。
+        """
         if "total_tokens" in usage:
             return int(usage.get("total_tokens", 0) or 0)
         return int(usage.get("prompt_tokens", 0) or 0) + int(usage.get("completion_tokens", 0) or 0)

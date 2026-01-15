@@ -1,20 +1,12 @@
-"""
-Token-level cost tracking + P0–P3 four-level budget alerting.
+"""AgentForge 模型网关层：cost_tracker。
 
-    P0 (100%): Stop all new requests — budget exhausted
-    P1 (90%):  Alert on-call — budget nearly exhausted, start throttling
-    P2 (70%):  Warning — budget consumption accelerating, review usage
-    P3 (daily): Daily report — routine cost accounting
+本模块负责 cost_tracker 相关能力，是 模型网关层 的组成部分。
 
-Design rationale:
-    Every LLM call costs money. Without per-token tracking, you can't:
-    1. Attribute cost to specific DAGs/users/agents (cost allocation)
-    2. Detect runaway loops (a stuck agent burning $100/hour)
-    3. Forecast budget needs (daily/weekly/monthly trends)
-    4. Enforce limits (stop service before bankrupting the account)
-
-    The P0–P3 system is modeled after SRE alerting: P0 is page-the-on-call,
-    P1 is urgent Slack message, P2 is tomorrow's standup topic, P3 is routine.
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
+- 关键路径应保留日志、指标或链路追踪信息。
+- 主要类：AlertLevel、CostRecord、CostReport、CostTracker。
 """
 
 import asyncio
@@ -27,79 +19,140 @@ logger = logging.getLogger(__name__)
 
 
 class AlertLevel(Enum):
-    """Budget alert levels, from least to most severe."""
+    """AlertLevel。
 
-    P3_DAILY = 3  # Routine daily report
-    P2_WARNING = 2  # Budget consumption accelerating
-    P1_ALERT = 1  # Budget nearly exhausted
-    P0_CRITICAL = 0  # Budget exhausted — stop service
+    AlertLevel 是状态或类型枚举，用于约束系统内部取值，避免散落的字符串常量。
+
+    主要成员：
+    - P3_DAILY: 3。
+    - P2_WARNING: 2。
+    - P1_ALERT: 1。
+    - P0_CRITICAL: 0。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    """
+
+    P3_DAILY = 3  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    P2_WARNING = 2  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    P1_ALERT = 1  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    P0_CRITICAL = 0  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 @dataclass
 class CostRecord:
-    """Single cost record from one LLM call."""
+    """CostRecord。
+
+    CostRecord 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - timestamp: float。
+    - model_name: str。
+    - token_count: int。
+    - cost: float。
+    - correlation_id: str。
+    - agent_name: str。
+    - span_id: str。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    """
 
     timestamp: float
     model_name: str
     token_count: int
     cost: float
-    correlation_id: str = ""  # Link to DAG execution
-    agent_name: str = ""  # Which agent made the call
-    span_id: str = ""  # Link to InferenceSpan
+    correlation_id: str = ""  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    agent_name: str = ""  # Agent 注册与查询。
+    span_id: str = ""  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 @dataclass
 class CostReport:
-    """Daily cost report with breakdowns."""
+    """CostReport。
+
+    CostReport 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - date: str。
+    - total_cost: float。
+    - total_tokens: int。
+    - budget_limit: float。
+    - budget_usage_pct: float。
+    - model_breakdown: dict[str, dict]。
+    - agent_breakdown: dict[str, dict]。
+    - alerts_triggered: list[str]。
+    - cache_hits_saved: float。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    """
 
     date: str
     total_cost: float
     total_tokens: int
     budget_limit: float
     budget_usage_pct: float
-    model_breakdown: dict[str, dict]  # model → {cost, tokens, calls}
-    agent_breakdown: dict[str, dict]  # agent → {cost, tokens, calls}
+    model_breakdown: dict[str, dict]  # 成本统计。
+    agent_breakdown: dict[str, dict]  # Agent 注册与查询。
     alerts_triggered: list[str]
-    cache_hits_saved: float = 0.0  # Estimated savings from semantic cache
+    cache_hits_saved: float = 0.0  # 缓存处理。
 
 
 class CostTracker:
+    """CostTracker。
+
+    CostTracker 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - P0_THRESHOLD: 1.0。
+    - P1_THRESHOLD: 0.9。
+    - P2_THRESHOLD: 0.7。
+    - 方法 record()。
+    - 方法 get_total_cost()。
+    - 方法 get_budget_usage()。
+    - 方法 is_budget_exhausted()。
+    - 方法 daily_report()。
+    - 方法 get_cost_by_correlation()。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
     """
-    Token-level cost tracking with budget enforcement and alerting.
 
-    Tracks every LLM call's cost, aggregates by model/agent/dag,
-    and triggers alerts when budget thresholds are crossed.
-
-    Thread safety: all mutations protected by asyncio.Lock since
-    multiple DAG nodes may record costs concurrently.
-    """
-
-    # Budget thresholds (fraction of daily budget)
-    P0_THRESHOLD = 1.00  # Stop service
-    P1_THRESHOLD = 0.90  # Alert + throttle
-    P2_THRESHOLD = 0.70  # Warning
-    # P3 is always active (daily report)
+    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    P0_THRESHOLD = 1.00  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    P1_THRESHOLD = 0.90  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    P2_THRESHOLD = 0.70  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
     def __init__(self, daily_budget: float = 100.0):
-        """
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
         Args:
-            daily_budget: Maximum daily spend in USD. Default $100.
+            daily_budget: float，调用方传入的 daily_budget 参数。
+
+        Returns:
+            None，函数执行后的结果。
         """
         self._daily_budget = daily_budget
         self._lock = asyncio.Lock()
 
-        # Tracking state
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         self._records: list[CostRecord] = []
         self._daily_start: float = self._today_start()
         self._current_day: str = time.strftime("%Y-%m-%d")
 
-        # Pre-computed indices for fast aggregation
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         self._total_cost: float = 0.0
         self._total_tokens: int = 0
-        self._model_totals: dict[str, dict] = {}  # model → {cost, tokens, calls}
-        self._agent_totals: dict[str, dict] = {}  # agent → {cost, tokens, calls}
+        self._model_totals: dict[str, dict] = {}  # 成本统计。
+        self._agent_totals: dict[str, dict] = {}  # Agent 注册与查询。
 
-        # Alert history
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         self._alerts: list[dict] = []
         self._p0_triggered: bool = False
 
@@ -112,16 +165,18 @@ class CostTracker:
         agent_name: str = "",
         span_id: str = "",
     ) -> None:
-        """
-        Record a single LLM call's cost.
+        """执行 record 对应的逻辑，并返回处理结果。
 
         Args:
-            token_count: Total tokens (prompt + completion).
-            model_name: Model used (for per-model cost tracking).
-            cost: Cost in USD for this call.
-            correlation_id: DAG execution ID for cost attribution.
-            agent_name: Agent that triggered the call.
-            span_id: InferenceSpan ID for trace correlation.
+            token_count: int，调用方传入的 token_count 参数。
+            model_name: str，调用方传入的 model_name 参数。
+            cost: float，调用方传入的 cost 参数。
+            correlation_id: str，调用方传入的 correlation_id 参数。
+            agent_name: str，调用方传入的 agent_name 参数。
+            span_id: str，调用方传入的 span_id 参数。
+
+        Returns:
+            None，函数执行后的结果。
         """
         async with self._lock:
             self._rollover_if_new_day()
@@ -137,18 +192,18 @@ class CostTracker:
             )
             self._records.append(record)
 
-            # Update aggregates
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             self._total_cost += cost
             self._total_tokens += token_count
 
-            # Model breakdown
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             if model_name not in self._model_totals:
                 self._model_totals[model_name] = {"cost": 0, "tokens": 0, "calls": 0}
             self._model_totals[model_name]["cost"] += cost
             self._model_totals[model_name]["tokens"] += token_count
             self._model_totals[model_name]["calls"] += 1
 
-            # Agent breakdown
+            # Agent 注册与查询。
             if agent_name:
                 if agent_name not in self._agent_totals:
                     self._agent_totals[agent_name] = {"cost": 0, "tokens": 0, "calls": 0}
@@ -156,11 +211,15 @@ class CostTracker:
                 self._agent_totals[agent_name]["tokens"] += token_count
                 self._agent_totals[agent_name]["calls"] += 1
 
-            # Check budget thresholds
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             await self._check_alerts()
 
     async def _check_alerts(self) -> None:
-        """Check if any budget threshold has been crossed. Called under lock."""
+        """执行 _check_alerts 对应的逻辑，并返回处理结果。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         usage_pct = self._total_cost / self._daily_budget if self._daily_budget > 0 else 0
 
         if usage_pct >= self.P0_THRESHOLD and not self._p0_triggered:
@@ -177,7 +236,7 @@ class CostTracker:
             logger.critical(alert["message"])
 
         elif usage_pct >= self.P1_THRESHOLD:
-            # Check if we already alerted at this level today
+            # 就绪状态。
             if not any(a["level"] == AlertLevel.P1_ALERT for a in self._alerts[-5:]):
                 alert = {
                     "level": AlertLevel.P1_ALERT,
@@ -204,25 +263,36 @@ class CostTracker:
                 logger.info(alert["message"])
 
     def get_total_cost(self) -> float:
-        """Get total cost for current day."""
+        """读取并返回指定数据，并返回调用方需要的结果。
+
+        Returns:
+            float，函数执行后的结果。
+        """
         return self._total_cost
 
     def get_budget_usage(self) -> float:
-        """Get budget usage as a fraction (0.0 to 1.0+)."""
+        """读取并返回指定数据，并返回调用方需要的结果。
+
+        Returns:
+            float，函数执行后的结果。
+        """
         if self._daily_budget <= 0:
             return 0.0
         return self._total_cost / self._daily_budget
 
     def is_budget_exhausted(self) -> bool:
-        """Check if P0 threshold has been crossed (service should stop)."""
+        """执行 is_budget_exhausted 对应的逻辑，并返回处理结果。
+
+        Returns:
+            bool，函数执行后的结果。
+        """
         return self._p0_triggered
 
     async def daily_report(self) -> CostReport:
-        """
-        Generate daily cost report with full breakdowns.
+        """执行 daily_report 对应的逻辑，并返回处理结果。
 
         Returns:
-            CostReport with model/agent breakdowns and alert history.
+            CostReport，函数执行后的结果。
         """
         self._rollover_if_new_day()
 
@@ -244,7 +314,14 @@ class CostTracker:
         )
 
     async def get_cost_by_correlation(self, correlation_id: str) -> dict:
-        """Get cost breakdown for a specific DAG execution."""
+        """读取并返回指定数据，并返回调用方需要的结果。
+
+        Args:
+            correlation_id: str，调用方传入的 correlation_id 参数。
+
+        Returns:
+            dict，函数执行后的结果。
+        """
         records = [r for r in self._records if r.correlation_id == correlation_id]
         if not records:
             return {"total_cost": 0, "total_tokens": 0, "calls": 0}
@@ -256,7 +333,11 @@ class CostTracker:
         }
 
     def _rollover_if_new_day(self) -> None:
-        """Reset daily counters if we've crossed midnight."""
+        """执行 _rollover_if_new_day 对应的逻辑，并返回处理结果。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         today = time.strftime("%Y-%m-%d")
         if today != self._current_day:
             self._current_day = today
@@ -271,7 +352,11 @@ class CostTracker:
 
     @staticmethod
     def _today_start() -> float:
-        """Return timestamp for start of today (midnight)."""
+        """执行 _today_start 对应的逻辑，并返回处理结果。
+
+        Returns:
+            float，函数执行后的结果。
+        """
         import datetime
 
         now = datetime.datetime.now()

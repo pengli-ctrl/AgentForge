@@ -15,6 +15,15 @@ def _make_event(
     correlation_id: str = "corr-001",
     source_agent: str = "code-review",
 ) -> AgentEvent:
+    """执行 _make_event 对应的逻辑，并返回处理结果。
+
+    Args:
+        correlation_id: str，调用方传入的 correlation_id 参数。
+        source_agent: str，调用方传入的 source_agent 参数。
+
+    Returns:
+        AgentEvent，函数执行后的结果。
+    """
     return AgentEvent(
         event_type=EventType.AGENT_COMPLETED,
         source_agent=source_agent,
@@ -27,14 +36,29 @@ class TestConflictArbiterInit:
     """初始化测试。"""
 
     def test_default_max_rounds(self) -> None:
+        """验证 default_max_rounds 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         arbiter = ConflictArbiter()
         assert arbiter.max_rounds == 3
 
     def test_custom_max_rounds(self) -> None:
+        """验证 custom_max_rounds 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         arbiter = ConflictArbiter(max_rounds=5)
         assert arbiter.max_rounds == 5
 
     def test_empty_state_on_init(self) -> None:
+        """验证 empty_state_on_init 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         arbiter = ConflictArbiter()
         assert arbiter.round_count == {}
         assert arbiter.prev_outputs == {}
@@ -45,6 +69,11 @@ class TestRoundCounting:
 
     @pytest.mark.asyncio
     async def test_round_count_increments(self) -> None:
+        """验证 round_count_increments 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         arbiter = ConflictArbiter(max_rounds=10)
         event = _make_event()
         await arbiter.on_agent_complete(event, {"content": "v1"})
@@ -54,6 +83,11 @@ class TestRoundCounting:
 
     @pytest.mark.asyncio
     async def test_round_count_separate_per_correlation(self) -> None:
+        """验证 round_count_separate_per_correlation 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         arbiter = ConflictArbiter(max_rounds=10)
         await arbiter.on_agent_complete(_make_event("corr-a"), {"x": 1})
         await arbiter.on_agent_complete(_make_event("corr-b"), {"y": 2})
@@ -66,6 +100,11 @@ class TestEscalation:
 
     @pytest.mark.asyncio
     async def test_escalation_after_max_rounds(self) -> None:
+        """验证 escalation_after_max_rounds 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         arbiter = ConflictArbiter(max_rounds=2)
         event = _make_event()
         await arbiter.on_agent_complete(event, {"v": 1})
@@ -79,6 +118,11 @@ class TestEscalation:
 
     @pytest.mark.asyncio
     async def test_escalation_payload_contains_rounds(self) -> None:
+        """验证 escalation_payload_contains_rounds 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         arbiter = ConflictArbiter(max_rounds=1)
         event = _make_event()
         await arbiter.on_agent_complete(event, {"v": 1})
@@ -92,6 +136,11 @@ class TestConvergence:
 
     @pytest.mark.asyncio
     async def test_convergence_detected(self) -> None:
+        """验证 convergence_detected 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         arbiter = ConflictArbiter(max_rounds=10)
         event = _make_event()
         output = {"review": "looks good", "score": 8}
@@ -103,6 +152,11 @@ class TestConvergence:
 
     @pytest.mark.asyncio
     async def test_no_convergence_with_different_output(self) -> None:
+        """验证 no_convergence_with_different_output 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         arbiter = ConflictArbiter(max_rounds=10)
         event = _make_event()
         await arbiter.on_agent_complete(event, {"v": 1})
@@ -114,28 +168,48 @@ class TestOutputHashing:
     """输出哈希测试。"""
 
     def test_hash_consistent(self) -> None:
+        """验证 hash_consistent 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         arbiter = ConflictArbiter()
         h1 = arbiter._hash_output({"a": 1, "b": 2})
         h2 = arbiter._hash_output({"b": 2, "a": 1})  # 顺序不同
         assert h1 == h2
 
     def test_hash_different_for_different_data(self) -> None:
+        """验证 hash_different_for_different_data 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         arbiter = ConflictArbiter()
         h1 = arbiter._hash_output({"a": 1})
         h2 = arbiter._hash_output({"a": 2})
         assert h1 != h2
 
     def test_hash_returns_hex_string(self) -> None:
+        """验证 hash_returns_hex_string 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         arbiter = ConflictArbiter()
         h = arbiter._hash_output({"x": 1})
         assert isinstance(h, str)
-        assert len(h) == 64  # SHA256 hex
+        assert len(h) == 64  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestSimilarity:
     """相似度计算测试。"""
 
     def test_similarity_returns_float(self) -> None:
+        """验证 similarity_returns_float 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         arbiter = ConflictArbiter()
         sim = arbiter._compute_similarity({"a": 1}, {"a": 1})
         assert isinstance(sim, float)

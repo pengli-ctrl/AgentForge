@@ -1,3 +1,15 @@
+"""AgentForge 平台测试层：test_increment4_admin。
+
+本测试模块验证 test_increment4_admin 覆盖的业务路径、边界条件和回归场景。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+-
+主要函数：test_memory_audit_query_filters_and_cursor、test_sqlalchemy_audit_query_filters_and_cursor、test_audit_endpoint_action_filter、test_audit_endpoint_admin_global、test_audit_endpoint_pagination、test_console_audit_admin_query、test_console_tenants_admin_list、test_console_connectors_admin_list_and_toggle。
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -37,6 +49,19 @@ def _event(
     resource_type: str = "ticket",
     offset_minutes: int = 0,
 ) -> AuditEvent:
+    """执行 _event 对应的逻辑，并返回处理结果。
+
+    Args:
+        tenant_id: str，调用方传入的 tenant_id 参数。
+        action: str，调用方传入的 action 参数。
+        actor_id: str，调用方传入的 actor_id 参数。
+        resource_id: str，调用方传入的 resource_id 参数。
+        resource_type: str，调用方传入的 resource_type 参数。
+        offset_minutes: int，调用方传入的 offset_minutes 参数。
+
+    Returns:
+        AuditEvent，函数执行后的结果。
+    """
     return AuditEvent(
         event_id=f"ev-{tenant_id}-{action}-{offset_minutes}",
         tenant_id=tenant_id,
@@ -50,6 +75,16 @@ def _event(
 
 
 def _spec(connector_id: str, tenant_id: str, enabled: bool = True) -> ConnectorSpec:
+    """执行 _spec 对应的逻辑，并返回处理结果。
+
+    Args:
+        connector_id: str，调用方传入的 connector_id 参数。
+        tenant_id: str，调用方传入的 tenant_id 参数。
+        enabled: bool，调用方传入的 enabled 参数。
+
+    Returns:
+        ConnectorSpec，函数执行后的结果。
+    """
     return ConnectorSpec(
         connector_id=connector_id,
         tenant_id=tenant_id,
@@ -62,6 +97,14 @@ def _spec(connector_id: str, tenant_id: str, enabled: bool = True) -> ConnectorS
 
 
 def _quota(tenant_id: str) -> TenantQuota:
+    """执行 _quota 对应的逻辑，并返回处理结果。
+
+    Args:
+        tenant_id: str，调用方传入的 tenant_id 参数。
+
+    Returns:
+        TenantQuota，函数执行后的结果。
+    """
     return TenantQuota(
         tenant_id=tenant_id,
         monthly_limit=100.0,
@@ -72,6 +115,15 @@ def _quota(tenant_id: str) -> TenantQuota:
 
 
 def _cost(tenant_id: str, amount: float) -> CostRecord:
+    """执行 _cost 对应的逻辑，并返回处理结果。
+
+    Args:
+        tenant_id: str，调用方传入的 tenant_id 参数。
+        amount: float，调用方传入的 amount 参数。
+
+    Returns:
+        CostRecord，函数执行后的结果。
+    """
     return CostRecord(
         tenant_id=tenant_id,
         task_id="task",
@@ -84,6 +136,14 @@ def _cost(tenant_id: str, amount: float) -> CostRecord:
 
 
 def _memory_container(**overrides) -> ServiceContainer:
+    """执行 _memory_container 对应的逻辑，并返回处理结果。
+
+    Args:
+        **overrides: Any，调用方传入的 **overrides 参数。
+
+    Returns:
+        ServiceContainer，函数执行后的结果。
+    """
     defaults = dict(
         repository=None,
         classifier=None,
@@ -98,6 +158,11 @@ def _memory_container(**overrides) -> ServiceContainer:
 
 
 async def test_memory_audit_query_filters_and_cursor() -> None:
+    """验证 memory_audit_query_filters_and_cursor 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     repo = MemoryAuditRepository()
     for ev in (
         _event("t1", "read", offset_minutes=10),
@@ -127,6 +192,11 @@ async def test_memory_audit_query_filters_and_cursor() -> None:
 
 @pytest.mark.asyncio
 async def test_sqlalchemy_audit_query_filters_and_cursor() -> None:
+    """验证 sqlalchemy_audit_query_filters_and_cursor 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     engine = create_async_engine(
         "sqlite+aiosqlite://",
         poolclass=StaticPool,
@@ -151,6 +221,11 @@ async def test_sqlalchemy_audit_query_filters_and_cursor() -> None:
 
 
 def _admin_app() -> TestClient:
+    """执行 _admin_app 对应的逻辑，并返回处理结果。
+
+    Returns:
+        TestClient，函数执行后的结果。
+    """
     audit = MemoryAuditRepository()
     asyncio.run(_seed_events(audit))
     c = _memory_container(audit_repository=audit)
@@ -158,12 +233,25 @@ def _admin_app() -> TestClient:
 
 
 async def _seed_events(repo) -> None:
+    """执行 _seed_events 对应的逻辑，并返回处理结果。
+
+    Args:
+        repo: Any，调用方传入的 repo 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     await repo.save(_event("t1", "read"))
     await repo.save(_event("t1", "write", actor_id="alice"))
     await repo.save(_event("t2", "write"))
 
 
 def test_audit_endpoint_action_filter() -> None:
+    """验证 audit_endpoint_action_filter 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc = _admin_app()
     r = tc.get("/v1/audit", params={"tenant_id": "t1", "action": "write"})
     assert r.status_code == 200
@@ -173,6 +261,11 @@ def test_audit_endpoint_action_filter() -> None:
 
 
 def test_audit_endpoint_admin_global() -> None:
+    """验证 audit_endpoint_admin_global 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc = _admin_app()
     r = tc.get("/v1/audit")
     assert r.status_code == 200
@@ -180,6 +273,11 @@ def test_audit_endpoint_admin_global() -> None:
 
 
 def test_audit_endpoint_pagination() -> None:
+    """验证 audit_endpoint_pagination 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc = _admin_app()
     r = tc.get("/v1/audit", params={"tenant_id": "t1", "limit": 1})
     assert r.status_code == 200
@@ -193,6 +291,11 @@ def test_audit_endpoint_pagination() -> None:
 
 
 def test_console_audit_admin_query() -> None:
+    """验证 console_audit_admin_query 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     tc = _admin_app()
     r = tc.get("/v1/console/audit", params={"action": "write"})
     assert r.status_code == 200
@@ -202,6 +305,11 @@ def test_console_audit_admin_query() -> None:
 
 
 def test_console_tenants_admin_list() -> None:
+    """验证 console_tenants_admin_list 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     quota = MemoryTenantQuotaRepository()
     asyncio.run(quota.upsert(_quota("t1")))
     cost = MemoryCostRepository()
@@ -222,17 +330,35 @@ def test_console_tenants_admin_list() -> None:
 
 
 def _seed_connectors() -> MemoryConnectorRepository:
+    """执行 _seed_connectors 对应的逻辑，并返回处理结果。
+
+    Returns:
+        MemoryConnectorRepository，函数执行后的结果。
+    """
     repo = MemoryConnectorRepository()
     asyncio.run(_seed_specs(repo))
     return repo
 
 
 async def _seed_specs(repo) -> None:
+    """执行 _seed_specs 对应的逻辑，并返回处理结果。
+
+    Args:
+        repo: Any，调用方传入的 repo 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     await repo.save_spec(_spec("c1", "t1", enabled=True))
     await repo.save_spec(_spec("c2", "t2", enabled=False))
 
 
 def test_console_connectors_admin_list_and_toggle() -> None:
+    """验证 console_connectors_admin_list_and_toggle 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     repo = _seed_connectors()
     c = _memory_container()
     c.connector_repository = repo
@@ -255,6 +381,11 @@ def test_console_connectors_admin_list_and_toggle() -> None:
 
 
 def test_console_connector_toggle_missing_404() -> None:
+    """验证 console_connector_toggle_missing_404 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     repo = _seed_connectors()
     c = _memory_container()
     c.connector_repository = repo

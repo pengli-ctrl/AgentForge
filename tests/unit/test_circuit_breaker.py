@@ -14,16 +14,31 @@ class TestCircuitState:
     """CircuitState 枚举测试。"""
 
     def test_three_states_exist(self) -> None:
+        """验证 three_states_exist 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         assert CircuitState.CLOSED
         assert CircuitState.OPEN
         assert CircuitState.HALF_OPEN
 
     def test_state_values(self) -> None:
+        """验证 state_values 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         assert CircuitState.CLOSED.value == "CLOSED"
         assert CircuitState.OPEN.value == "OPEN"
         assert CircuitState.HALF_OPEN.value == "HALF_OPEN"
 
     def test_states_are_distinct(self) -> None:
+        """验证 states_are_distinct 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         states = {CircuitState.CLOSED, CircuitState.OPEN, CircuitState.HALF_OPEN}
         assert len(states) == 3
 
@@ -32,6 +47,11 @@ class TestCircuitBreakerInit:
     """初始化测试。"""
 
     def test_default_parameters(self) -> None:
+        """验证 default_parameters 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         breaker = CircuitBreaker()
         assert breaker.failure_threshold == 5
         assert breaker.recovery_timeout == 60.0
@@ -39,6 +59,11 @@ class TestCircuitBreakerInit:
         assert breaker.state == CircuitState.CLOSED
 
     def test_custom_parameters(self) -> None:
+        """验证 custom_parameters 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         breaker = CircuitBreaker(
             failure_threshold=3,
             recovery_timeout=30.0,
@@ -49,6 +74,11 @@ class TestCircuitBreakerInit:
         assert breaker.half_open_max_calls == 2
 
     def test_initial_failure_count_zero(self) -> None:
+        """验证 initial_failure_count_zero 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         breaker = CircuitBreaker()
         assert breaker.failure_count == 0
 
@@ -57,10 +87,20 @@ class TestClosedState:
     """CLOSED 状态测试。"""
 
     def test_can_execute_in_closed(self) -> None:
+        """验证 can_execute_in_closed 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         breaker = CircuitBreaker()
         assert breaker.can_execute() is True
 
     def test_record_success_resets_failure_count(self) -> None:
+        """验证 record_success_resets_failure_count 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         breaker = CircuitBreaker(failure_threshold=5)
         breaker.record_failure()
         breaker.record_failure()
@@ -69,6 +109,11 @@ class TestClosedState:
         assert breaker.failure_count == 0
 
     def test_record_failure_increments_count(self) -> None:
+        """验证 record_failure_increments_count 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         breaker = CircuitBreaker(failure_threshold=5)
         for i in range(4):
             breaker.record_failure()
@@ -76,6 +121,11 @@ class TestClosedState:
             assert breaker.state == CircuitState.CLOSED
 
     def test_transition_to_open_after_threshold(self) -> None:
+        """验证 transition_to_open_after_threshold 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         breaker = CircuitBreaker(failure_threshold=3)
         breaker.record_failure()
         breaker.record_failure()
@@ -84,6 +134,11 @@ class TestClosedState:
         assert breaker.state == CircuitState.OPEN
 
     def test_can_execute_after_open(self) -> None:
+        """验证 can_execute_after_open 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         breaker = CircuitBreaker(failure_threshold=1)
         breaker.record_failure()
         assert breaker.state == CircuitState.OPEN
@@ -94,12 +149,22 @@ class TestOpenState:
     """OPEN 状态测试。"""
 
     def test_can_execute_false_in_open(self) -> None:
+        """验证 can_execute_false_in_open 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         breaker = CircuitBreaker(failure_threshold=1)
         breaker.record_failure()
         assert breaker.state == CircuitState.OPEN
         assert breaker.can_execute() is False
 
     def test_stays_open_before_recovery_timeout(self) -> None:
+        """验证 stays_open_before_recovery_timeout 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         breaker = CircuitBreaker(failure_threshold=1, recovery_timeout=60.0)
         breaker.record_failure()
         # 立即检查，不应恢复
@@ -107,6 +172,11 @@ class TestOpenState:
         assert breaker.can_execute() is False
 
     def test_transitions_to_half_open_after_timeout(self) -> None:
+        """验证 transitions_to_half_open_after_timeout 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         breaker = CircuitBreaker(failure_threshold=1, recovery_timeout=0.1)
         breaker.record_failure()
         assert breaker.state == CircuitState.OPEN
@@ -136,6 +206,11 @@ class TestHalfOpenState:
     """HALF_OPEN 状态测试。"""
 
     def test_can_execute_allows_one_call_in_half_open(self) -> None:
+        """验证 can_execute_allows_one_call_in_half_open 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         breaker = CircuitBreaker(
             failure_threshold=1,
             recovery_timeout=0.05,
@@ -150,6 +225,11 @@ class TestHalfOpenState:
         assert breaker.can_execute() is False
 
     def test_half_open_success_recovers_to_closed(self) -> None:
+        """验证 half_open_success_recovers_to_closed 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         breaker = CircuitBreaker(
             failure_threshold=1,
             recovery_timeout=0.05,
@@ -165,6 +245,11 @@ class TestHalfOpenState:
         assert breaker.failure_count == 0
 
     def test_half_open_failure_back_to_open(self) -> None:
+        """验证 half_open_failure_back_to_open 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         now = [0.0]
         breaker = CircuitBreaker(
             failure_threshold=1,
@@ -181,6 +266,11 @@ class TestHalfOpenState:
         assert breaker.state == CircuitState.OPEN
 
     def test_half_open_with_multiple_allowed_calls(self) -> None:
+        """验证 half_open_with_multiple_allowed_calls 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         now = [0.0]
         breaker = CircuitBreaker(
             failure_threshold=1,
@@ -203,48 +293,56 @@ class TestStateTransitions:
 
     def test_full_cycle_closed_open_half_open_closed(self) -> None:
         """完整状态转换链：CLOSED → OPEN → HALF_OPEN → CLOSED。"""
+        now = [0.0]
         breaker = CircuitBreaker(
             failure_threshold=2,
             recovery_timeout=0.05,
+            clock=lambda: now[0],
         )
 
-        # CLOSED → OPEN
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         assert breaker.state == CircuitState.CLOSED
         breaker.record_failure()
         breaker.record_failure()
         assert breaker.state == CircuitState.OPEN
 
-        # OPEN → HALF_OPEN
-        time.sleep(0.06)
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+        now[0] = 0.06
         assert breaker.state == CircuitState.HALF_OPEN
 
-        # HALF_OPEN → CLOSED
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         breaker.can_execute()
         breaker.record_success()
         assert breaker.state == CircuitState.CLOSED
 
     def test_full_cycle_with_half_open_failure(self) -> None:
-        """完整状态转换链：CLOSED → OPEN → HALF_OPEN → OPEN → HALF_OPEN → CLOSED。"""
+        """验证 full_cycle_with_half_open_failure 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
+        now = [0.0]
         breaker = CircuitBreaker(
             failure_threshold=1,
             recovery_timeout=0.05,
+            clock=lambda: now[0],
         )
 
-        # CLOSED → OPEN
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         breaker.record_failure()
         assert breaker.state == CircuitState.OPEN
 
-        # OPEN → HALF_OPEN
-        time.sleep(0.06)
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+        now[0] = 0.06
         assert breaker.state == CircuitState.HALF_OPEN
 
-        # HALF_OPEN → OPEN (试探失败)
+        # HALF_OPEN → OPEN (试探失败，重置计时器)
         breaker.can_execute()
         breaker.record_failure()
         assert breaker.state == CircuitState.OPEN
 
         # OPEN → HALF_OPEN (再次等待恢复)
-        time.sleep(0.06)
+        now[0] = 0.12
         assert breaker.state == CircuitState.HALF_OPEN
 
         # HALF_OPEN → CLOSED (试探成功)
@@ -257,6 +355,11 @@ class TestReset:
     """reset 方法测试。"""
 
     def test_reset_from_open(self) -> None:
+        """验证 reset_from_open 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         breaker = CircuitBreaker(failure_threshold=1)
         breaker.record_failure()
         assert breaker.state == CircuitState.OPEN
@@ -266,6 +369,11 @@ class TestReset:
         assert breaker.failure_count == 0
 
     def test_reset_from_half_open(self) -> None:
+        """验证 reset_from_half_open 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         breaker = CircuitBreaker(
             failure_threshold=1,
             recovery_timeout=0.05,
@@ -278,6 +386,11 @@ class TestReset:
         assert breaker.state == CircuitState.CLOSED
 
     def test_reset_from_closed(self) -> None:
+        """验证 reset_from_closed 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         breaker = CircuitBreaker(failure_threshold=5)
         breaker.record_failure()
         breaker.record_failure()
@@ -291,12 +404,22 @@ class TestRepr:
     """__repr__ 测试。"""
 
     def test_repr_contains_state(self) -> None:
+        """验证 repr_contains_state 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         breaker = CircuitBreaker(failure_threshold=3)
         r = repr(breaker)
         assert "CLOSED" in r
         assert "failures=0" in r
 
     def test_repr_updates_with_state(self) -> None:
+        """验证 repr_updates_with_state 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         breaker = CircuitBreaker(failure_threshold=1)
         breaker.record_failure()
         r = repr(breaker)

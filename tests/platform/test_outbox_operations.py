@@ -1,3 +1,15 @@
+"""AgentForge 平台测试层：test_outbox_operations。
+
+本测试模块验证 test_outbox_operations 覆盖的业务路径、边界条件和回归场景。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+-
+主要函数：make_sqlalchemy、test_sqlalchemy_outbox_list_detail_discard_count、test_memory_outbox_store_matches_surface、test_outbox_admin_endpoints_sqlalchemy、test_outbox_memory_endpoints。
+"""
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -13,6 +25,11 @@ from agentforge.platform.runtime import build_memory_container, build_sqlalchemy
 
 
 async def make_sqlalchemy():
+    """执行 make_sqlalchemy 对应的逻辑，并返回处理结果。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     engine = create_async_engine(
         "sqlite+aiosqlite://",
         poolclass=StaticPool,
@@ -27,6 +44,16 @@ async def make_sqlalchemy():
 def _event(
     event_id: str, tenant: str = "tenant-1", event_type: str = "ticket.created"
 ) -> EventEnvelope:
+    """执行 _event 对应的逻辑，并返回处理结果。
+
+    Args:
+        event_id: str，调用方传入的 event_id 参数。
+        tenant: str，调用方传入的 tenant 参数。
+        event_type: str，调用方传入的 event_type 参数。
+
+    Returns:
+        EventEnvelope，函数执行后的结果。
+    """
     return EventEnvelope(
         event_id=event_id,
         event_type=event_type,
@@ -40,6 +67,11 @@ def _event(
 
 @pytest.mark.asyncio
 async def test_sqlalchemy_outbox_list_detail_discard_count() -> None:
+    """验证 sqlalchemy_outbox_list_detail_discard_count 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     engine, session_factory = await make_sqlalchemy()
     store = SQLAlchemyOutboxStore(session_factory)
 
@@ -73,7 +105,7 @@ async def test_sqlalchemy_outbox_list_detail_discard_count() -> None:
     assert counts_after["pending"] == 2
     assert counts_after["discarded"] == 1
 
-    # replay brings it back to pending
+    # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     assert await store.replay("e1") is True
     assert (await store.get_event("t1", "e1"))["status"] == "pending"
     await engine.dispose()
@@ -81,6 +113,11 @@ async def test_sqlalchemy_outbox_list_detail_discard_count() -> None:
 
 @pytest.mark.asyncio
 async def test_memory_outbox_store_matches_surface() -> None:
+    """验证 memory_outbox_store_matches_surface 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     store = MemoryOutboxStore()
     await store.enqueue(_event("m1", tenant="t1"))
     await store.enqueue(_event("m2", tenant="t1"))
@@ -97,9 +134,19 @@ async def test_memory_outbox_store_matches_surface() -> None:
 
 
 def test_outbox_admin_endpoints_sqlalchemy() -> None:
+    """验证 outbox_admin_endpoints_sqlalchemy 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     import asyncio
 
     async def setup():
+        """执行 setup 对应的逻辑，并返回处理结果。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         engine, session_factory = await make_sqlalchemy()
         container = build_sqlalchemy_container(session_factory)
         async with session_factory() as session:
@@ -127,6 +174,11 @@ def test_outbox_admin_endpoints_sqlalchemy() -> None:
 
 
 def test_outbox_memory_endpoints() -> None:
+    """验证 outbox_memory_endpoints 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     import asyncio
 
     container = build_memory_container()

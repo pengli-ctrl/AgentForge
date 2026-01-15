@@ -1,23 +1,12 @@
-"""
-Planner Agent — automatic task decomposition engine.
+"""AgentForge 编排执行层：planner。
 
-The Planner is the intelligence behind "dynamic orchestration" mode:
-it analyzes a natural-language task description and produces a DAGGraph
-that the DAGEngine can execute.
+本模块负责 planner 相关能力，是 编排执行层 的组成部分。
 
-Design philosophy:
-    1. LLM only does PLANNING (decompose + order), not execution.
-    2. Planner produces a structured DAGGraph — deterministic code executes it.
-    3. If LLM produces an invalid DAG (cycle, unknown agent), fall back to
-       static编排 (single-agent passthrough).
-    4. Planner supports "re-plan" — given a failed DAG result, adjust the
-       plan and return a new DAGGraph for runtime re-orchestration.
-
-Prompt engineering notes:
-    - We tell the LLM about available agents via get_available_agents().
-    - We constrain output to strict JSON schema (node_id, agent_name, edges).
-    - We include max_nodes limit in prompt so LLM won't over-decompose.
-    - We provide 2-3 few-shot examples for common task patterns.
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
+- 关键路径应保留日志、指标或链路追踪信息。
+- 主要类：PlanResult、PlannerConfig、PlannerAgent。
 """
 
 import json
@@ -27,7 +16,7 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-# ── Planner prompt templates ────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 PLANNER_SYSTEM_PROMPT = """\
 You are a task decomposition engine. Given a user task and a list of available
@@ -79,61 +68,98 @@ Rules:
 
 @dataclass
 class PlanResult:
-    """Result of a planning operation."""
+    """PlanResult。
+
+    PlanResult 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - success: bool。
+    - dag_spec: Optional[dict]。
+    - rationale: str。
+    - error: Optional[str]。
+    - fallback_single_agent: str。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    """
 
     success: bool
-    dag_spec: Optional[dict] = None  # Raw JSON from LLM
+    dag_spec: Optional[dict] = None  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
     rationale: str = ""
     error: Optional[str] = None
-    fallback_single_agent: str = ""  # If plan fails, which single agent to use
+    fallback_single_agent: str = ""  # Agent 注册与查询。
 
 
 @dataclass
 class PlannerConfig:
-    """Configuration for the Planner Agent."""
+    """PlannerConfig。
 
-    max_nodes: int = 50  # Must match DAGEngine max_nodes
-    max_replan_attempts: int = 2  # Max re-plan tries before giving up
-    model_name: str = "Qwen3-Pro"  # Planner uses the best model
-    timeout_seconds: float = 15.0  # Planning itself should be fast
+    PlannerConfig 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - max_nodes: int。
+    - max_replan_attempts: int。
+    - model_name: str。
+    - timeout_seconds: float。
+    - few_shot_examples: list[dict]。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    """
+
+    max_nodes: int = 50  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    max_replan_attempts: int = 2  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    model_name: str = "Qwen3-Pro"  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    timeout_seconds: float = 15.0  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
     few_shot_examples: list[dict] = field(default_factory=list)
 
 
 class PlannerAgent:
-    """
-    Automatic task decomposition agent.
+    """PlannerAgent。
 
-    Uses LLM to convert natural-language task descriptions into DAGGraph
-    execution plans. Falls back to single-agent passthrough on failure.
+    PlannerAgent 是核心运行时组件，负责状态管理、调度和跨模块协作。
 
-    Usage:
-        planner = PlannerAgent(llm_gateway, agent_registry)
-        result = await planner.plan("Review my Python code for security issues")
-        if result.success:
-            dag = planner.build_dag(result.dag_spec)
-            dag_result = await dag_engine.execute(correlation_id, input_data, dag=dag)
+    主要成员：
+    - 方法 plan()。
+    - 方法 replan()。
+    - 方法 build_dag()。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
     """
 
     def __init__(
         self,
-        llm_gateway,  # LLMGateway instance for LLM calls
-        agent_registry,  # AgentRegistry to look up available agents
+        llm_gateway,  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+        agent_registry,  # Agent 注册与查询。
         config: Optional[PlannerConfig] = None,
     ):
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            llm_gateway: Any，调用方传入的 llm_gateway 参数。
+            agent_registry: Any，调用方传入的 agent_registry 参数。
+            config: Optional[PlannerConfig]，调用方传入的 config 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._llm = llm_gateway
         self._registry = agent_registry
         self._config = config or PlannerConfig()
 
     async def plan(self, task_description: str, context: Optional[dict] = None) -> PlanResult:
-        """
-        Decompose a task into a DAG execution plan.
+        """执行 plan 对应的逻辑，并返回处理结果。
 
         Args:
-            task_description: Natural-language description of the task.
-            context: Optional additional context (e.g., file contents, previous results).
+            task_description: str，调用方传入的 task_description 参数。
+            context: Optional[dict]，调用方传入的 context 参数。
 
         Returns:
-            PlanResult with the DAG specification or fallback info.
+            PlanResult，函数执行后的结果。
         """
         agent_descriptions = self._get_agent_descriptions()
         system_prompt = PLANNER_SYSTEM_PROMPT.format(
@@ -155,7 +181,7 @@ class PlannerAgent:
                         {"role": "user", "content": user_prompt},
                     ],
                     model=self._config.model_name,
-                    temperature=0.1,  # Low temperature for structured output
+                    temperature=0.1,  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
                     max_tokens=2000,
                 ),
                 timeout=self._config.timeout_seconds,
@@ -166,7 +192,7 @@ class PlannerAgent:
                 logger.warning("Planner: LLM returned unparseable JSON, falling back")
                 return self._fallback_plan(task_description)
 
-            # Validate the plan
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             validation_error = self._validate_plan(dag_spec)
             if validation_error:
                 logger.warning("Planner: invalid plan — %s, falling back", validation_error)
@@ -197,17 +223,16 @@ class PlannerAgent:
         failed_nodes: list[str],
         error_detail: str,
     ) -> PlanResult:
-        """
-        Re-plan after partial DAG failure.
+        """执行 replan 对应的逻辑，并返回处理结果。
 
         Args:
-            original_task: The original task description.
-            failed_dag_spec: The DAG spec that partially failed.
-            failed_nodes: List of node_ids that failed.
-            error_detail: Error message from the failed execution.
+            original_task: str，调用方传入的 original_task 参数。
+            failed_dag_spec: dict，调用方传入的 failed_dag_spec 参数。
+            failed_nodes: list[str]，调用方传入的 failed_nodes 参数。
+            error_detail: str，调用方传入的 error_detail 参数。
 
         Returns:
-            PlanResult with a new DAG specification.
+            PlanResult，函数执行后的结果。
         """
         agent_descriptions = self._get_agent_descriptions()
         system_prompt = REPLAN_SYSTEM_PROMPT.format(
@@ -257,11 +282,13 @@ class PlannerAgent:
             return PlanResult(success=False, error=str(e)[:500])
 
     def build_dag(self, dag_spec: dict) -> Any:
-        """
-        Convert a planner DAG spec (JSON dict) into a DAGGraph object.
+        """构建目标对象，并返回调用方需要的结果。
 
-        This creates the proper DAGGraph with DAGNode instances that
-        the DAGEngine can execute.
+        Args:
+            dag_spec: dict，调用方传入的 dag_spec 参数。
+
+        Returns:
+            Any，函数执行后的结果。
         """
         from agentforge.orchestration.dag_engine import DAGGraph, DAGNode
 
@@ -279,15 +306,19 @@ class PlannerAgent:
         for edge_spec in dag_spec.get("edges", []):
             graph.add_edge(edge_spec["from"], edge_spec["to"])
 
-        # Auto-wire input_mapping for nodes that have incoming edges but no mapping
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         self._auto_wire_inputs(graph)
 
         return graph
 
-    # ── Internal helpers ────────────────────────────────────────────────────
+    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
     def _get_agent_descriptions(self) -> str:
-        """Build agent description list from registry for the LLM prompt."""
+        """执行 _get_agent_descriptions 对应的逻辑，并返回处理结果。
+
+        Returns:
+            str，函数执行后的结果。
+        """
         registered = self._registry.list_agents()
         lines = []
         for name in registered:
@@ -297,7 +328,14 @@ class PlannerAgent:
         return "\n".join(lines) if lines else "- (no agents registered)"
 
     def _parse_response(self, response: Any) -> Optional[dict]:
-        """Parse LLM response into a DAG spec dict. Returns None on failure."""
+        """执行 _parse_response 对应的逻辑，并返回处理结果。
+
+        Args:
+            response: Any，调用方传入的 response 参数。
+
+        Returns:
+            Optional[dict]，函数执行后的结果。
+        """
         text = ""
         if hasattr(response, "content"):
             text = response.content
@@ -309,11 +347,11 @@ class PlannerAgent:
         if not text:
             return None
 
-        # Strip markdown code fences if present
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         text = text.strip()
         if text.startswith("```"):
             lines = text.split("\n")
-            # Remove first and last lines (```json and ```)
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             lines = [line for line in lines[1:] if line.strip() != "```"]
             text = "\n".join(lines)
 
@@ -327,10 +365,13 @@ class PlannerAgent:
             return None
 
     def _validate_plan(self, dag_spec: dict) -> Optional[str]:
-        """
-        Validate a planner DAG spec. Returns error message or None if valid.
-        Checks: nodes exist, agent_names are registered, edges reference valid nodes,
-        no cycles, within max_nodes limit.
+        """执行 _validate_plan 对应的逻辑，并返回处理结果。
+
+        Args:
+            dag_spec: dict，调用方传入的 dag_spec 参数。
+
+        Returns:
+            Optional[str]，函数执行后的结果。
         """
         nodes = dag_spec.get("nodes", [])
         edges = dag_spec.get("edges", [])
@@ -364,7 +405,7 @@ class PlannerAgent:
             if dst not in node_ids:
                 return f"Edge references unknown target: {dst}"
 
-        # Cycle check via topological sort
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         in_degree = {nid: 0 for nid in node_ids}
         adjacency: dict[str, list[str]] = {nid: [] for nid in node_ids}
         for edge in edges:
@@ -389,13 +430,15 @@ class PlannerAgent:
         return None
 
     def _auto_wire_inputs(self, graph: Any) -> None:
+        """执行 _auto_wire_inputs 对应的逻辑，并返回处理结果。
+
+        Args:
+            graph: Any，调用方传入的 graph 参数。
+
+        Returns:
+            None，函数执行后的结果。
         """
-        For nodes with incoming edges but no input_mapping, auto-wire:
-        - If exactly one incoming edge: map "query" → "$ctx.{source_output_key}"
-        - If multiple incoming edges: map "query" → "$ctx.{source_output_key}" for first,
-          add additional sources as "context_N"
-        """
-        # Build reverse adjacency (who points to me)
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         incoming: dict[str, list[str]] = {nid: [] for nid in graph.nodes}
         for src, dst in graph.edges:
             incoming[dst].append(src)
@@ -403,15 +446,15 @@ class PlannerAgent:
         for node_id, sources in incoming.items():
             node = graph.nodes[node_id]
             if node.input_mapping:
-                continue  # Already has explicit mapping
+                continue  # 就绪状态。
             if not sources:
-                # Root node: takes original input
+                # 说明：该步骤用于实现上述逻辑并保证行为稳定。
                 node.input_mapping = {"query": "$input.user_query"}
             elif len(sources) == 1:
                 src_key = graph.nodes[sources[0]].output_key or sources[0]
                 node.input_mapping = {"query": f"$ctx.{src_key}"}
             else:
-                # Multiple inputs: combine
+                # 说明：该步骤用于实现上述逻辑并保证行为稳定。
                 mapping = {"query": f"$ctx.{graph.nodes[sources[0]].output_key or sources[0]}"}
                 for i, src in enumerate(sources[1:], 1):
                     src_key = graph.nodes[src].output_key or src
@@ -419,9 +462,13 @@ class PlannerAgent:
                 node.input_mapping = mapping
 
     def _fallback_plan(self, task_description: str) -> PlanResult:
-        """
-        Create a single-agent fallback plan when LLM planning fails.
-        Guesses the best agent for the task based on keywords.
+        """执行 _fallback_plan 对应的逻辑，并返回处理结果。
+
+        Args:
+            task_description: str，调用方传入的 task_description 参数。
+
+        Returns:
+            PlanResult，函数执行后的结果。
         """
         agent_name = self._guess_single_agent(task_description)
         return PlanResult(
@@ -431,13 +478,13 @@ class PlannerAgent:
         )
 
     def _guess_single_agent(self, task_description: str) -> str:
-        """
-        Heuristic agent selection based on task description keywords.
-        Used as fallback when LLM planning fails.
+        """执行 _guess_single_agent 对应的逻辑，并返回处理结果。
 
-        Agent names here MUST match the names actually registered in the
-        AgentRegistry (hyphenated, e.g. ``security-scan``) so the selected
-        agent can be resolved at execution time.
+        Args:
+            task_description: str，调用方传入的 task_description 参数。
+
+        Returns:
+            str，函数执行后的结果。
         """
         task_lower = task_description.lower()
 
@@ -454,10 +501,10 @@ class PlannerAgent:
                 if agent_name in self._registry.list_agents():
                     return agent_name
 
-        # Default to code-review as the most general-purpose agent
+        # Agent 注册与查询。
         if "code-review" in self._registry.list_agents():
             return "code-review"
 
-        # Ultimate fallback: return first available agent
+        # Agent 注册与查询。
         agents = self._registry.list_agents()
         return agents[0] if agents else "unknown"

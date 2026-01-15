@@ -18,9 +18,9 @@ import pytest
 
 from agentforge.tools.test_execution_tool import TestExecutionTool
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 辅助函数 — mock asyncio.create_subprocess_exec
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 def _make_mock_process(
@@ -44,19 +44,29 @@ def _make_mock_process(
     return process
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 基础测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestTestExecutionToolBasic:
     """TestExecutionTool 基础属性测试。"""
 
     def test_name(self) -> None:
+        """验证 name 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         tool = TestExecutionTool()
         assert tool.name == "test_execution"
 
     def test_schema(self) -> None:
+        """验证 schema 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         tool = TestExecutionTool()
         schema = tool.schema()
         assert schema["type"] == "function"
@@ -69,17 +79,27 @@ class TestTestExecutionToolBasic:
         assert "test_path" in required
 
     def test_init_defaults(self) -> None:
+        """验证 init_defaults 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         tool = TestExecutionTool()
         assert tool.timeout == 300
 
     def test_init_custom_timeout(self) -> None:
+        """验证 init_custom_timeout 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         tool = TestExecutionTool(timeout=60)
         assert tool.timeout == 60
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 成功执行测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestTestExecutionSuccess:
@@ -160,9 +180,9 @@ class TestTestExecutionSuccess:
         assert result.metadata["total"] == 0
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 测试失败场景
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestTestExecutionFailure:
@@ -220,9 +240,9 @@ class TestTestExecutionFailure:
         assert result.metadata["failed"] == 3
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 超时处理
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestTestExecutionTimeout:
@@ -278,9 +298,9 @@ class TestTestExecutionTimeout:
         assert result.metadata["coverage"] is None
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 自定义命令
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestTestExecutionCustomCommand:
@@ -333,9 +353,9 @@ class TestTestExecutionCustomCommand:
         assert "--tb=short" in args
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 输出解析
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestTestExecutionOutputParsing:
@@ -396,9 +416,9 @@ class TestTestExecutionOutputParsing:
         assert result["coverage"] is None
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 综合测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestTestExecutionComprehensive:

@@ -1,1 +1,6 @@
-# Application services for the new AgentForge platform.
+"""AgentForge 平台应用服务层包初始化。
+
+本模块用于声明包边界，并保持该目录可以被稳定导入。
+"""
+
+# 服务层行为验证。

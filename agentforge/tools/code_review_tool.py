@@ -40,6 +40,15 @@ class CodeReviewTool(BaseTool):
         rules_path: str | None = None,
         max_file_size: int = 1024 * 1024,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            rules_path: str | None，调用方传入的 rules_path 参数。
+            max_file_size: int，调用方传入的 max_file_size 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.rules_path = rules_path
         self.max_file_size = max_file_size
 
@@ -91,9 +100,9 @@ class CodeReviewTool(BaseTool):
             },
         }
 
-    # ------------------------------------------------------------------
+    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
     # AST 分析辅助方法
-    # ------------------------------------------------------------------
+    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
     @staticmethod
     def _calc_complexity(
@@ -163,6 +172,15 @@ class CodeReviewTool(BaseTool):
         )
 
         def _depth(n: ast.AST, current: int) -> int:
+            """执行 _depth 对应的逻辑，并返回处理结果。
+
+            Args:
+                n: ast.AST，调用方传入的 n 参数。
+                current: int，调用方传入的 current 参数。
+
+            Returns:
+                int，函数执行后的结果。
+            """
             max_d = current
             for child in ast.iter_child_nodes(n):
                 if isinstance(child, nesting_nodes):
@@ -173,9 +191,9 @@ class CodeReviewTool(BaseTool):
 
         return _depth(node, 0)
 
-    # ------------------------------------------------------------------
+    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
     # 核心执行方法
-    # ------------------------------------------------------------------
+    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
     async def execute(self, **kwargs: Any) -> ToolResult:
         """执行代码审查。

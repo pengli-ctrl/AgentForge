@@ -80,6 +80,15 @@ class AgentEngine:
         llm_gateway: LLMGateway,
         max_iterations: int = 5,
     ):
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            llm_gateway: LLMGateway，调用方传入的 llm_gateway 参数。
+            max_iterations: int，调用方传入的 max_iterations 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.llm = llm_gateway
         self.tool_registry = ToolRegistry()  # 统一工具注册表
         self.max_iterations = max_iterations  # 防止无限循环

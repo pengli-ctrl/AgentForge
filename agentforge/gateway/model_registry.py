@@ -1,26 +1,12 @@
-"""
-Model Registry — central registry for available LLM models.
+"""AgentForge 模型网关层：model_registry。
 
-Manages model profiles, availability status, and circuit breaker state.
-Each model has a ModelProfile describing its capabilities, cost, and latency.
-The registry is the source of truth for which models the SmartRouter can use.
+本模块负责 model_registry 相关能力，是 模型网关层 的组成部分。
 
-Design decisions:
-    - Singleton-style: one registry instance shared across the gateway layer
-    - Circuit breaker is tracked HERE, not in the router — the router calls
-      registry.mark_unavailable() when failures exceed threshold
-    - Recovery is automatic via a tracked asyncio task (no background thread
-      needed); the task holds a strong reference so recovery always runs even
-      if no other reference to the registry survives scheduling time
-    - Default models are registered at init with production-tuned profiles
-    - Models can be added/removed at runtime for A/B testing or model rotation
-
-Production tuning notes:
-    - Qwen3-Pro: highest capability (9.0), but 2.5x more expensive than MiniMax
-    - Kimi: unique 200K context window — only model for long-document tasks
-    - MiniMax: 10x cheaper than alternatives, used as fallback and for simple tasks
-    - DeepSeek-V3: best price/performance ratio — 0.008/1K with 8.5 capability
-    - GLM-5: balanced middle-ground, good for general-purpose tasks
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
+- 关键路径应保留日志、指标或链路追踪信息。
+- 主要类：ModelProfile、ModelRegistry。
 """
 
 import asyncio
@@ -33,79 +19,80 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ModelProfile:
-    """
-    Profile for a single registered model.
+    """ModelProfile。
 
-    All scoring dimensions are stored here; routing logic is in SmartRouter.
-    The profile is essentially a static description of the model's capabilities
-    and economics — runtime state (is_available) is also tracked here.
+    ModelProfile 封装相关领域行为，保持职责单一并降低调用方复杂度。
 
-    Attributes:
-        name: Model identifier (e.g., "Qwen3-Pro"). Used in API calls.
-        capability_score: Quality score 0–10, higher = better output quality.
-        cost_per_1k_tokens: USD cost per 1000 tokens (input+output combined).
-        avg_latency_ms: Average response latency measured over last 1000 calls.
-        max_context_length: Maximum input token count the model supports.
-        is_available: Runtime flag — False when circuit breaker is open.
-        description: Human-readable model description for logging/debugging.
-        specializations: Task types this model excels at (e.g., ["reasoning", "code_gen"]).
+    主要成员：
+    - name: str。
+    - capability_score: float。
+    - cost_per_1k_tokens: float。
+    - avg_latency_ms: float。
+    - max_context_length: int。
+    - is_available: bool。
+    - description: str。
+    - specializations: list[str]。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
     """
 
     name: str
-    capability_score: float  # 0–10, higher = better quality
-    cost_per_1k_tokens: float  # USD per 1K tokens
-    avg_latency_ms: float  # Average response latency
-    max_context_length: int = 32000  # Max input tokens
-    is_available: bool = True  # Runtime: set False during circuit break
+    capability_score: float  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    cost_per_1k_tokens: float  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    avg_latency_ms: float  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    max_context_length: int = 32000  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    is_available: bool = True  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
     description: str = ""
     specializations: list[str] = field(default_factory=list)
 
 
 class ModelRegistry:
-    """
-    Central registry of available LLM models.
+    """ModelRegistry。
 
-    Responsibilities:
-        1. Maintain the list of models and their profiles
-        2. Track availability (circuit breaker state) per model
-        3. Provide lookup methods for the SmartRouter
-        4. Handle automatic recovery after circuit breaker trips
+    ModelRegistry 是核心运行时组件，负责状态管理、调度和跨模块协作。
 
-    Circuit breaker behavior:
-        - When a model has >50% failure rate over last 10 calls, the
-          SmartRouter calls mark_unavailable() to temporarily remove it
-        - After duration_seconds (default 15 min), the model is automatically
-          recovered and becomes available again
-        - This prevents cascading failures from a degraded model provider
+    主要成员：
+    - 方法 get()。
+    - 方法 get_available()。
+    - 方法 mark_unavailable()。
+    - 方法 mark_available()。
+    - 方法 register_model()。
+    - 方法 unregister_model()。
+    - 方法 list_models()。
+    - 方法 get_all_profiles()。
+    - 方法 get_by_specialization()。
+    - 方法 get_cheapest()。
+    - 方法 get_fastest()。
+    - 方法 get_most_capable()。
+    - 方法 status_summary()。
 
-    Thread safety:
-        - All mutations (mark_unavailable, register, unregister) use asyncio.Lock
-        - Read operations (get, list_models, get_available) are lock-free
-          because they return copies or immutable references
-
-    Recovery safety:
-        - Previously, mark_unavailable scheduled recovery via
-          ``asyncio.get_event_loop().call_later(duration, self._recover_model,
-          name)``. ``call_later`` only holds a weak reference to the callback, so
-          the bound method could be GC'd and the model would never recover. It
-          also raced with other mutations because the flag flip was not guarded.
-        - Now each model's recovery is a pending ``asyncio.Task`` stored by strong
-          reference, guarded by ``_lock``. Re-marking cancels any prior pending
-          recovery, and ``mark_available`` cancels pending recovery as well, so a
-          model cannot be spuriously re-opened by an obsolete timer.
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
     """
 
     def __init__(self):
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._models: dict[str, ModelProfile] = {}
         self._lock = asyncio.Lock()
-        # Strong reference to per-model recovery tasks. Keeping the running task
-        # alive guarantees the model is restored even if no other strong
-        # reference to the registry exists when recovery is scheduled.
+        # 执行中状态。
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         self._pending_recovery: dict[str, asyncio.Task] = {}
         self._register_defaults()
 
     def _register_defaults(self) -> None:
-        """Register the 5 default models with production-tuned profiles."""
+        """执行 _register_defaults 对应的逻辑，并返回处理结果。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         defaults = [
             ModelProfile(
                 name="Qwen3-Pro",
@@ -130,7 +117,7 @@ class ModelRegistry:
                 capability_score=7.5,
                 cost_per_1k_tokens=0.012,
                 avg_latency_ms=2000,
-                max_context_length=200000,  # 200K context — unique advantage
+                max_context_length=200000,  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
                 description="200K context window — best for long-document processing",
                 specializations=["long_context", "summarization"],
             ),
@@ -157,40 +144,33 @@ class ModelRegistry:
             self._models[model.name] = model
 
     def get(self, name: str) -> Optional[ModelProfile]:
-        """
-        Get a model profile by name.
+        """执行 get 对应的核心操作，并保持调用契约稳定。
 
         Args:
-            name: Model identifier (e.g., "Qwen3-Pro").
+            name: str，调用方传入的 name 参数。
 
         Returns:
-            ModelProfile if found, None otherwise.
+            Optional[ModelProfile]，函数执行后的结果。
         """
         return self._models.get(name)
 
     def get_available(self) -> list[ModelProfile]:
-        """
-        Get all models currently available (not circuit-broken).
+        """读取并返回指定数据，并返回调用方需要的结果。
 
         Returns:
-            List of ModelProfile instances where is_available=True.
+            list[ModelProfile]，函数执行后的结果。
         """
         return [m for m in self._models.values() if m.is_available]
 
     async def mark_unavailable(self, name: str, duration_seconds: float = 900) -> None:
-        """
-        Circuit breaker: mark model as unavailable for duration.
-
-        Called by SmartRouter when a model's failure rate exceeds threshold.
-        After duration_seconds, the model is automatically recovered.
-
-        Holds the pending recovery for ``name`` by strong reference (via an
-        asyncio task stored in ``_pending_recovery``), cancelling any previous
-        not-yet-fired recovery so stale timers cannot resurrect the model early.
+        """执行 mark_unavailable 对应的逻辑，并返回处理结果。
 
         Args:
-            name: Model identifier to mark unavailable.
-            duration_seconds: How long to keep the circuit open. Default 900s (15 min).
+            name: str，调用方传入的 name 参数。
+            duration_seconds: float，调用方传入的 duration_seconds 参数。
+
+        Returns:
+            None，函数执行后的结果。
         """
         async with self._lock:
             model = self._models.get(name)
@@ -200,26 +180,24 @@ class ModelRegistry:
             model.is_available = False
             logger.warning("Circuit breaker: %s unavailable for %.0fs", name, duration_seconds)
 
-            # Cancel any previously scheduled recovery for this model.
+            # 取消任务。
             previous = self._pending_recovery.pop(name, None)
             if previous is not None and not previous.done():
                 previous.cancel()
 
-            # Strong-reference the recovery task so it is not GC'd.
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             recovery = asyncio.create_task(self._recover_model_after(name, duration_seconds))
             self._pending_recovery[name] = recovery
 
     async def _recover_model_after(self, name: str, duration_seconds: float) -> None:
-        """
-        Recover a circuit-broken model after the timeout elapses (async task body).
-
-        Runs as an asyncio task and only flips availability back if this task is
-        still the current pending recovery for ``name`` (guards against races
-        with re-mark or an explicit mark_available).
+        """执行 _recover_model_after 对应的逻辑，并返回处理结果。
 
         Args:
-            name: Model identifier to recover.
-            duration_seconds: How long to wait before recovering.
+            name: str，调用方传入的 name 参数。
+            duration_seconds: float，调用方传入的 duration_seconds 参数。
+
+        Returns:
+            None，函数执行后的结果。
         """
         try:
             await asyncio.sleep(duration_seconds)
@@ -238,14 +216,13 @@ class ModelRegistry:
             logger.info("Circuit breaker: %s recovered", name)
 
     async def mark_available(self, name: str) -> None:
-        """
-        Immediately restore a model and cancel any pending auto-recovery.
-
-        Useful when a health probe confirms the provider recovered ahead of the
-        scheduled timeout, or for manual intervention.
+        """执行 mark_available 对应的逻辑，并返回处理结果。
 
         Args:
-            name: Model identifier to mark available.
+            name: str，调用方传入的 name 参数。
+
+        Returns:
+            None，函数执行后的结果。
         """
         async with self._lock:
             model = self._models.get(name)
@@ -258,11 +235,13 @@ class ModelRegistry:
             logger.info("Model %s marked available (cancelled pending recovery)", name)
 
     async def register_model(self, profile: ModelProfile) -> None:
-        """
-        Register a new model at runtime (e.g., for A/B testing).
+        """执行 register_model 对应的逻辑，并返回处理结果。
 
         Args:
-            profile: Complete ModelProfile for the new model.
+            profile: ModelProfile，调用方传入的 profile 参数。
+
+        Returns:
+            None，函数执行后的结果。
         """
         async with self._lock:
             if profile.name in self._models:
@@ -276,14 +255,13 @@ class ModelRegistry:
             )
 
     async def unregister_model(self, name: str) -> bool:
-        """
-        Remove a model from the registry.
+        """执行 unregister_model 对应的逻辑，并返回处理结果。
 
         Args:
-            name: Model identifier to remove.
+            name: str，调用方传入的 name 参数。
 
         Returns:
-            True if the model was found and removed.
+            bool，函数执行后的结果。
         """
         async with self._lock:
             if name in self._models:
@@ -293,65 +271,72 @@ class ModelRegistry:
             return False
 
     def list_models(self) -> list[str]:
-        """
-        List all registered model names.
+        """查询并返回列表结果，并返回调用方需要的结果。
 
         Returns:
-            List of model name strings (includes both available and circuit-broken).
+            list[str]，函数执行后的结果。
         """
         return list(self._models.keys())
 
     def get_all_profiles(self) -> list[ModelProfile]:
-        """
-        Get all model profiles (including circuit-broken ones).
-        Useful for admin/dashboard purposes.
+        """读取并返回指定数据，并返回调用方需要的结果。
 
         Returns:
-            List of all ModelProfile instances.
+            list[ModelProfile]，函数执行后的结果。
         """
         return list(self._models.values())
 
     def get_by_specialization(self, task_type: str) -> list[ModelProfile]:
-        """
-        Get models that specialize in a given task type.
+        """读取并返回指定数据，并返回调用方需要的结果。
 
         Args:
-            task_type: Task category (e.g., "code_gen", "reasoning").
+            task_type: str，调用方传入的 task_type 参数。
 
         Returns:
-            List of ModelProfile instances that list this specialization.
+            list[ModelProfile]，函数执行后的结果。
         """
         return [
             m for m in self._models.values() if m.is_available and task_type in m.specializations
         ]
 
     def get_cheapest(self) -> Optional[ModelProfile]:
-        """Get the cheapest available model (for budget-sensitive routing)."""
+        """读取并返回指定数据，并返回调用方需要的结果。
+
+        Returns:
+            Optional[ModelProfile]，函数执行后的结果。
+        """
         available = self.get_available()
         if not available:
             return None
         return min(available, key=lambda m: m.cost_per_1k_tokens)
 
     def get_fastest(self) -> Optional[ModelProfile]:
-        """Get the fastest available model (for latency-sensitive routing)."""
+        """读取并返回指定数据，并返回调用方需要的结果。
+
+        Returns:
+            Optional[ModelProfile]，函数执行后的结果。
+        """
         available = self.get_available()
         if not available:
             return None
         return min(available, key=lambda m: m.avg_latency_ms)
 
     def get_most_capable(self) -> Optional[ModelProfile]:
-        """Get the most capable available model (for quality-critical tasks)."""
+        """读取并返回指定数据，并返回调用方需要的结果。
+
+        Returns:
+            Optional[ModelProfile]，函数执行后的结果。
+        """
         available = self.get_available()
         if not available:
             return None
         return max(available, key=lambda m: m.capability_score)
 
     def status_summary(self) -> dict[str, Any]:
-        """
-        Get a status summary for monitoring/dashboard.
+        """执行 status_summary 对应的逻辑，并返回处理结果。
 
         Returns:
-            Dict with model counts and availability status.
+            dict[str, Any]，函数执行后的结果。
         """
         total = len(self._models)
         available = len(self.get_available())

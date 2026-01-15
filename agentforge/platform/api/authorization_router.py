@@ -1,3 +1,14 @@
+"""AgentForge 平台 API 层：authorization_router。
+
+本模块定义 authorization_ 相关 HTTP 接口，负责请求解析、鉴权校验、调用应用服务并组织响应。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+- 主要函数：create_authorization_router。
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -8,12 +19,16 @@ from agentforge.platform.runtime import ServiceContainer
 
 
 def create_authorization_router(container: ServiceContainer) -> APIRouter:
-    """Expose the high-risk authorization gate as an audited API.
+    """创建新的业务对象，并返回调用方需要的结果。
 
-    ``POST /v1/authorize`` evaluates whether ``principal`` may run ``action`` on
-    a resource and -- when a human-approved ``ticket`` context is supplied --
-    enforces the approval boundary. Every check is persisted as an audit event,
-    so callers can answer "who executed / why allowed" for high-risk actions.
+    Args:
+        container: ServiceContainer，调用方传入的 container 参数。
+
+    Returns:
+        APIRouter，函数执行后的结果。
+
+    Raises:
+        HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
     """
     router = APIRouter(prefix="/v1/authorize", tags=["authorize"])
 
@@ -22,6 +37,18 @@ def create_authorization_router(container: ServiceContainer) -> APIRouter:
         request: Request,
         body: dict[str, Any],
     ) -> dict:
+        """执行 authorize 对应的逻辑，并返回处理结果。
+
+        Args:
+            request: Request，调用方传入的 request 参数。
+            body: dict[str, Any]，调用方传入的 body 参数。
+
+        Returns:
+            dict，函数执行后的结果。
+
+        Raises:
+            HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+        """
         tenant_id = body.get("tenant_id")
         principal = body.get("principal")
         action = body.get("action")

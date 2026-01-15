@@ -90,6 +90,15 @@ class LLMReranker:
         llm_gateway: LLMGateway,
         max_chunks: int = 20,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            llm_gateway: LLMGateway，调用方传入的 llm_gateway 参数。
+            max_chunks: int，调用方传入的 max_chunks 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.llm_gateway = llm_gateway
         self.max_chunks = max_chunks
 

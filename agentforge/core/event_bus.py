@@ -54,6 +54,16 @@ class EventBus:
         redis_url: str = "redis://localhost:6379",
         kafka_config: dict[str, Any] | None = None,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            backend: str，调用方传入的 backend 参数。
+            redis_url: str，调用方传入的 redis_url 参数。
+            kafka_config: dict[str, Any] | None，调用方传入的 kafka_config 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.backend = backend
         self.redis_url = redis_url
         self.kafka_config = kafka_config or {}

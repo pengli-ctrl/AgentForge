@@ -1,3 +1,14 @@
+"""AgentForge 平台应用服务层：builtin_policies。
+
+本模块负责 builtin_policies 相关的平台能力，是 平台应用服务层 的组成部分。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+- 主要函数：builtin_policies、seed_rbac。
+"""
+
 from __future__ import annotations
 
 from agentforge.platform.domain.policy import ActionPolicy
@@ -5,10 +16,10 @@ from agentforge.platform.domain.rbac import Permission, Role
 
 
 def builtin_policies() -> list[ActionPolicy]:
-    """Declarative default action policies.
+    """执行 builtin_policies 对应的逻辑，并返回处理结果。
 
-    Fail-closed: only actions listed here are promotable. ``ticket.writeback``
-    is a high-risk write action that always requires approval.
+    Returns:
+        list[ActionPolicy]，函数执行后的结果。
     """
     return [
         ActionPolicy(
@@ -35,9 +46,24 @@ def builtin_policies() -> list[ActionPolicy]:
 
 
 def _async_relation_check(openfga_client):
-    """Return an async callable wrapper around the OpenFGA client check."""
+    """执行 _async_relation_check 对应的逻辑，并返回处理结果。
+
+    Args:
+        openfga_client: Any，调用方传入的 openfga_client 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
 
     async def _check(tuple_) -> bool:
+        """执行 _check 对应的逻辑，并返回处理结果。
+
+        Args:
+            tuple_: Any，调用方传入的 tuple_ 参数。
+
+        Returns:
+            bool，函数执行后的结果。
+        """
         return openfga_client.acheck(
             tuple_.tenant_id,
             tuple_.object_type,
@@ -50,7 +76,14 @@ def _async_relation_check(openfga_client):
 
 
 async def seed_rbac(repository) -> None:
-    """Idempotently seed built-in roles iff no roles exist yet."""
+    """执行 seed_rbac 对应的逻辑，并返回处理结果。
+
+    Args:
+        repository: Any，调用方传入的 repository 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     roles = [
         Role(
             role_id="role-support-admin",

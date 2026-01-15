@@ -1,52 +1,52 @@
-# AgentForge Dependencies
+# AgentForge 运行时依赖。
+# 本文件是平台运行时依赖的唯一来源。platform 层的硬顶层导入必须在这里声明，
+# 否则干净环境或 CI 会在导入阶段失败。注释尽量保持为 ASCII 安全内容，
+# 避免部分 Windows 终端编码导致 pip 解析异常。
 
-# Core
+# --- 核心依赖 ---
 pyyaml>=6.0
 
-# LLM Gateway
+# --- LLM 网关 ---
 httpx>=0.25.0
 
-# Event Bus (choose one)
+# --- 事件总线，按部署方案选择 ---
 redis>=5.0.0
-# kafka-python>=2.0.0  # uncomment when migrating to Kafka
+# 生产环境使用 aiokafka，详见下方 Workflow / Eventing 分组。
 
-# RAG
+# --- RAG 检索与向量能力 ---
 tree-sitter>=0.21.0
 tree-sitter-python>=0.21.0
 rank-bm25>=0.2.2
 faiss-cpu>=1.7.4
 
-# API Layer
+# --- API 服务层 ---
 fastapi>=0.104.0
-uvicorn>=0.24.0
+uvicorn[standard]>=0.24.0
 
-# Storage
-# MySQL driver (install when using MySQL backend)
-# aiomysql>=0.2.0
-# sqlalchemy>=2.0.0
+# --- 校验与配置，platform 层存在顶层导入 ---
+pydantic>=1.10.0
+pydantic-settings>=2.0.0
 
-# Observability
+# --- 存储层 ---
+# platform 持久化模块会硬导入 SQLAlchemy。
+# 生产环境使用 asyncpg 连接 PostgreSQL，测试环境使用 requirements-dev 中的 aiosqlite。
+sqlalchemy>=2.0.0
+alembic>=1.13.0
+asyncpg>=0.29.0
+pgvector>=0.2.0
+
+# --- 工作流、事件流和 LLM ---
+temporalio>=1.6.0
+aiokafka>=0.10.0
+litellm>=1.40.0
+
+# --- 可观测性 ---
 prometheus-client>=0.19.0
 opentelemetry-api>=1.20.0
 opentelemetry-sdk>=1.20.0
+opentelemetry-exporter-otlp-proto-grpc>=1.20.0
 
-# CLI
-# typer>=0.9.0  # optional, CLI uses argparse by default
-
-# Safety / Observability
-# (already covered by opentelemetry and prometheus-client)
-
-# SDK
-# httpx already included above
-
-# Utils
+# --- 通用工具 ---
 numpy>=1.24.0
 
-# Development (install with: pip install -r requirements-dev.txt)
-# pytest>=7.0.0
-# pytest-asyncio>=0.21.0
-# pytest-cov>=4.0.0
-# black>=23.0.0
-# isort>=5.12.0
-# flake8>=6.0.0
-# mypy>=1.5.0
+# 开发依赖位于 requirements-dev.txt，包括 pytest、lint 和异步测试工具。

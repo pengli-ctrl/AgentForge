@@ -1,19 +1,12 @@
-"""Agent 构建器 — 流式 API 构建 Agent。
+"""AgentForge SDK 层：builder。
 
-提供链式调用 API 来构建 Agent 实例，
-使 Agent 的创建更加直观和可读。
+本模块负责 builder 相关能力，是 SDK 层 的组成部分。
 
-使用方式：
-    agent = (
-        AgentBuilder()
-        .with_llm(llm_gateway)
-        .with_tool(CodeReviewTool())
-        .with_tool(SecurityScanTool())
-        .with_prompt("code_review")
-        .with_name("my-code-reviewer")
-        .with_max_iterations(10)
-        .build()
-    )
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
+- 关键路径应保留日志、指标或链路追踪信息。
+- 主要类：AgentBuilder、_BuiltAgent。
 """
 
 from __future__ import annotations
@@ -51,6 +44,11 @@ class AgentBuilder:
     """
 
     def __init__(self) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._llm_gateway: Any = None
         self._tools: list[BaseTool] = []
         self._prompt_name: str = ""

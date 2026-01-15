@@ -100,6 +100,15 @@ class LLMRouter:
         llm_gateway: LLMGateway,
         default_agent: str = "code-review",
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            llm_gateway: LLMGateway，调用方传入的 llm_gateway 参数。
+            default_agent: str，调用方传入的 default_agent 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.llm_gateway = llm_gateway
         self.default_agent = default_agent
 

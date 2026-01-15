@@ -3,12 +3,12 @@
 ![CI](https://img.shields.io/badge/CI-passing-brightgreen)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
-![Tests](https://img.shields.io/badge/Tests-703%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/Tests-728%20passed-brightgreen)
 ![Code Style](https://img.shields.io/badge/code%20style-black-000000)
 
 > An **AI Agent orchestration + enterprise governance platform** for SMEs — a one-stop AI platform infrastructure spanning multi-agent orchestration, intelligent routing, cost control, and an end-to-end multi-tenant customer-support ticket workflow (retrieve → generate → approve → write back).
 
-AgentForge is an integrated platform for AI Agent orchestration and enterprise governance. On top sits a **multi-agent orchestration engine** with a three-layer architecture (orchestration / runtime / gateway): a built-in DAG task engine (up to 50 nodes), 5-model intelligent routing, semantic caching, three-tier memory, and end-to-end tracing. Below it is an **enterprise AI platform layer** (first landing: customer-support and after-sales ticket processing): multi-tenancy, RBAC + a declarative policy engine, tenant quotas and cost governance, full-process auditing, Temporal workflows + Outbox reliable delivery, retrieval evaluation and offline regression, and connectors with ticket write-back. Open source — **all 703 automated tests pass** (including 237 platform-layer tests), with black / isort / flake8 / mypy all green.
+AgentForge is an integrated platform for AI Agent orchestration and enterprise governance. On top sits a **multi-agent orchestration engine** with a three-layer architecture (orchestration / runtime / gateway): a built-in DAG task engine (up to 50 nodes), 5-model intelligent routing, semantic caching, three-tier memory, and end-to-end tracing. Below it is an **enterprise AI platform layer** (first landing: customer-support and after-sales ticket processing): multi-tenancy, RBAC + a declarative policy engine, tenant quotas and cost governance, full-process auditing, Temporal workflows + Outbox reliable delivery, retrieval evaluation and offline regression, and connectors with ticket write-back. Open source — **all 728 automated tests pass** (including 262 platform-layer tests), with black / isort / flake8 / mypy all green.
 
 ---
 
@@ -169,10 +169,10 @@ Feishu/Webhook → signature check + idempotency → ticket create/state machine
 | Task completion rate | **97%** | across 15,000+ requests |
 | Cascade failure rate | **< 0.3%** | structured output + cross-validation + safe defaults |
 | Cache hit rate | **38%** | Embedding similarity > 0.92 |
-| Automated tests | **703** | all pass, green CI (unit + integration + platform) |
+| Automated tests | **728** | all pass, green CI (unit + integration + platform) |
 | Agent types | **5** | code review / test execution / doc generation / security scan / deploy |
 | Max DAG size | **50 nodes** | Kahn topo sort + parallel scheduling |
-| Platform tests | **237** | dedicated enterprise AI platform layer tests |
+| Platform tests | **262** | dedicated enterprise AI platform layer tests |
 
 > Data from benchmark runs (2,000 labeled queries) and daily usage (3 weeks, 15,000+ requests total); not a commercial production environment.
 
@@ -252,8 +252,8 @@ AgentForge/
 │   ├── workflows/                # DAG workflow configs
 │   ├── dev/ · prod/              # Runtime environment configs
 │   └── logging.yaml              # Logging config
-├── tests/                        # 703 tests (unit + integration + platform)
-├── docs/                         # Architecture / handoff / BACKLOG docs
+├── tests/                        # 728 tests (unit + integration + platform)
+├── docs/                         # Architecture / ADR / overview docs
 ├── alembic/                      # Database migrations
 ├── deploy/                       # Deployment configs
 └── ...
@@ -313,7 +313,7 @@ print(decision.outcome)  # allowed / denied / requires_approval
 
 ## Engineering Guarantees
 
-- **Tests**: 703 automated tests (unit + integration + platform), all green locally
+- **Tests**: 728 automated tests (unit + integration + platform), all green locally
 - **Static checks**: black / isort / flake8 (max-line-length=100) / mypy — **zero errors** across 206 source files
 - **CI**: GitHub Actions full test suite (Python 3.10 / 3.11 / 3.12), no `continue-on-error` to mask failures
 - **Type safety**: strict mypy coverage across the repo

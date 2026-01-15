@@ -1,3 +1,15 @@
+"""AgentForge 平台测试层：test_retrieval_evaluation。
+
+本测试模块验证 test_retrieval_evaluation 覆盖的业务路径、边界条件和回归场景。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+-
+主要函数：test_recall_at_k、test_precision_at_k、test_mean_reciprocal_rank、test_citation_accuracy、test_hybrid_reranker_prefers_keyword_coverage、test_retrieval_evaluation_scores、test_evaluation_tenant_isolation。
+"""
+
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
@@ -35,10 +47,26 @@ from agentforge.platform.infrastructure.sqlalchemy_knowledge_repository import (
     ],
 )
 def test_recall_at_k(relevant, retrieved, k, expected) -> None:
+    """验证 recall_at_k 对应的业务行为、边界条件和回归场景。
+
+    Args:
+        relevant: Any，调用方传入的 relevant 参数。
+        retrieved: Any，调用方传入的 retrieved 参数。
+        k: Any，调用方传入的 k 参数。
+        expected: Any，调用方传入的 expected 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     assert recall_at_k(relevant, retrieved, k) == expected
 
 
 def test_precision_at_k() -> None:
+    """验证 precision_at_k 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     relevant = {"a", "b"}
     assert precision_at_k(relevant, ["a", "c", "d"], k=3) == 1 / 3
     assert precision_at_k(relevant, ["a", "b"], k=2) == 1.0
@@ -46,6 +74,11 @@ def test_precision_at_k() -> None:
 
 
 def test_mean_reciprocal_rank() -> None:
+    """验证 mean_reciprocal_rank 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     queries = [
         ({"a", "b"}, ["x", "a", "b"]),  # 首命中位置 2 -> 0.5
         ({"c"}, ["c", "d"]),  # 首命中位置 1 -> 1.0
@@ -56,6 +89,11 @@ def test_mean_reciprocal_rank() -> None:
 
 
 def test_citation_accuracy() -> None:
+    """验证 citation_accuracy 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     relevant = {"a", "b", "c"}
     assert citation_accuracy(["a", "c"], relevant) == 1.0
     assert citation_accuracy(["a", "zz"], relevant) == 0.5
@@ -63,6 +101,18 @@ def test_citation_accuracy() -> None:
 
 
 def _chunk(chunk_id: str, title: str, content: str, fts: float, vec: float) -> RetrievedChunk:
+    """执行 _chunk 对应的逻辑，并返回处理结果。
+
+    Args:
+        chunk_id: str，调用方传入的 chunk_id 参数。
+        title: str，调用方传入的 title 参数。
+        content: str，调用方传入的 content 参数。
+        fts: float，调用方传入的 fts 参数。
+        vec: float，调用方传入的 vec 参数。
+
+    Returns:
+        RetrievedChunk，函数执行后的结果。
+    """
     return RetrievedChunk(
         chunk_id=chunk_id,
         document_id="doc",
@@ -76,6 +126,11 @@ def _chunk(chunk_id: str, title: str, content: str, fts: float, vec: float) -> R
 
 
 def test_hybrid_reranker_prefers_keyword_coverage() -> None:
+    """验证 hybrid_reranker_prefers_keyword_coverage 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     reranker = HybridReranker()
     candidates = [
         _chunk(
@@ -99,6 +154,14 @@ def test_hybrid_reranker_prefers_keyword_coverage() -> None:
 
 
 async def _build(kind: str):
+    """执行 _build 对应的逻辑，并返回处理结果。
+
+    Args:
+        kind: str，调用方传入的 kind 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     if kind == "memory":
         return MemoryKnowledgeRepository()
     engine = create_async_engine(
@@ -113,6 +176,14 @@ async def _build(kind: str):
 
 
 async def _seed(repository) -> None:
+    """执行 _seed 对应的逻辑，并返回处理结果。
+
+    Args:
+        repository: Any，调用方传入的 repository 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     docs = [
         (
             "t1",
@@ -145,6 +216,14 @@ async def _seed(repository) -> None:
 
 
 async def _run_evaluation(kind: str) -> None:
+    """执行 _run_evaluation 对应的逻辑，并返回处理结果。
+
+    Args:
+        kind: str，调用方传入的 kind 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     repository = await _build(kind)
     await _seed(repository)
     service = RetrievalEvaluationService(repository, HybridReranker())
@@ -173,12 +252,28 @@ async def _run_evaluation(kind: str) -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("kind", ["memory", "sqlalchemy"])
 async def test_retrieval_evaluation_scores(kind: str) -> None:
+    """验证 retrieval_evaluation_scores 对应的业务行为、边界条件和回归场景。
+
+    Args:
+        kind: str，调用方传入的 kind 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     await _run_evaluation(kind)
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("kind", ["memory", "sqlalchemy"])
 async def test_evaluation_tenant_isolation(kind: str) -> None:
+    """验证 evaluation_tenant_isolation 对应的业务行为、边界条件和回归场景。
+
+    Args:
+        kind: str，调用方传入的 kind 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     repository = await _build(kind)
     await _seed(repository)
     service = RetrievalEvaluationService(repository, HybridReranker())

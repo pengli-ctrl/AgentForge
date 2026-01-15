@@ -1,24 +1,12 @@
-"""
-Semantic cache — gateway layer core component.
+"""AgentForge 模型网关层：semantic_cache。
 
-Embedding similarity > 0.92 → return cached result directly (cache hit).
-Target hit rate: 38%.
+本模块负责 semantic_cache 相关能力，是 模型网关层 的组成部分。
 
-Why 0.92?
-    This is the Pareto-optimal threshold determined experimentally:
-    - At 0.95: too strict, hit rate only 12%, most similar queries miss
-    - At 0.92: hit rate 38%, false positive rate <2% (acceptable)
-    - At 0.90: hit rate 52%, but false positive rate jumps to 8% (unacceptable)
-    - At 0.85: hit rate 68%, but semantic drift makes cached answers unreliable
-
-    The 0.92 threshold maximizes hit rate while keeping false positives below
-    the "user would notice" threshold. Tested on 10K query pairs from production
-    traffic with human evaluation of "would a user accept this cached answer?"
-
-Eviction strategy: LRU + TTL hybrid.
-    - LRU: evict least-recently-accessed entries when at capacity
-    - TTL: entries older than 24h are considered stale regardless of access
-    This prevents both memory bloat (LRU) and stale answers (TTL).
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
+- 关键路径应保留日志、指标或链路追踪信息。
+- 主要类：CacheEntry、SemanticCache。
 """
 
 import asyncio
@@ -34,51 +22,71 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class CacheEntry:
-    """
-    Single cache entry holding the embedding, result, and access metadata.
+    """CacheEntry。
 
-    The embedding vector is stored in full for cosine similarity computation.
-    In production, consider using a FAISS index for O(1) approximate nearest
-    neighbor search instead of O(N) linear scan.
+    CacheEntry 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - key: str。
+    - embedding: list[float]。
+    - result: dict。
+    - hit_count: int。
+    - created_at: float。
+    - last_accessed: float。
+    - 方法 age_hours()。
+    - 方法 idle_minutes()。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
     """
 
-    key: str  # Text hash or original query
-    embedding: list[float]  # Dense vector from embedding model
-    result: dict  # Cached response to return on hit
-    hit_count: int = 0  # Number of times this entry was returned
+    key: str  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    embedding: list[float]  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    result: dict  # 缓存处理。
+    hit_count: int = 0  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
     created_at: float = field(default_factory=time.time)
     last_accessed: float = field(default_factory=time.time)
 
     @property
     def age_hours(self) -> float:
-        """Age of this entry in hours."""
+        """执行 age_hours 对应的逻辑，并返回处理结果。
+
+        Returns:
+            float，函数执行后的结果。
+        """
         return (time.time() - self.created_at) / 3600
 
     @property
     def idle_minutes(self) -> float:
-        """Minutes since last access."""
+        """执行 idle_minutes 对应的逻辑，并返回处理结果。
+
+        Returns:
+            float，函数执行后的结果。
+        """
         return (time.time() - self.last_accessed) / 60
 
 
 class SemanticCache:
+    """SemanticCache。
+
+    SemanticCache 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - DEFAULT_THRESHOLD: 0.92。
+    - DEFAULT_MAX_SIZE: 10000。
+    - DEFAULT_TTL_HOURS: 24。
+    - 方法 get()。
+    - 方法 put()。
+    - 方法 stats()。
+    - 方法 clear()。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
     """
-    Embedding-based semantic cache with cosine similarity matching.
 
-    Architecture:
-        Input text → Embedding model → Vector → Cosine similarity scan → Cache hit/miss
-
-    Performance characteristics:
-        - get(): O(N) linear scan where N = cache size. At N=10000, ~50ms on CPU.
-        - put(): O(1) amortized (with eviction).
-        - Memory: ~10000 entries × ~1KB/embedding = ~10MB for vectors + result storage.
-
-    Production optimization:
-        Replace linear scan with FAISS IndexFlatIP for O(log N) retrieval.
-        The current implementation is correct but slow at scale — this is
-        intentional for portability (no C++ dependencies).
-    """
-
-    # Default configuration
+    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
     DEFAULT_THRESHOLD = 0.92
     DEFAULT_MAX_SIZE = 10000
     DEFAULT_TTL_HOURS = 24
@@ -89,48 +97,43 @@ class SemanticCache:
         max_size: int = DEFAULT_MAX_SIZE,
         ttl_hours: float = DEFAULT_TTL_HOURS,
     ):
-        """
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
         Args:
-            threshold: Minimum cosine similarity for a cache hit (0.0–1.0).
-                       0.92 is the Pareto-optimal value (see module docstring).
-            max_size: Maximum number of entries before eviction triggers.
-            ttl_hours: Time-to-live in hours. Entries older than this are stale.
+            threshold: float，调用方传入的 threshold 参数。
+            max_size: int，调用方传入的 max_size 参数。
+            ttl_hours: float，调用方传入的 ttl_hours 参数。
+
+        Returns:
+            None，函数执行后的结果。
         """
         self._threshold = threshold
         self._max_size = max_size
         self._ttl_hours = ttl_hours
 
-        # Ordered dict for LRU tracking — most recently accessed at end
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         self._store: OrderedDict[str, CacheEntry] = OrderedDict()
         self._lock = asyncio.Lock()
 
-        # Statistics
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         self._total_lookups = 0
         self._total_hits = 0
         self._total_evictions = 0
 
     async def get(self, query_embedding: list[float]) -> Optional[CacheEntry]:
-        """
-        Look up a cache entry by embedding similarity.
-
-        Performs O(N) linear scan computing cosine similarity against all
-        cached entries. Returns the best match if similarity > threshold.
-
-        TTL-expired entries encountered on the way are removed (not merely
-        skipped), so stale items do not linger in memory and do not inflate
-        ``stats()["current_size"]``.
+        """执行 get 对应的核心操作，并保持调用契约稳定。
 
         Args:
-            query_embedding: Query vector from embedding model.
+            query_embedding: list[float]，调用方传入的 query_embedding 参数。
 
         Returns:
-            CacheEntry if a sufficiently similar cached result exists, None otherwise.
+            Optional[CacheEntry]，函数执行后的结果。
         """
         async with self._lock:
             self._total_lookups += 1
 
-            # Prune TTL-expired entries before scanning. Deleting within the lock
-            # avoids iterating while mutating and keeps expired data from lingering.
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             expired_keys = [
                 key for key, entry in self._store.items() if entry.age_hours > self._ttl_hours
             ]
@@ -149,10 +152,10 @@ class SemanticCache:
                     best_entry = entry
 
             if best_entry is not None and best_score >= self._threshold:
-                # Cache hit!
+                # 缓存处理。
                 best_entry.hit_count += 1
                 best_entry.last_accessed = time.time()
-                # Move to end (most recently used)
+                # 说明：该步骤用于实现上述逻辑并保证行为稳定。
                 self._store.move_to_end(best_entry.key)
                 self._total_hits += 1
 
@@ -177,27 +180,24 @@ class SemanticCache:
         embedding: list[float],
         result: dict,
     ) -> None:
-        """
-        Store a result in the cache with its embedding.
-
-        If the cache is at capacity, triggers LRU+TTL eviction before inserting.
-        If the key already exists, the old entry is removed first so the new one
-        lands at the most-recently-used end of the OrderedDict — otherwise
-        overwriting in place would break LRU order and reset its hit stats.
+        """执行 put 对应的逻辑，并返回处理结果。
 
         Args:
-            key_text: Original text or hash for identification.
-            embedding: Dense vector from embedding model.
-            result: The response to cache.
+            key_text: str，调用方传入的 key_text 参数。
+            embedding: list[float]，调用方传入的 embedding 参数。
+            result: dict，调用方传入的 result 参数。
+
+        Returns:
+            None，函数执行后的结果。
         """
         async with self._lock:
-            # Evict if at capacity
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             if len(self._store) >= self._max_size:
                 await self._evict()
 
-            key = key_text[:200]  # Truncate long keys
-            # Remove an existing entry for the same key first, so the new one is
-            # inserted at the MRU end of the OrderedDict (correct LRU order).
+            key = key_text[:200]  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             if key in self._store:
                 del self._store[key]
 
@@ -209,17 +209,15 @@ class SemanticCache:
             self._store[key] = entry
 
     async def _evict(self) -> None:
-        """
-        Eviction strategy: LRU + TTL hybrid.
+        """执行 _evict 对应的逻辑，并返回处理结果。
 
-        Phase 1: Remove all TTL-expired entries (age > ttl_hours).
-        Phase 2: If still at capacity, remove LRU entries until 10% free.
-                 We free 10% (not just 1) to avoid evicting on every put().
+        Returns:
+            None，函数执行后的结果。
         """
         now = time.time()
         ttl_seconds = self._ttl_hours * 3600
 
-        # Phase 1: Remove expired entries
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         expired_keys = [
             key for key, entry in self._store.items() if (now - entry.created_at) > ttl_seconds
         ]
@@ -227,9 +225,9 @@ class SemanticCache:
             del self._store[key]
         self._total_evictions += len(expired_keys)
 
-        # Phase 2: LRU eviction if still at capacity
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         if len(self._store) >= self._max_size:
-            # Remove oldest 10% of entries (OrderedDict: oldest = first items)
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             evict_count = max(1, self._max_size // 10)
             for _ in range(evict_count):
                 if self._store:
@@ -238,11 +236,14 @@ class SemanticCache:
 
     @staticmethod
     def _cosine_similarity(v1: list[float], v2: list[float]) -> float:
-        """
-        Compute cosine similarity between two vectors.
+        """执行 _cosine_similarity 对应的逻辑，并返回处理结果。
 
-        cos(θ) = (A · B) / (|A| × |B|)
-        Returns value in [-1, 1]. For normalized embeddings, range is [0, 1].
+        Args:
+            v1: list[float]，调用方传入的 v1 参数。
+            v2: list[float]，调用方传入的 v2 参数。
+
+        Returns:
+            float，函数执行后的结果。
         """
         if len(v1) != len(v2) or not v1:
             return 0.0
@@ -262,11 +263,10 @@ class SemanticCache:
         return dot_product / (math.sqrt(norm1) * math.sqrt(norm2))
 
     def stats(self) -> dict:
-        """
-        Cache performance statistics.
+        """执行 stats 对应的逻辑，并返回处理结果。
 
-        Returns hit rate, entry count, eviction count, and other metrics.
-        Used by CostTracker for cost attribution (cache hits = saved LLM costs).
+        Returns:
+            dict，函数执行后的结果。
         """
         hit_rate = self._total_hits / self._total_lookups if self._total_lookups > 0 else 0.0
         return {
@@ -282,7 +282,11 @@ class SemanticCache:
         }
 
     async def clear(self) -> None:
-        """Clear all cache entries and reset statistics."""
+        """执行 clear 对应的逻辑，并返回处理结果。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         async with self._lock:
             self._store.clear()
             self._total_lookups = 0

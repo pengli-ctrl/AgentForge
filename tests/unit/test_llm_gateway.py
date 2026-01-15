@@ -20,27 +20,35 @@ from agentforge.llm.gateway import (
 )
 from tests.conftest import MockLLMGateway
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 辅助函数 — 构建 httpx MockTransport
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 def _make_mock_transport(
     response_body: dict,
     status_code: int = 200,
 ):
-    """创建 httpx.MockTransport，返回指定的响应。
+    """执行 _make_mock_transport 对应的逻辑，并返回处理结果。
 
     Args:
-        response_body: 响应 JSON 体。
-        status_code: HTTP 状态码。
+        response_body: dict，调用方传入的 response_body 参数。
+        status_code: int，调用方传入的 status_code 参数。
 
     Returns:
-        httpx.MockTransport 实例。
+        None，函数执行后的结果。
     """
     import httpx
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """执行 handler 对应的逻辑，并返回处理结果。
+
+        Args:
+            request: httpx.Request，调用方传入的 request 参数。
+
+        Returns:
+            httpx.Response，函数执行后的结果。
+        """
         return httpx.Response(status_code, json=response_body)
 
     return httpx.MockTransport(handler)
@@ -49,19 +57,27 @@ def _make_mock_transport(
 def _make_mock_transport_sequence(
     responses: list[tuple[int, dict]],
 ):
-    """创建 httpx.MockTransport，按顺序返回一系列响应。
+    """执行 _make_mock_transport_sequence 对应的逻辑，并返回处理结果。
 
     Args:
-        responses: [(status_code, response_body), ...] 列表。
+        responses: list[tuple[int, dict]]，调用方传入的 responses 参数。
 
     Returns:
-        httpx.MockTransport 实例。
+        None，函数执行后的结果。
     """
     import httpx
 
     iterator = iter(responses)
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """执行 handler 对应的逻辑，并返回处理结果。
+
+        Args:
+            request: httpx.Request，调用方传入的 request 参数。
+
+        Returns:
+            httpx.Response，函数执行后的结果。
+        """
         try:
             status_code, body = next(iterator)
         except StopIteration:
@@ -72,36 +88,60 @@ def _make_mock_transport_sequence(
 
 
 def _make_mock_transport_error(error_cls):
-    """创建 httpx.MockTransport，始终抛出指定的 httpx 异常。
+    """执行 _make_mock_transport_error 对应的逻辑，并返回处理结果。
 
     Args:
-        error_cls: httpx 异常类（如 httpx.ConnectError）。
+        error_cls: Any，调用方传入的 error_cls 参数。
 
     Returns:
-        httpx.MockTransport 实例。
+        None，函数执行后的结果。
+
+    Raises:
+        error_cls: 当输入、状态或外部依赖不满足要求时抛出。
     """
     import httpx
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """执行 handler 对应的逻辑，并返回处理结果。
+
+        Args:
+            request: httpx.Request，调用方传入的 request 参数。
+
+        Returns:
+            httpx.Response，函数执行后的结果。
+
+        Raises:
+            error_cls: 当输入、状态或外部依赖不满足要求时抛出。
+        """
         raise error_cls("simulated error")
 
     return httpx.MockTransport(handler)
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 数据类测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestToolCall:
     """ToolCall 数据类测试。"""
 
     def test_default_arguments(self) -> None:
+        """验证 default_arguments 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         call = ToolCall(name="search")
         assert call.name == "search"
         assert call.arguments == {}
 
     def test_with_arguments(self) -> None:
+        """验证 with_arguments 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         call = ToolCall(name="search", arguments={"query": "test"})
         assert call.name == "search"
         assert call.arguments["query"] == "test"
@@ -111,6 +151,11 @@ class TestLLMResponse:
     """LLMResponse 数据类测试。"""
 
     def test_defaults(self) -> None:
+        """验证 defaults 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         resp = LLMResponse()
         assert resp.content == ""
         assert resp.tool_calls == []
@@ -120,6 +165,11 @@ class TestLLMResponse:
         assert resp.latency == 0.0
 
     def test_with_tool_calls(self) -> None:
+        """验证 with_tool_calls 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         resp = LLMResponse(
             content="",
             has_tool_calls=True,
@@ -131,19 +181,29 @@ class TestLLMResponse:
         assert resp.tool_calls[0].name == "echo"
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 抽象基类测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestLLMGatewayAbstract:
     """LLMGateway 抽象基类测试。"""
 
     def test_cannot_instantiate_abstract(self) -> None:
+        """验证 cannot_instantiate_abstract 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         with pytest.raises(TypeError):
             LLMGateway()  # type: ignore[abstract]
 
     def test_init_params(self) -> None:
+        """验证 init_params 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         gw = VLLMGateway(
             model="test-model",
             max_tokens=2048,
@@ -156,21 +216,45 @@ class TestLLMGatewayAbstract:
         assert gw.temperature == 0.5
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # VLLMGateway 基础测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestVLLMGateway:
-    """VLLMGateway 测试。"""
+    """TestVLLMGateway。
+
+    TestVLLMGateway 组织一组相关测试，覆盖正常流程、边界条件和回归场景。
+
+    主要成员：
+    - 方法 test_init_defaults()。
+    - 方法 test_init_custom()。
+    - 方法 test_chat_returns_response()。
+    - 方法 test_chat_with_string_prompt()。
+    - 方法 test_chat_with_message_list()。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    """
 
     def test_init_defaults(self) -> None:
+        """验证 init_defaults 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         gw = VLLMGateway()
         assert gw.endpoint == "http://localhost:8000/v1"
         assert gw.api_key == "EMPTY"
         assert gw.model == ""
 
     def test_init_custom(self) -> None:
+        """验证 init_custom 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         gw = VLLMGateway(
             endpoint="http://my-server:8080/v1",
             model="llama-3",
@@ -231,9 +315,9 @@ class TestVLLMGateway:
         assert resp.content == "Hi there"
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # VLLMGateway 响应解析测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestVLLMGatewayResponseParsing:
@@ -371,9 +455,9 @@ class TestVLLMGatewayResponseParsing:
         assert resp.tool_calls[0].arguments == {}
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # VLLMGateway 错误处理与重试测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestVLLMGatewayRetry:
@@ -460,6 +544,17 @@ class TestVLLMGatewayRetry:
         call_count = 0
 
         def handler(request: httpx.Request) -> httpx.Response:
+            """执行 handler 对应的逻辑，并返回处理结果。
+
+            Args:
+                request: httpx.Request，调用方传入的 request 参数。
+
+            Returns:
+                httpx.Response，函数执行后的结果。
+
+            Raises:
+                httpx.ConnectError: 当输入、状态或外部依赖不满足要求时抛出。
+            """
             nonlocal call_count
             call_count += 1
             if call_count < 2:
@@ -511,6 +606,14 @@ class TestVLLMGatewayRetry:
         captured_request = {}
 
         def handler(request: httpx.Request) -> httpx.Response:
+            """执行 handler 对应的逻辑，并返回处理结果。
+
+            Args:
+                request: httpx.Request，调用方传入的 request 参数。
+
+            Returns:
+                httpx.Response，函数执行后的结果。
+            """
             captured_request["body"] = json.loads(request.content)
             captured_request["headers"] = dict(request.headers)
             return httpx.Response(
@@ -542,12 +645,24 @@ class TestVLLMGatewayRetry:
 
     @pytest.mark.asyncio
     async def test_url_construction(self) -> None:
-        """验证 URL 拼接正确：{endpoint}/chat/completions。"""
+        """验证 url_construction 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         import httpx
 
         captured_url = {}
 
         def handler(request: httpx.Request) -> httpx.Response:
+            """执行 handler 对应的逻辑，并返回处理结果。
+
+            Args:
+                request: httpx.Request，调用方传入的 request 参数。
+
+            Returns:
+                httpx.Response，函数执行后的结果。
+            """
             captured_url["url"] = str(request.url)
             return httpx.Response(
                 200,
@@ -568,16 +683,36 @@ class TestVLLMGatewayRetry:
         assert captured_url["url"] == "http://my-server:8080/v1/chat/completions"
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # MockLLMGateway 测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestMockLLMGateway:
-    """MockLLMGateway 测试（复用 conftest fixture）。"""
+    """TestMockLLMGateway。
+
+    TestMockLLMGateway 组织一组相关测试，覆盖正常流程、边界条件和回归场景。
+
+    主要成员：
+    - 方法 test_default_response()。
+    - 方法 test_scripted_responses()。
+    - 方法 test_call_count_increments()。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    """
 
     @pytest.mark.asyncio
     async def test_default_response(self, mock_llm: MockLLMGateway) -> None:
+        """验证 default_response 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            mock_llm: MockLLMGateway，调用方传入的 mock_llm 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         resp = await mock_llm.chat("hello")
         assert resp.content == "Mock LLM response."
         assert resp.model == "mock-model"
@@ -585,6 +720,11 @@ class TestMockLLMGateway:
 
     @pytest.mark.asyncio
     async def test_scripted_responses(self) -> None:
+        """验证 scripted_responses 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         gw = MockLLMGateway(
             responses=[
                 LLMResponse(content="first", model="m"),
@@ -600,6 +740,11 @@ class TestMockLLMGateway:
 
     @pytest.mark.asyncio
     async def test_call_count_increments(self) -> None:
+        """验证 call_count_increments 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         gw = MockLLMGateway()
         assert gw.call_count == 0
         await gw.chat("a")
@@ -607,9 +752,9 @@ class TestMockLLMGateway:
         assert gw.call_count == 2
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 健康检查测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestHealthCheck:
@@ -617,14 +762,54 @@ class TestHealthCheck:
 
     @pytest.mark.asyncio
     async def test_health_check_success(self) -> None:
+        """验证 health_check_success 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         gw = MockLLMGateway(responses=[LLMResponse(content="pong", model="mock")])
         result = await gw.health_check()
         assert result is True
 
     @pytest.mark.asyncio
     async def test_health_check_failure(self) -> None:
+        """验证 health_check_failure 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+
+        Raises:
+            ConnectionError: 当输入、状态或外部依赖不满足要求时抛出。
+        """
+
         class FailingGateway(LLMGateway):
+            """FailingGateway。
+
+            FailingGateway 封装外部系统或基础设施协议，向上提供稳定、可测试的接口。
+
+            主要成员：
+            - 方法 chat()。
+
+            设计约束：
+            - 保持接口稳定，避免调用方依赖内部实现细节。
+            - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+            """
+
             async def chat(self, messages, tools=None, max_tokens=None, temperature=None):
+                """执行 chat 对应的逻辑，并返回处理结果。
+
+                Args:
+                    messages: Any，调用方传入的 messages 参数。
+                    tools: Any，调用方传入的 tools 参数。
+                    max_tokens: Any，调用方传入的 max_tokens 参数。
+                    temperature: Any，调用方传入的 temperature 参数。
+
+                Returns:
+                    None，函数执行后的结果。
+
+                Raises:
+                    ConnectionError: 当输入、状态或外部依赖不满足要求时抛出。
+                """
                 raise ConnectionError("LLM service unavailable")
 
         gw = FailingGateway(model="test")

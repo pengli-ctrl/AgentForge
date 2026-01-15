@@ -1,3 +1,14 @@
+"""AgentForge 平台应用服务层：high_risk_authorizer。
+
+本模块负责 high_risk_authorizer 相关的平台能力，是 平台应用服务层 的组成部分。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+- 主要类：HighRiskActionAuthorizer。
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -15,15 +26,17 @@ from agentforge.platform.infrastructure.memory_rbac_repository import MemoryRbac
 
 
 class HighRiskActionAuthorizer:
-    """An authorization gate for high-risk (typically write) actions.
+    """HighRiskActionAuthorizer。
 
-    Closes the "who executed / why allowed" audit loop (engineering spec stage-3
-    acceptance): resolves the caller's roles/permissions, evaluates the action
-    against the PolicyEngine, enforces the human-approval boundary (a high-risk
-    action that requires approval may only run after the ticket has been
-    approved), and records BOTH the allowance and every denial as durable audit
-    events. Fails closed: unknown/disabled policies and missing approval yield a
-    denial, never a silent allow.
+    HighRiskActionAuthorizer 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - 方法 authorize()。
+    - 方法 execute_guarded()。
+
+    设计约束：
+    - 保持接口稳定，不向调用方暴露不必要的数据结构。
+    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
     """
 
     def __init__(
@@ -32,6 +45,16 @@ class HighRiskActionAuthorizer:
         audit_repository: AuditRepository | None = None,
         rbac_repository=None,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            policy_engine: PolicyEngine，调用方传入的 policy_engine 参数。
+            audit_repository: AuditRepository | None，调用方传入的 audit_repository 参数。
+            rbac_repository: Any，调用方传入的 rbac_repository 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._policy_engine = policy_engine
         self._audit_repository = audit_repository
         if rbac_repository is None:
@@ -50,6 +73,21 @@ class HighRiskActionAuthorizer:
         relation: str | None = None,
         record: bool = True,
     ) -> AuthorizationDecision:
+        """执行 authorize 对应的逻辑，并返回处理结果。
+
+        Args:
+            tenant_id: str，调用方传入的 tenant_id 参数。
+            principal: str，调用方传入的 principal 参数。
+            action: str，调用方传入的 action 参数。
+            resource_type: str，调用方传入的 resource_type 参数。
+            resource_id: str，调用方传入的 resource_id 参数。
+            ticket: Ticket | None，调用方传入的 ticket 参数。
+            relation: str | None，调用方传入的 relation 参数。
+            record: bool，调用方传入的 record 参数。
+
+        Returns:
+            AuthorizationDecision，函数执行后的结果。
+        """
         roles, permissions = await self._resolve_identity(tenant_id, principal)
 
         policy_decision = await self._policy_engine.authorize(
@@ -72,8 +110,8 @@ class HighRiskActionAuthorizer:
 
         approval_ref = None
         reasons = list(policy_decision.reasons)
-        # Human-approval boundary: a high-risk action that requires approval may
-        # only run after the ticket has been approved (READY_TO_PUBLISH).
+        # 验证审批边界，确保高风险动作必须经过审批。
+        # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
         if outcome == AuthorizationOutcome.REQUIRES_APPROVAL:
             granted = self._approval_granted(ticket)
             if granted:
@@ -102,7 +140,14 @@ class HighRiskActionAuthorizer:
 
     @staticmethod
     def _approval_granted(ticket: Ticket | None) -> str | None:
-        """Return an approval reference if the ticket has been human-approved."""
+        """执行 _approval_granted 对应的逻辑，并返回处理结果。
+
+        Args:
+            ticket: Ticket | None，调用方传入的 ticket 参数。
+
+        Returns:
+            str | None，函数执行后的结果。
+        """
         if ticket is None:
             return None
         if ticket.status != TicketStatus.READY_TO_PUBLISH:
@@ -113,6 +158,15 @@ class HighRiskActionAuthorizer:
         return approval.get("decided_by") or ticket.ticket_id
 
     async def _resolve_identity(self, tenant_id: str, principal: str) -> tuple[list[str], list]:
+        """执行 _resolve_identity 对应的逻辑，并返回处理结果。
+
+        Args:
+            tenant_id: str，调用方传入的 tenant_id 参数。
+            principal: str，调用方传入的 principal 参数。
+
+        Returns:
+            tuple[list[str], list]，函数执行后的结果。
+        """
         roles: list[str] = []
         permissions: set = set()
         assignments = await self._rbac_repository.assignments_for_user(tenant_id, principal)
@@ -129,6 +183,16 @@ class HighRiskActionAuthorizer:
         decision: AuthorizationDecision,
         ticket: Ticket | None,
     ) -> None:
+        """执行 _record_audit 对应的逻辑，并返回处理结果。
+
+        Args:
+            tenant_id: str，调用方传入的 tenant_id 参数。
+            decision: AuthorizationDecision，调用方传入的 decision 参数。
+            ticket: Ticket | None，调用方传入的 ticket 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         if self._audit_repository is None:
             return
         risk = (
@@ -168,10 +232,23 @@ class HighRiskActionAuthorizer:
         fn: Any,
         **kwargs: Any,
     ) -> Any:
-        """Human-authorization boundary wrapper around a high-risk callable.
+        """执行 execute_guarded 对应的逻辑，并返回处理结果。
 
-        The callable is only invoked when authorization is granted; otherwise
-        raises PermissionError with the reasons.
+        Args:
+            tenant_id: str，调用方传入的 tenant_id 参数。
+            principal: str，调用方传入的 principal 参数。
+            action: str，调用方传入的 action 参数。
+            resource_type: str，调用方传入的 resource_type 参数。
+            resource_id: str，调用方传入的 resource_id 参数。
+            ticket: Ticket | None，调用方传入的 ticket 参数。
+            fn: Any，调用方传入的 fn 参数。
+            **kwargs: Any，调用方传入的 **kwargs 参数。
+
+        Returns:
+            Any，函数执行后的结果。
+
+        Raises:
+            PermissionError: 当输入、状态或外部依赖不满足要求时抛出。
         """
         decision = await self.authorize(
             tenant_id=tenant_id,

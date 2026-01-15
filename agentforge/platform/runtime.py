@@ -1,3 +1,16 @@
+"""AgentForge 平台代码：runtime。
+
+本模块负责依赖装配和服务容器构建，把仓储、模型网关、审计、配额、策略与工作流客户端组合成可运行的系统。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+- 主要类：ServiceContainer。
+-
+主要函数：build_memory_container、build_sqlalchemy_container、configure_container、get_container、boot_runtime。
+"""
+
 from __future__ import annotations
 
 import logging
@@ -93,8 +106,10 @@ from agentforge.platform.infrastructure.sqlalchemy_tenant_quota_repository impor
 from agentforge.platform.infrastructure.sqlalchemy_ticket_repository import (
     SQLAlchemyTicketRepository,
 )
+from agentforge.platform.observability.trace_recorder import TraceRecorder
 from agentforge.platform.settings import get_settings
 
+# 常量：DEFAULT_PROFILES。
 DEFAULT_PROFILES = [
     ModelProfile(
         name="fast-local",
@@ -118,6 +133,15 @@ DEFAULT_PROFILES = [
 
 
 class ServiceContainer:
+    """ServiceContainer。
+
+    ServiceContainer 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    设计约束：
+    - 保持接口稳定，不向调用方暴露不必要的数据结构。
+    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    """
+
     def __init__(
         self,
         repository,
@@ -142,7 +166,38 @@ class ServiceContainer:
         scheduled_report_repository=None,
         run_repository=None,
         default_report_retention_days: int | None = None,
+        trace_recorder: TraceRecorder | None = None,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            repository: Any，调用方传入的 repository 参数。
+            classifier: Any，调用方传入的 classifier 参数。
+            knowledge_repository: Any，调用方传入的 knowledge_repository 参数。
+            model_gateway: Any，调用方传入的 model_gateway 参数。
+            cost_repository: Any，调用方传入的 cost_repository 参数。
+            outbox_store: Any，调用方传入的 outbox_store 参数。
+            workflow_client: Any，调用方传入的 workflow_client 参数。
+            reply_connector: Any，调用方传入的 reply_connector 参数。
+            audit_repository: Any，调用方传入的 audit_repository 参数。
+            authenticator: ApiKeyAuthenticator | None，调用方传入的 authenticator 参数。
+            evaluation_repository: Any，调用方传入的 evaluation_repository 参数。
+            regression_repository: Any，调用方传入的 regression_repository 参数。
+            connector_registry: Any，调用方传入的 connector_registry 参数。
+            connector_repository: Any，调用方传入的 connector_repository 参数。
+            adapter_factory: Any，调用方传入的 adapter_factory 参数。
+            rbac_repository: Any，调用方传入的 rbac_repository 参数。
+            policy_engine: Any，调用方传入的 policy_engine 参数。
+            openfga_client: Any，调用方传入的 openfga_client 参数。
+            tenant_quota_repository: Any，调用方传入的 tenant_quota_repository 参数。
+            scheduled_report_repository: Any，调用方传入的 scheduled_report_repository 参数。
+            run_repository: Any，调用方传入的 run_repository 参数。
+            default_report_retention_days: int | None，调用方传入的 default_report_retention_days 参数。
+            trace_recorder: TraceRecorder | None，调用方传入的 trace_recorder 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.repository = repository
         self.classifier = classifier
         self.knowledge_repository = knowledge_repository
@@ -187,11 +242,15 @@ class ServiceContainer:
 
             tenant_quota_repository = MemoryTenantQuotaRepository()
         self.tenant_quota_repository = tenant_quota_repository
+        if trace_recorder is None:
+            trace_recorder = TraceRecorder()
+        self.trace_recorder = trace_recorder
         self.dashboard_service = DashboardService(
             cost_repository,
             tenant_quota_repository,
             regression_repository,
         )
+        self.dashboard_service.attach_trace_recorder(trace_recorder)
         if scheduled_report_repository is None:
             scheduled_report_repository = MemoryScheduledReportRepository()
         self.scheduled_report_repository = scheduled_report_repository
@@ -256,7 +315,23 @@ class ServiceContainer:
 _default_container: ServiceContainer | None = None
 
 
-def _wrap_gateway(inner, cost_repository, tenant_quota_repository=None) -> QuotaAwareModelGateway:
+def _wrap_gateway(
+    inner,
+    cost_repository,
+    tenant_quota_repository=None,
+    trace_recorder: TraceRecorder | None = None,
+) -> QuotaAwareModelGateway:
+    """执行 _wrap_gateway 对应的逻辑，并返回处理结果。
+
+    Args:
+        inner: Any，调用方传入的 inner 参数。
+        cost_repository: Any，调用方传入的 cost_repository 参数。
+        tenant_quota_repository: Any，调用方传入的 tenant_quota_repository 参数。
+        trace_recorder: TraceRecorder | None，调用方传入的 trace_recorder 参数。
+
+    Returns:
+        QuotaAwareModelGateway，函数执行后的结果。
+    """
     router = ModelRouter(DEFAULT_PROFILES)
     routed = RoutingModelGateway(router, inner)
     budget = get_settings().monthly_model_budget
@@ -269,10 +344,10 @@ def _wrap_gateway(inner, cost_repository, tenant_quota_repository=None) -> Quota
 
 
 def _default_report_retention() -> int | None:
-    """Global default report run retention (days) from environment.
+    """执行 _default_report_retention 对应的逻辑，并返回处理结果。
 
-    Applies to due schedules that don't define an explicit retention_days,
-    giving run_due an automatic cleanup backstop. Absent/invalid -> disabled.
+    Returns:
+        int | None，函数执行后的结果。
     """
     raw = os.environ.get("AGENTFORGE_REPORT_DEFAULT_RETENTION_DAYS")
     if raw is None:
@@ -287,6 +362,15 @@ def build_memory_container(
     model_gateway=None,
     authenticator: ApiKeyAuthenticator | None = None,
 ) -> ServiceContainer:
+    """构建目标对象，并返回调用方需要的结果。
+
+    Args:
+        model_gateway: Any，调用方传入的 model_gateway 参数。
+        authenticator: ApiKeyAuthenticator | None，调用方传入的 authenticator 参数。
+
+    Returns:
+        ServiceContainer，函数执行后的结果。
+    """
     cost_repository = MemoryCostRepository()
     audit_repository = MemoryAuditRepository()
     evaluation_repository = MemoryEvaluationRepository()
@@ -295,14 +379,17 @@ def build_memory_container(
     scheduled_report_repository = MemoryScheduledReportRepository()
     run_repository = MemoryReportRunRepository()
     outbox_store = MemoryOutboxStore()
+    trace_recorder = TraceRecorder()
+    inner = model_gateway or StaticModelGateway(recorder=trace_recorder)
     return ServiceContainer(
         MemoryTicketRepository(),
         RuleBasedTicketClassifier(),
         MemoryKnowledgeRepository(),
         _wrap_gateway(
-            model_gateway or StaticModelGateway(),
+            inner,
             cost_repository,
             tenant_quota_repository,
+            trace_recorder=trace_recorder,
         ),
         cost_repository,
         reply_connector=reply_connector,
@@ -314,6 +401,7 @@ def build_memory_container(
         run_repository=run_repository,
         outbox_store=outbox_store,
         default_report_retention_days=_default_report_retention(),
+        trace_recorder=trace_recorder,
     )
 
 
@@ -324,6 +412,18 @@ def build_sqlalchemy_container(
     reply_connector=None,
     authenticator: ApiKeyAuthenticator | None = None,
 ) -> ServiceContainer:
+    """构建目标对象，并返回调用方需要的结果。
+
+    Args:
+        session_factory: async_sessionmaker[AsyncSession]，调用方传入的 session_factory 参数。
+        model_gateway: Any，调用方传入的 model_gateway 参数。
+        workflow_client: Any，调用方传入的 workflow_client 参数。
+        reply_connector: Any，调用方传入的 reply_connector 参数。
+        authenticator: ApiKeyAuthenticator | None，调用方传入的 authenticator 参数。
+
+    Returns:
+        ServiceContainer，函数执行后的结果。
+    """
     cost_repository = SQLAlchemyCostRepository(session_factory)
     audit_repository = SQLAlchemyAuditRepository(session_factory)
     evaluation_repository = SQLAlchemyEvaluationRepository(session_factory)
@@ -331,14 +431,17 @@ def build_sqlalchemy_container(
     tenant_quota_repository = SQLAlchemyTenantQuotaRepository(session_factory)
     scheduled_report_repository = SQLAlchemyScheduledReportRepository(session_factory)
     run_repository = SQLAlchemyReportRunRepository(session_factory)
+    trace_recorder = TraceRecorder()
+    inner = model_gateway or LiteLLMModelGateway(recorder=trace_recorder)
     return ServiceContainer(
         SQLAlchemyTicketRepository(session_factory),
         RuleBasedTicketClassifier(),
         SQLAlchemyKnowledgeRepository(session_factory),
         _wrap_gateway(
-            model_gateway or LiteLLMModelGateway(),
+            inner,
             cost_repository,
             tenant_quota_repository,
+            trace_recorder=trace_recorder,
         ),
         cost_repository,
         SQLAlchemyOutboxStore(session_factory),
@@ -353,15 +456,29 @@ def build_sqlalchemy_container(
         scheduled_report_repository=scheduled_report_repository,
         run_repository=run_repository,
         default_report_retention_days=_default_report_retention(),
+        trace_recorder=trace_recorder,
     )
 
 
 def configure_container(container: ServiceContainer) -> None:
+    """执行 configure_container 对应的逻辑，并返回处理结果。
+
+    Args:
+        container: ServiceContainer，调用方传入的 container 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     global _default_container
     _default_container = container
 
 
 def get_container() -> ServiceContainer:
+    """读取并返回指定数据，并返回调用方需要的结果。
+
+    Returns:
+        ServiceContainer，函数执行后的结果。
+    """
     global _default_container
     if _default_container is None:
         _default_container = build_memory_container()
@@ -372,20 +489,13 @@ logger = logging.getLogger(__name__)
 
 
 async def boot_runtime(container: ServiceContainer) -> None:
-    """Wire startup-only concerns for an assembled ServiceContainer.
+    """执行 boot_runtime 对应的逻辑，并返回处理结果。
 
-    These two steps are defined but were never wired into assembly, which left
-    the platform not fully usable out of the box:
+    Args:
+        container: ServiceContainer，调用方传入的 container 参数。
 
-    * ``seed_rbac`` ensures the built-in roles exist (idempotent) so policy
-      evaluation is meaningful from the first boot.
-    * ``connector_registry.load_from_repository`` rebuilds connector adapters
-      from the persisted connector repository so registered connectors survive
-      a restart.
-
-    Each step is best-effort: a transient backend outage (e.g. schema not yet
-    migrated) logs a warning instead of taking the platform down, and the
-    container stays fully assembled for in-memory / dev use.
+    Returns:
+        None，函数执行后的结果。
     """
     try:
         await seed_rbac(container.rbac_repository)

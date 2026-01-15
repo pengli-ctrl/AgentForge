@@ -15,6 +15,15 @@ from agentforge.safety.pulse_shaper import PulseShaper
 
 
 def _make_event(source: str = "test-agent", corr_id: str = "corr-1") -> AgentEvent:
+    """执行 _make_event 对应的逻辑，并返回处理结果。
+
+    Args:
+        source: str，调用方传入的 source 参数。
+        corr_id: str，调用方传入的 corr_id 参数。
+
+    Returns:
+        AgentEvent，函数执行后的结果。
+    """
     return AgentEvent(
         event_type=EventType.AGENT_COMPLETED,
         source_agent=source,
@@ -27,6 +36,11 @@ class TestPulseShaperInit:
     """初始化测试。"""
 
     def test_default_values(self) -> None:
+        """验证 default_values 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         ps = PulseShaper()
         assert ps.window == 5.0
         assert ps.max_batch == 10
@@ -34,6 +48,11 @@ class TestPulseShaperInit:
         assert ps.flush_task is None
 
     def test_custom_values(self) -> None:
+        """验证 custom_values 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         ps = PulseShaper(window_seconds=2.0, max_batch_size=5)
         assert ps.window == 2.0
         assert ps.max_batch == 5
@@ -44,6 +63,11 @@ class TestBatchFlush:
 
     @pytest.mark.asyncio
     async def test_flush_on_batch_full(self) -> None:
+        """验证 flush_on_batch_full 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         ps = PulseShaper(window_seconds=10.0, max_batch_size=3)
         bus = AsyncMock()
 
@@ -58,6 +82,11 @@ class TestBatchFlush:
 
     @pytest.mark.asyncio
     async def test_no_flush_below_batch_threshold(self) -> None:
+        """验证 no_flush_below_batch_threshold 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         ps = PulseShaper(window_seconds=10.0, max_batch_size=5)
         bus = AsyncMock()
 
@@ -67,6 +96,11 @@ class TestBatchFlush:
 
     @pytest.mark.asyncio
     async def test_flush_creates_merged_event(self) -> None:
+        """验证 flush_creates_merged_event 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         ps = PulseShaper(window_seconds=10.0, max_batch_size=2)
         bus = AsyncMock()
 
@@ -85,18 +119,28 @@ class TestWindowTimeout:
 
     @pytest.mark.asyncio
     async def test_delayed_flush_after_window(self) -> None:
+        """验证 delayed_flush_after_window 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         ps = PulseShaper(window_seconds=0.05, max_batch_size=10)
         bus = AsyncMock()
 
         await ps.on_event(_make_event(), bus)
         assert ps.flush_task is not None
 
-        # Wait for window to expire
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         await asyncio.sleep(0.1)
         bus.publish.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_flush_task_cleared_after_flush(self) -> None:
+        """验证 flush_task_cleared_after_flush 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         ps = PulseShaper(window_seconds=0.05, max_batch_size=10)
         bus = AsyncMock()
 
@@ -110,6 +154,11 @@ class TestFlushEmpty:
 
     @pytest.mark.asyncio
     async def test_flush_empty_does_nothing(self) -> None:
+        """验证 flush_empty_does_nothing 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         ps = PulseShaper()
         bus = AsyncMock()
         await ps._flush(bus)
@@ -117,10 +166,25 @@ class TestFlushEmpty:
 
 
 class TestMultipleCorrelations:
-    """多 correlation_id 测试。"""
+    """TestMultipleCorrelations。
+
+    TestMultipleCorrelations 组织一组相关测试，覆盖正常流程、边界条件和回归场景。
+
+    主要成员：
+    - 方法 test_batch_uses_first_event_correlation()。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    """
 
     @pytest.mark.asyncio
     async def test_batch_uses_first_event_correlation(self) -> None:
+        """验证 batch_uses_first_event_correlation 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         ps = PulseShaper(window_seconds=10.0, max_batch_size=2)
         bus = AsyncMock()
 

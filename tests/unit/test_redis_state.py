@@ -24,12 +24,22 @@ class TestInit:
     """初始化测试。"""
 
     def test_default_values(self) -> None:
+        """验证 default_values 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         s = RedisStateStore()
         assert s.redis_url == "redis://localhost:6379"
         assert s.key_prefix == "agentforge:snapshot"
         assert s.default_ttl == 86400
 
     def test_custom_values(self) -> None:
+        """验证 custom_values 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         s = RedisStateStore(
             redis_url="redis://my-host:6380",
             key_prefix="custom:prefix",
@@ -40,6 +50,14 @@ class TestInit:
         assert s.default_ttl == 7200
 
     def test_no_redis_on_init(self, store: RedisStateStore) -> None:
+        """验证 no_redis_on_init 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: RedisStateStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         assert store._redis is None
         assert store._fallback == {}
 
@@ -49,6 +67,14 @@ class TestSaveAndLoad:
 
     @pytest.mark.asyncio
     async def test_save_and_load_snapshot(self, store: RedisStateStore) -> None:
+        """验证 save_and_load_snapshot 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: RedisStateStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         snapshot = {"agent": "review", "result": "ok", "version": 1}
         await store.save_snapshot("corr-001", 1, snapshot)
         loaded = await store.load_snapshot("corr-001", 1)
@@ -56,11 +82,27 @@ class TestSaveAndLoad:
 
     @pytest.mark.asyncio
     async def test_load_nonexistent_returns_none(self, store: RedisStateStore) -> None:
+        """验证 load_nonexistent_returns_none 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: RedisStateStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         result = await store.load_snapshot("corr-missing", 1)
         assert result is None
 
     @pytest.mark.asyncio
     async def test_save_multiple_versions(self, store: RedisStateStore) -> None:
+        """验证 save_multiple_versions 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: RedisStateStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         for v in range(1, 4):
             await store.save_snapshot("corr-002", v, {"version": v})
 
@@ -77,6 +119,14 @@ class TestLoadLatest:
 
     @pytest.mark.asyncio
     async def test_load_latest_snapshot(self, store: RedisStateStore) -> None:
+        """验证 load_latest_snapshot 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: RedisStateStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         await store.save_snapshot("corr-003", 1, {"v": 1})
         await store.save_snapshot("corr-003", 2, {"v": 2})
         await store.save_snapshot("corr-003", 5, {"v": 5})
@@ -87,6 +137,14 @@ class TestLoadLatest:
 
     @pytest.mark.asyncio
     async def test_load_latest_no_snapshots(self, store: RedisStateStore) -> None:
+        """验证 load_latest_no_snapshots 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: RedisStateStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         result = await store.load_latest_snapshot("corr-empty")
         assert result is None
 
@@ -96,6 +154,14 @@ class TestDelete:
 
     @pytest.mark.asyncio
     async def test_delete_snapshots(self, store: RedisStateStore) -> None:
+        """验证 delete_snapshots 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: RedisStateStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         await store.save_snapshot("corr-004", 1, {"a": 1})
         await store.save_snapshot("corr-004", 2, {"a": 2})
         count = await store.delete_snapshots("corr-004")
@@ -105,6 +171,14 @@ class TestDelete:
 
     @pytest.mark.asyncio
     async def test_delete_nonexistent_returns_zero(self, store: RedisStateStore) -> None:
+        """验证 delete_nonexistent_returns_zero 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: RedisStateStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         count = await store.delete_snapshots("corr-none")
         assert count == 0
 
@@ -113,6 +187,14 @@ class TestKeyConstruction:
     """Key 构造测试。"""
 
     def test_make_key(self, store: RedisStateStore) -> None:
+        """验证 make_key 对应的业务行为、边界条件和回归场景。
+
+        Args:
+            store: RedisStateStore，调用方传入的 store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         key = store._make_key("corr-005", 3)
         assert key == "agentforge:snapshot:corr-005:3"
 

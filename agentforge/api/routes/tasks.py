@@ -43,6 +43,15 @@ class TaskRoutes:
         task_store: TaskStore,
         workflow_engine: Any = None,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            task_store: TaskStore，调用方传入的 task_store 参数。
+            workflow_engine: Any，调用方传入的 workflow_engine 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.task_store = task_store
         self.workflow_engine = workflow_engine
 

@@ -1,3 +1,14 @@
+"""AgentForge 平台应用服务层：retrieval_metrics。
+
+本模块负责 retrieval_metrics 相关的平台能力，是 平台应用服务层 的组成部分。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+- 主要函数：recall_at_k、precision_at_k、mean_reciprocal_rank、citation_accuracy、average。
+"""
+
 from __future__ import annotations
 
 
@@ -6,10 +17,15 @@ def recall_at_k(
     retrieved: list[str],
     k: int | None = None,
 ) -> float:
-    """Recall@K：命中的相关文档数 / 相关文档总数。
+    """执行 recall_at_k 对应的逻辑，并返回处理结果。
 
-    若 relevant 为空视为 0（避免除零，且无相关文档的查询不贡献召回）。
-    retrieved 需为按相关性排序的候选 id 列表。
+    Args:
+        relevant: set[str]，调用方传入的 relevant 参数。
+        retrieved: list[str]，调用方传入的 retrieved 参数。
+        k: int | None，调用方传入的 k 参数。
+
+    Returns:
+        float，函数执行后的结果。
     """
     if not relevant:
         return 0.0
@@ -24,9 +40,15 @@ def precision_at_k(
     retrieved: list[str],
     k: int | None = None,
 ) -> float:
-    """Precision@K：前 K 个结果中相关文档占比。
+    """执行 precision_at_k 对应的逻辑，并返回处理结果。
 
-    retrieved 为空时返回 0。
+    Args:
+        relevant: set[str]，调用方传入的 relevant 参数。
+        retrieved: list[str]，调用方传入的 retrieved 参数。
+        k: int | None，调用方传入的 k 参数。
+
+    Returns:
+        float，函数执行后的结果。
     """
     if k is not None:
         retrieved = retrieved[:k]
@@ -39,7 +61,14 @@ def precision_at_k(
 def mean_reciprocal_rank(
     queries: list[tuple[set[str], list[str]]],
 ) -> float:
-    """MRR：对所有 (相关集, 排序结果) 计算首个命中位置的倒数取平均。"""
+    """执行 mean_reciprocal_rank 对应的逻辑，并返回处理结果。
+
+    Args:
+        queries: list[tuple[set[str], list[str]]]，调用方传入的 queries 参数。
+
+    Returns:
+        float，函数执行后的结果。
+    """
     if not queries:
         return 0.0
     reciprocal_sum = 0.0
@@ -57,9 +86,14 @@ def citation_accuracy(
     citations: list[str],
     relevant: set[str],
 ) -> float:
-    """引用正确率：草稿引用的 chunk 中有多少属于相关文档集。
+    """执行 citation_accuracy 对应的逻辑，并返回处理结果。
 
-    返回 [0, 1]；无引用（空列表）时视为 0，表示该条未给出可验证引用。
+    Args:
+        citations: list[str]，调用方传入的 citations 参数。
+        relevant: set[str]，调用方传入的 relevant 参数。
+
+    Returns:
+        float，函数执行后的结果。
     """
     if not citations:
         return 0.0
@@ -68,7 +102,14 @@ def citation_accuracy(
 
 
 def average(values: list[float]) -> float:
-    """列表平均值，空列表返回 0。"""
+    """执行 average 对应的逻辑，并返回处理结果。
+
+    Args:
+        values: list[float]，调用方传入的 values 参数。
+
+    Returns:
+        float，函数执行后的结果。
+    """
     if not values:
         return 0.0
     return sum(values) / len(values)

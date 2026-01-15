@@ -19,19 +19,31 @@ logger = logging.getLogger(__name__)
 
 
 class AgentRegistry:
-    """Agent 注册表 — 管理 Agent 名称到实例的映射。
+    """AgentRegistry。
 
-    工作流引擎通过 AgentRegistry 查找 Agent 实例。
-    支持动态注册、注销和批量注册。
+    AgentRegistry 是核心运行时组件，负责状态管理、调度和跨模块协作。
 
-    Example:
-        >>> registry = AgentRegistry()
-        >>> registry.register("code-review", code_review_agent)
-        >>> agent = registry.get("code-review")
-        >>> registry.unregister("code-review")
+    主要成员：
+    - 方法 register()。
+    - 方法 register_many()。
+    - 方法 unregister()。
+    - 方法 get()。
+    - 方法 has()。
+    - 方法 list_agents()。
+    - 方法 list_names()。
+    - 方法 clear()。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
     """
 
     def __init__(self) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._agents: dict[str, Any] = {}
         self._metadata: dict[str, dict[str, Any]] = {}
 

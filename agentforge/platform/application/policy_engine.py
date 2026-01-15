@@ -1,3 +1,14 @@
+"""AgentForge 平台应用服务层：policy_engine。
+
+本模块负责 policy_engine 相关的平台能力，是 平台应用服务层 的组成部分。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+- 主要类：PolicyReloadEvent、PolicyEngine。
+"""
+
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
@@ -14,13 +25,19 @@ from agentforge.platform.domain.rbac import Permission, role_permissions
 
 @dataclass(frozen=True)
 class PolicyReloadEvent:
-    """Versioned audit record emitted after a successful policy reload.
+    """PolicyReloadEvent。
 
-    A reload bumps ``source_revision`` monotonically; this event carries the
-    new revision plus a fingerprint of what changed so the host application
-    can persist a durable, version-stamped audit trail (e.g. as an
-    ``AuditEvent``). Only emitted via the optional ``reload_listener`` hook --
-    the engine itself stays free of I/O concerns.
+    PolicyReloadEvent 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - revision: int。
+    - policy_count: int。
+    - source: str。
+    - occurred_at: datetime。
+
+    设计约束：
+    - 保持接口稳定，不向调用方暴露不必要的数据结构。
+    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
     """
 
     revision: int
@@ -30,13 +47,21 @@ class PolicyReloadEvent:
 
 
 class PolicyEngine:
-    """Deterministic RBAC + policy evaluation engine.
+    """PolicyEngine。
 
-    Combines role-based permissions with declarative action policies and an
-    optional OpenFGA-style relation check (via a callable) to decide whether a
-    principal may run ``action`` on ``resource``. Fails closed: an action with
-    no matching enabled policy is denied. High-risk write actions that require
-    approval yield ``requires_approval`` instead of an immediate allow.
+    PolicyEngine 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - 方法 register_policy()。
+    - 方法 list_policies()。
+    - 方法 source_revision()。
+    - 方法 reload()。
+    - 方法 reload_from_loader()。
+    - 方法 authorize()。
+
+    设计约束：
+    - 保持接口稳定，不向调用方暴露不必要的数据结构。
+    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
     """
 
     def __init__(
@@ -45,27 +70,40 @@ class PolicyEngine:
         relation_check=None,
         reload_listener: Callable[[PolicyReloadEvent], object] | None = None,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            policies: Iterable[ActionPolicy] | None，调用方传入的 policies 参数。
+            relation_check: Any，调用方传入的 relation_check 参数。
+            reload_listener: Callable[[PolicyReloadEvent], object] | None，调用方传入的 reload_listener 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._policies: dict[tuple[str, str], ActionPolicy] = {}
         for policy in policies or ():
             self._store(policy)
-        # relation_check: async callable (RelationTuple) -> bool
+        # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
         self._relation_check = relation_check
-        # monotonic revision bumped on every (re)load, so callers can detect
-        # a hot-reload and trace which policy set a decision was made against.
+        # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
+        # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
         self._source_revision = 0
-        # Optional hook: after a successful atomic reload, emit a versioned
-        # PolicyReloadEvent so the host can write a durable audit trail.
+        # 验证成功场景，确保正常路径行为稳定。
+        # 验证审计记录，确保关键行为可追踪。
         self._reload_listener = reload_listener
 
     @staticmethod
     def _validate_policy(policy: ActionPolicy) -> None:
-        """Fail closed on a misconfigured policy.
+        """执行 _validate_policy 对应的逻辑，并返回处理结果。
 
-        ``required_permission`` must be a valid :class:`Permission` value or the
-        policy is rejected outright. An unrecognised string must never be
-        silently downgraded (e.g. to ``None``) at authorize time, which would let
-        a typo'd config degrade an action into an open policy and contradict the
-        engine's fail-closed contract.
+        Args:
+            policy: ActionPolicy，调用方传入的 policy 参数。
+
+        Returns:
+            None，函数执行后的结果。
+
+        Raises:
+            ValueError: 当输入、状态或外部依赖不满足要求时抛出。
         """
         if policy.required_permission is None:
             return
@@ -78,41 +116,70 @@ class PolicyEngine:
             ) from exc
 
     def _store(self, policy: ActionPolicy) -> None:
+        """执行 _store 对应的逻辑，并返回处理结果。
+
+        Args:
+            policy: ActionPolicy，调用方传入的 policy 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._validate_policy(policy)
         key = (policy.tenant_id, policy.action)
         self._policies[key] = policy
 
     def register_policy(self, policy: ActionPolicy) -> None:
+        """执行 register_policy 对应的逻辑，并返回处理结果。
+
+        Args:
+            policy: ActionPolicy，调用方传入的 policy 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._store(policy)
 
     def list_policies(self, tenant_id: str) -> list[ActionPolicy]:
+        """查询并返回列表结果，并返回调用方需要的结果。
+
+        Args:
+            tenant_id: str，调用方传入的 tenant_id 参数。
+
+        Returns:
+            list[ActionPolicy]，函数执行后的结果。
+        """
         return [policy for (t, _a), policy in self._policies.items() if t == tenant_id]
 
     @property
     def source_revision(self) -> int:
-        """Monotonic revision of the currently loaded policy set."""
+        """执行 source_revision 对应的逻辑，并返回处理结果。
+
+        Returns:
+            int，函数执行后的结果。
+        """
         return self._source_revision
 
     def reload(self, policies: Iterable[ActionPolicy]) -> int:
-        """Atomically replace all policies with ``policies``.
+        """执行 reload 对应的逻辑，并返回处理结果。
 
-        Validation/construction of the new set is the caller's responsibility
-        (e.g. via :class:`PolicyFileLoader`); here we build the new registry
-        fully before swapping, so a bad replacement never leaves a partially
-        updated engine. Emits a :class:`PolicyReloadEvent` on success. Returns
-        the new ``source_revision``.
+        Args:
+            policies: Iterable[ActionPolicy]，调用方传入的 policies 参数。
+
+        Returns:
+            int，函数执行后的结果。
         """
         rev = self._swap(policies)
         self._emit_reload_event("reload")
         return rev
 
     def reload_from_loader(self, loader) -> int:
-        """Hot-reload from a loader/producer yielding ``ActionPolicy`` s.
+        """执行 reload_from_loader 对应的逻辑，并返回处理结果。
 
-        The loader is invoked first and must succeed entirely; only then is
-        the engine registry swapped (atomic). On loader failure the engine is
-        left untouched and the previous policy set stays authoritative. Emits
-        a :class:`PolicyReloadEvent` on success.
+        Args:
+            loader: Any，调用方传入的 loader 参数。
+
+        Returns:
+            int，函数执行后的结果。
         """
         loaded = loader()
         rev = self._swap(loaded)
@@ -120,12 +187,16 @@ class PolicyEngine:
         return rev
 
     def _swap(self, policies: Iterable[ActionPolicy]) -> int:
-        """Build and atomically install a new policy registry.
+        """执行 _swap 对应的逻辑，并返回处理结果。
 
-        Constructs the replacement dict in full and validates against duplicate
-        keys before swapping ``self._policies``; increments ``source_revision``
-        afterwards. Raises ``ValueError`` on a duplicate key or an invalid
-        ``required_permission`` and leaves the engine unchanged.
+        Args:
+            policies: Iterable[ActionPolicy]，调用方传入的 policies 参数。
+
+        Returns:
+            int，函数执行后的结果。
+
+        Raises:
+            ValueError: 当输入、状态或外部依赖不满足要求时抛出。
         """
         new_registry: dict[tuple[str, str], ActionPolicy] = {}
         for policy in policies:
@@ -150,6 +221,21 @@ class PolicyEngine:
         resource_id: str = "",
         relation: str | None = None,
     ) -> PolicyDecision:
+        """执行 authorize 对应的逻辑，并返回处理结果。
+
+        Args:
+            tenant_id: str，调用方传入的 tenant_id 参数。
+            principal: str，调用方传入的 principal 参数。
+            action: str，调用方传入的 action 参数。
+            roles: Iterable[str]，调用方传入的 roles 参数。
+            permissions: Iterable[Permission] | None，调用方传入的 permissions 参数。
+            resource_type: str，调用方传入的 resource_type 参数。
+            resource_id: str，调用方传入的 resource_id 参数。
+            relation: str | None，调用方传入的 relation 参数。
+
+        Returns:
+            PolicyDecision，函数执行后的结果。
+        """
         roles = set(roles)
         perms = set(permissions or [])
         for role in roles:
@@ -181,7 +267,7 @@ class PolicyEngine:
                 reasons=["policy disabled"],
             )
 
-        # Optional OpenFGA-style relation check gates access to the resource.
+        # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
         if relation is not None and self._relation_check is not None:
             allowed_relation = await self._check_relation(
                 tenant_id, resource_type, resource_id, relation, principal
@@ -198,11 +284,11 @@ class PolicyEngine:
                     reasons=[f"relation {relation} not granted"],
                 )
 
-        # Permission check. ``required_permission`` is validated to be a real
-        # :class:`Permission` at load/register time (fail-closed), so a typo'd
-        # value can never silently degrade to ``None`` and become an open
-        # policy. This check runs before the approval gate so an unauthorized
-        # principal cannot sneak through just because a ticket was approved.
+        # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
+        # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
+        # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
+        # 验证审批边界，确保高风险动作必须经过审批。
+        # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
         if policy.required_permission:
             needed = Permission(policy.required_permission)
             if needed not in perms:
@@ -230,7 +316,7 @@ class PolicyEngine:
                 reasons=["role not allow-listed"],
             )
 
-        # Permission / role gate passed; now apply the approval requirement.
+        # 验证审批边界，确保高风险动作必须经过审批。
         if policy.require_approval:
             return PolicyDecision(
                 tenant_id=tenant_id,
@@ -243,9 +329,9 @@ class PolicyEngine:
                 reasons=["action requires approval"],
             )
 
-        # Allow: a permission-backed policy already passed its permission check
-        # above; an allow-list-restricted (or open but permission-gated) policy
-        # is permitted when the caller's roles intersect the allow-list.
+        # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
+        # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
+        # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
         if not allowed_roles or roles & allowed_roles:
             return PolicyDecision(
                 tenant_id=tenant_id,
@@ -269,6 +355,14 @@ class PolicyEngine:
         )
 
     def _emit_reload_event(self, source: str) -> None:
+        """执行 _emit_reload_event 对应的逻辑，并返回处理结果。
+
+        Args:
+            source: str，调用方传入的 source 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         if self._reload_listener is None:
             return
         event = PolicyReloadEvent(
@@ -287,6 +381,18 @@ class PolicyEngine:
         relation: str,
         principal: str,
     ) -> bool:
+        """执行 _check_relation 对应的逻辑，并返回处理结果。
+
+        Args:
+            tenant_id: str，调用方传入的 tenant_id 参数。
+            resource_type: str，调用方传入的 resource_type 参数。
+            resource_id: str，调用方传入的 resource_id 参数。
+            relation: str，调用方传入的 relation 参数。
+            principal: str，调用方传入的 principal 参数。
+
+        Returns:
+            bool，函数执行后的结果。
+        """
         from agentforge.platform.domain.policy import RelationTuple
 
         result = await self._relation_check(

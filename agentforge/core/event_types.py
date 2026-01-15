@@ -100,5 +100,10 @@ class BatchEvent:
     batch_size: int = 0
 
     def __post_init__(self) -> None:
+        """执行 __post_init__ 对应的逻辑，并返回处理结果。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         if self.batch_size == 0:
             self.batch_size = len(self.sub_events)

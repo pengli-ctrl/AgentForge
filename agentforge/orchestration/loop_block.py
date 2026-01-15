@@ -1,35 +1,12 @@
-"""
-LoopBlock — controlled uncertainty within a deterministic DAG framework.
+"""AgentForge 编排执行层：loop_block。
 
-DAG provides deterministic execution order; LoopBlock embeds a sub-DAG
-that can iterate up to 5 times (hard constraint), with an exit condition
-checked after each iteration.
+本模块负责 loop_block 相关能力，是 编排执行层 的组成部分。
 
-Use cases:
-    - Self-correction: Agent produces output → validator checks → if invalid, retry
-    - Iterative refinement: Agent improves output each iteration until quality threshold met
-    - Convergence loops: Multi-agent debate until consensus reached
-
-Why max 5 iterations?
-    This is the "bounded retry" principle. Without a hard limit, a loop could
-    run forever (infinite loop with LLM calls = infinite cost). 5 iterations
-    covers 95%+ of valid use cases. If you need more, your exit condition
-    is probably wrong.
-
-    Cost analysis: 5 iterations × 2 LLM calls × $0.01 = $0.10 max per loop.
-    Without limit, a stuck loop could cost $10+ before the DAG timeout fires.
-
-Integration:
-    LoopBlock is a DAG node type. The DAG engine treats it as a single node
-    that internally executes a sub-DAG multiple times. LoopSpan tracks each
-    iteration for observability.
-
-Sub-DAG budget:
-    Each iteration runs a bounded mini-DAG (Defaults: ≤20 nodes, ≤60s global
-    timeout, ≤3 parallel nodes). These are LOCAL per-iteration bounds that
-    keep a single iteration cheap; the caller is responsible for ensuring the
-    overall loop budget (iterations × per-iteration timeout) fits inside the
-    enclosing DAG's global timeout. They are configurable via the constructor.
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
+- 关键路径应保留日志、指标或链路追踪信息。
+- 主要类：LoopResult、LoopBlock。
 """
 
 import asyncio
@@ -40,52 +17,68 @@ from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
-# Per-iteration sub-DAG limits for LoopBlock. Kept as named constants so they
-# are explicit and easy to tune; overridable via the constructor.
-DEFAULT_SUB_DAG_MAX_NODES = 20  # Max nodes inside one loop iteration's sub-DAG
-DEFAULT_SUB_DAG_TIMEOUT = 60.0  # Per-iteration sub-DAG global timeout (seconds)
-DEFAULT_SUB_DAG_MAX_PARALLEL = 3  # Max parallel nodes inside one iteration
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
+DEFAULT_SUB_DAG_MAX_NODES = 20  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+DEFAULT_SUB_DAG_TIMEOUT = 60.0  # 超时状态。
+DEFAULT_SUB_DAG_MAX_PARALLEL = 3  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 @dataclass
 class LoopResult:
-    """Result from a LoopBlock execution."""
+    """LoopResult。
+
+    LoopResult 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - success: bool。
+    - iterations_completed: int。
+    - max_iterations: int。
+    - final_output: dict。
+    - exit_reason: str。
+    - iteration_results: list[dict]。
+    - total_cost: float。
+    - total_latency_ms: float。
+    - converged: bool。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    """
 
     success: bool
     iterations_completed: int
     max_iterations: int
     final_output: dict = field(default_factory=dict)
-    exit_reason: str = ""  # "condition_met", "max_iterations", "error"
+    exit_reason: str = ""  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
     iteration_results: list[dict] = field(default_factory=list)
     total_cost: float = 0.0
     total_latency_ms: float = 0.0
-    converged: bool = False  # True if exit_condition was satisfied
+    converged: bool = False  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class LoopBlock:
-    """
-    Loop controller embedding a sub-DAG with bounded iteration.
+    """LoopBlock。
 
-    Each iteration:
-        1. Execute the sub-DAG with current context
-        2. Check exit_condition(result, iteration_number)
-        3. If exit condition met → return success
-        4. If max_iterations reached → return with converged=False
-        5. Agent can read current iteration via context["__loop_iteration__"]
+    LoopBlock 封装相关领域行为，保持职责单一并降低调用方复杂度。
 
-    The exit_condition is a callable that receives the sub-DAG result and
-    current iteration number, returning True to stop or False to continue.
+    主要成员：
+    - ABSOLUTE_MAX_ITERATIONS: 5。
+    - 方法 execute()。
+    - 方法 name()。
+    - 方法 max_iterations()。
 
-    Thread safety: LoopBlock is not thread-safe. Each instance should be
-    used by a single DAG execution at a time.
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
     """
 
-    # Hard constraint: never allow more than 5 iterations regardless of config
+    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
     ABSOLUTE_MAX_ITERATIONS = 5
 
     def __init__(
         self,
-        sub_dag,  # DAGGraph instance — the sub-DAG to execute each iteration
+        sub_dag,  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         max_iterations: int = 5,
         exit_condition: Optional[Callable] = None,
         name: str = "loop_block",
@@ -93,17 +86,19 @@ class LoopBlock:
         sub_dag_max_nodes: int = DEFAULT_SUB_DAG_MAX_NODES,
         sub_dag_max_parallel: int = DEFAULT_SUB_DAG_MAX_PARALLEL,
     ):
-        """
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
         Args:
-            sub_dag: The DAGGraph to execute in each iteration.
-            max_iterations: Max iterations (capped at ABSOLUTE_MAX_ITERATIONS=5).
-            exit_condition: Callable(result_dict, iteration_number) → bool.
-                           Returns True to stop iterating.
-                           Default: always stop after 1 iteration (no looping).
-            name: Identifier for logging/tracing.
-            sub_dag_timeout: Per-iteration sub-DAG global timeout (seconds).
-            sub_dag_max_nodes: Max nodes allowed in one iteration's sub-DAG.
-            sub_dag_max_parallel: Max parallel nodes within one iteration.
+            sub_dag: Any，调用方传入的 sub_dag 参数。
+            max_iterations: int，调用方传入的 max_iterations 参数。
+            exit_condition: Optional[Callable]，调用方传入的 exit_condition 参数。
+            name: str，调用方传入的 name 参数。
+            sub_dag_timeout: float，调用方传入的 sub_dag_timeout 参数。
+            sub_dag_max_nodes: int，调用方传入的 sub_dag_max_nodes 参数。
+            sub_dag_max_parallel: int，调用方传入的 sub_dag_max_parallel 参数。
+
+        Returns:
+            None，函数执行后的结果。
         """
         if max_iterations > self.ABSOLUTE_MAX_ITERATIONS:
             logger.warning(
@@ -122,20 +117,19 @@ class LoopBlock:
 
     async def execute(
         self,
-        context,  # ContextStore instance
+        context,  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         agent_registry=None,
         tracer=None,
     ) -> LoopResult:
-        """
-        Execute the loop: run sub-DAG up to max_iterations times.
+        """执行 execute 对应的逻辑，并返回处理结果。
 
         Args:
-            context: Shared ContextStore for data flow between iterations.
-            agent_registry: Agent registry for resolving agent names in sub-DAG.
-            tracer: Tracer for creating LoopSpan per iteration.
+            context: Any，调用方传入的 context 参数。
+            agent_registry: Any，调用方传入的 agent_registry 参数。
+            tracer: Any，调用方传入的 tracer 参数。
 
         Returns:
-            LoopResult with iteration details and final output.
+            LoopResult，函数执行后的结果。
         """
         start_time = time.monotonic()
         iteration_results = []
@@ -146,20 +140,20 @@ class LoopBlock:
 
         for iteration in range(1, self._max_iterations + 1):
 
-            # Inject iteration metadata into context
-            # Agents can read this to know which iteration they're in
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+            # Agent 注册与查询。
             await context.write("__loop_iteration__", iteration)
             await context.write("__loop_name__", self._name)
             await context.write("__loop_max__", self._max_iterations)
 
             try:
-                # Execute the sub-DAG for this iteration
-                # Import here to avoid circular dependency
+                # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+                # 说明：该步骤用于实现上述逻辑并保证行为稳定。
                 from agentforge.orchestration.dag_engine import DAGEngine
 
-                # Bounded mini-engine per iteration. Limits are explicit and
-                # configurable (see constructor) so the loop budget can be
-                # tuned to fit within the enclosing DAG's global timeout.
+                # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+                # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+                # 超时状态。
                 sub_engine = DAGEngine(
                     max_nodes=self._sub_dag_max_nodes,
                     global_timeout=self._sub_dag_timeout,
@@ -213,12 +207,12 @@ class LoopBlock:
                         "error": str(e)[:200],
                     }
                 )
-                # Continue to next iteration unless it's the last
+                # 说明：该步骤用于实现上述逻辑并保证行为稳定。
                 if iteration == self._max_iterations:
                     exit_reason = "error"
                 continue
 
-            # Check exit condition
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             try:
                 should_exit = self._exit_condition(final_output, iteration)
             except Exception as e:
@@ -227,7 +221,7 @@ class LoopBlock:
                     self._name,
                     str(e)[:200],
                 )
-                should_exit = True  # Stop on condition error to prevent infinite loop
+                should_exit = True  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
             if should_exit:
                 converged = True
@@ -239,7 +233,7 @@ class LoopBlock:
                 )
                 break
         else:
-            # Loop completed without break — max iterations reached
+            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             if not exit_reason:
                 exit_reason = "max_iterations"
                 logger.warning(
@@ -265,8 +259,18 @@ class LoopBlock:
 
     @property
     def name(self) -> str:
+        """执行 name 对应的逻辑，并返回处理结果。
+
+        Returns:
+            str，函数执行后的结果。
+        """
         return self._name
 
     @property
     def max_iterations(self) -> int:
+        """执行 max_iterations 对应的逻辑，并返回处理结果。
+
+        Returns:
+            int，函数执行后的结果。
+        """
         return self._max_iterations

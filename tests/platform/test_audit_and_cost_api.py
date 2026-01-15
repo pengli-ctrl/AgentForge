@@ -1,3 +1,15 @@
+"""AgentForge 平台测试层：test_audit_and_cost_api。
+
+本测试模块验证 test_audit_and_cost_api 覆盖的业务路径、边界条件和回归场景。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+-
+主要函数：create_completed_ticket、test_audit_and_cost_summary_cover_completed_ticket、test_sqlalchemy_audit_repository_round_trip。
+"""
+
 import asyncio
 
 import pytest
@@ -13,7 +25,21 @@ from agentforge.platform.runtime import build_memory_container
 
 
 def create_completed_ticket(container):
+    """创建新的业务对象，并返回调用方需要的结果。
+
+    Args:
+        container: Any，调用方传入的 container 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
+
     async def setup():
+        """执行 setup 对应的逻辑，并返回处理结果。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         await container.knowledge_service.ingest_document(
             tenant_id="tenant-1",
             title="Product usage",
@@ -40,6 +66,11 @@ def create_completed_ticket(container):
 
 
 def test_audit_and_cost_summary_cover_completed_ticket() -> None:
+    """验证 audit_and_cost_summary_cover_completed_ticket 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     container = build_memory_container()
     ticket = create_completed_ticket(container)
     client = TestClient(create_platform_app(container))
@@ -69,6 +100,11 @@ def test_audit_and_cost_summary_cover_completed_ticket() -> None:
 
 @pytest.mark.asyncio
 async def test_sqlalchemy_audit_repository_round_trip() -> None:
+    """验证 sqlalchemy_audit_repository_round_trip 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     engine = create_async_engine(
         "sqlite+aiosqlite://",
         poolclass=StaticPool,

@@ -60,6 +60,16 @@ class GitTool(BaseTool):
         allowed_repo_urls: set[str] | None = None,
         command_timeout: float = 60.0,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            workspace: str，调用方传入的 workspace 参数。
+            allowed_repo_urls: set[str] | None，调用方传入的 allowed_repo_urls 参数。
+            command_timeout: float，调用方传入的 command_timeout 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.workspace = workspace
         self.allowed_repo_urls = allowed_repo_urls or set()
         self._command_timeout = command_timeout
@@ -70,7 +80,11 @@ class GitTool(BaseTool):
         return "git"
 
     def schema(self) -> dict:
-        """返回 JSON Schema。"""
+        """执行 schema 对应的逻辑，并返回处理结果。
+
+        Returns:
+            dict，函数执行后的结果。
+        """
         return {
             "type": "function",
             "function": {
@@ -236,10 +250,13 @@ class GitTool(BaseTool):
         )
 
     async def _kill_process(self, process: asyncio.subprocess.Process) -> None:
-        """Terminate a stuck subprocess and reap it so no zombie remains.
+        """执行 _kill_process 对应的逻辑，并返回处理结果。
 
         Args:
-            process: The subprocess to kill.
+            process: asyncio.subprocess.Process，调用方传入的 process 参数。
+
+        Returns:
+            None，函数执行后的结果。
         """
         try:
             process.kill()
@@ -303,13 +320,13 @@ class GitTool(BaseTool):
         return ToolResult(success=False, output="", error=f"Unknown operation: {operation}")
 
     async def _do_clone(self, kwargs: dict[str, Any]) -> ToolResult:
-        """执行 git clone。
+        """执行 _do_clone 对应的逻辑，并返回处理结果。
 
         Args:
-            kwargs: 包含 repo_url, local_path, branch。
+            kwargs: dict[str, Any]，调用方传入的 kwargs 参数。
 
         Returns:
-            克隆结果。
+            ToolResult，函数执行后的结果。
         """
         repo_url = kwargs.get("repo_url", "")
         local_path = kwargs.get("local_path", "")
@@ -340,13 +357,13 @@ class GitTool(BaseTool):
         return result
 
     async def _do_pull(self, kwargs: dict[str, Any]) -> ToolResult:
-        """执行 git pull。
+        """执行 _do_pull 对应的逻辑，并返回处理结果。
 
         Args:
-            kwargs: 包含 local_path。
+            kwargs: dict[str, Any]，调用方传入的 kwargs 参数。
 
         Returns:
-            拉取结果。
+            ToolResult，函数执行后的结果。
         """
         local_path = kwargs.get("local_path", "")
         if not local_path:
@@ -362,13 +379,13 @@ class GitTool(BaseTool):
         return result
 
     async def _do_diff(self, kwargs: dict[str, Any]) -> ToolResult:
-        """执行 git diff。
+        """执行 _do_diff 对应的逻辑，并返回处理结果。
 
         Args:
-            kwargs: 包含 local_path, commit_range（可选，如 main...feature）。
+            kwargs: dict[str, Any]，调用方传入的 kwargs 参数。
 
         Returns:
-            diff 结果。
+            ToolResult，函数执行后的结果。
         """
         local_path = kwargs.get("local_path", "")
         commit_range = kwargs.get("commit_range", kwargs.get("branch", ""))
@@ -428,13 +445,13 @@ class GitTool(BaseTool):
         return result
 
     async def _do_show(self, kwargs: dict[str, Any]) -> ToolResult:
-        """执行 git show。
+        """执行 _do_show 对应的逻辑，并返回处理结果。
 
         Args:
-            kwargs: 包含 local_path, commit。
+            kwargs: dict[str, Any]，调用方传入的 kwargs 参数。
 
         Returns:
-            show 结果。
+            ToolResult，函数执行后的结果。
         """
         local_path = kwargs.get("local_path", "")
         commit = kwargs.get("commit", "")
@@ -463,13 +480,13 @@ class GitTool(BaseTool):
         return result
 
     async def _do_status(self, kwargs: dict[str, Any]) -> ToolResult:
-        """执行 git status。
+        """执行 _do_status 对应的逻辑，并返回处理结果。
 
         Args:
-            kwargs: 包含 local_path。
+            kwargs: dict[str, Any]，调用方传入的 kwargs 参数。
 
         Returns:
-            status 结果。
+            ToolResult，函数执行后的结果。
         """
         local_path = kwargs.get("local_path", "")
         if not local_path:

@@ -91,6 +91,17 @@ class RateLimitMiddleware:
         max_buckets: int = 10_000,
         bucket_ttl: float = 3_600.0,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            capacity: float，调用方传入的 capacity 参数。
+            rate: float，调用方传入的 rate 参数。
+            max_buckets: int，调用方传入的 max_buckets 参数。
+            bucket_ttl: float，调用方传入的 bucket_ttl 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.capacity = capacity
         self.rate = rate
         self.max_buckets = max_buckets

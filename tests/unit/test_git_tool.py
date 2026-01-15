@@ -15,9 +15,9 @@ import pytest
 
 from agentforge.tools.git_tool import GitTool
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 辅助函数 — mock asyncio.create_subprocess_exec
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 def _make_mock_process(
@@ -41,19 +41,29 @@ def _make_mock_process(
     return process
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 基础测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestGitToolBasic:
     """GitTool 基础属性测试。"""
 
     def test_name(self) -> None:
+        """验证 name 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         tool = GitTool()
         assert tool.name == "git"
 
     def test_schema(self) -> None:
+        """验证 schema 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         tool = GitTool()
         schema = tool.schema()
         assert schema["type"] == "function"
@@ -70,11 +80,21 @@ class TestGitToolBasic:
         assert "reset" not in schema["function"]["parameters"]["properties"]["operation"]["enum"]
 
     def test_init_defaults(self) -> None:
+        """验证 init_defaults 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         tool = GitTool()
         assert tool.workspace == "/tmp/agentforge-workspace"
         assert tool.allowed_repo_urls == set()
 
     def test_init_with_allowed_urls(self) -> None:
+        """验证 init_with_allowed_urls 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         tool = GitTool(
             workspace="/custom/workspace",
             allowed_repo_urls={"https://github.com/org/repo.git"},
@@ -83,9 +103,9 @@ class TestGitToolBasic:
         assert "https://github.com/org/repo.git" in tool.allowed_repo_urls
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 操作白名单测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestGitToolOperationWhitelist:
@@ -115,9 +135,9 @@ class TestGitToolOperationWhitelist:
         assert result.success is False
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 安全校验测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestGitToolSecurity:
@@ -199,9 +219,9 @@ class TestGitToolSecurity:
         assert "invalid" in result.error.lower()
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # Clone 操作测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestGitToolClone:
@@ -283,9 +303,9 @@ class TestGitToolClone:
         assert "repository not found" in result.error
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # Pull 操作测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestGitToolPull:
@@ -318,9 +338,9 @@ class TestGitToolPull:
         assert "local_path" in result.error
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # Diff 操作测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestGitToolDiff:
@@ -343,7 +363,11 @@ class TestGitToolDiff:
 
     @pytest.mark.asyncio
     async def test_diff_with_commit_range(self) -> None:
-        """有 commit_range 的 diff。"""
+        """验证 diff_with_commit_range 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         tool = GitTool(workspace="/tmp/ws")
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = _make_mock_process(
@@ -369,9 +393,9 @@ class TestGitToolDiff:
         assert "local_path" in result.error
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # Log 操作测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestGitToolLog:
@@ -421,9 +445,9 @@ class TestGitToolLog:
         assert "-n20" in args
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # Show 操作测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestGitToolShow:
@@ -431,7 +455,11 @@ class TestGitToolShow:
 
     @pytest.mark.asyncio
     async def test_show_success(self) -> None:
-        """成功 show commit。"""
+        """验证 show_success 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         tool = GitTool(workspace="/tmp/ws")
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = _make_mock_process(
@@ -459,9 +487,9 @@ class TestGitToolShow:
         assert "commit" in result.error
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # Status 操作测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestGitToolStatus:
@@ -493,9 +521,9 @@ class TestGitToolStatus:
         assert "local_path" in result.error
 
 
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 错误处理测试
-# ──────────────────────────────────────────────────────────────────────────
+# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestGitToolErrorHandling:

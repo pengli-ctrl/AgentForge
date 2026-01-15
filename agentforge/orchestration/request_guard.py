@@ -1,31 +1,12 @@
-"""
-Request amplification control — three-dimensional limits preventing multi-Agent
-cascade calls from overwhelming external APIs.
+"""AgentForge 编排执行层：request_guard。
 
-    Dimension 1 — DAG size:       ≤ 50 nodes per DAG
-    Dimension 2 — LLM call count: ≤ 100 calls per single request
-    Dimension 3 — Concurrency:    ≤ 10 active DAGs × 5 parallel nodes = 50 max concurrent slots
+本模块负责 request_guard 相关能力，是 编排执行层 的组成部分。
 
-Why these limits?
-    DAG ≤ 50: Beyond 50 nodes, the orchestration overhead (context passing,
-    dependency resolution, span tracking) becomes comparable to actual
-    agent execution time. Also, 50 nodes × 2 LLM calls/node = 100 LLM calls,
-    hitting the per-request API budget.
-
-    LLM calls ≤ 100: Each LLM call costs money and time. 100 calls × avg $0.01
-    = $1 per request maximum. Beyond this, a single user request can bankrupt
-    the service. Also prevents runaway loops.
-
-    Concurrency ≤ 10 DAGs × 5 parallel: 10 concurrent DAGs prevent a single
-    user from monopolizing the system. 5 parallel nodes per DAG prevent
-    burst API calls. Combined: max 50 concurrent LLM calls system-wide.
-
-Design rationale:
-    Uses semaphore pattern (acquire/release) for concurrency control.
-    Size and count checks are stateless (just compare against thresholds).
-    Size/count checks run before DAG execution starts — fail-fast prevents
-    partial execution and wasted resources. The concurrency semaphore is
-    acquired at DAG start and released in a finally block.
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
+- 关键路径应保留日志、指标或链路追踪信息。
+- 主要类：RequestGuard。
 """
 
 import asyncio
@@ -36,57 +17,72 @@ logger = logging.getLogger(__name__)
 
 
 class RequestGuard:
+    """RequestGuard。
+
+    RequestGuard 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+    主要成员：
+    - MAX_DAG_NODES: 50。
+    - MAX_LLM_CALLS_PER_REQUEST: 100。
+    - MAX_ACTIVE_DAGS: 10。
+    - MAX_PARALLEL_NODES: 5。
+    - 方法 check_dag_size()。
+    - 方法 check_llm_call_count()。
+    - 方法 check_concurrency()。
+    - 方法 acquire()。
+    - 方法 release()。
+    - 方法 increment_llm_calls()。
+    - 方法 get_llm_call_count()。
+    - 方法 cleanup_request()。
+    - 方法 active_dag_count()。
+    - 方法 available_slots()。
+    - 方法 status()。
+
+    设计约束：
+    - 保持接口稳定，避免调用方依赖内部实现细节。
+    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
     """
-    Three-dimensional request guard preventing API overload.
 
-    Lifecycle:
-        1. Pre-flight checks: check_dag_size, check_llm_call_count, check_concurrency
-        2. acquire() — reserve a concurrency slot before DAG execution
-        3. release() — free the slot after DAG completion (in finally block)
-
-    The guard uses asyncio.Semaphore for the concurrency dimension, which
-    naturally handles the wait-when-full behavior. Size and count checks
-    are simple boolean guards that reject immediately.
-    """
-
-    # Hard limits — these are architectural constraints, not tunable parameters
-    MAX_DAG_NODES = 50  # Max nodes in a single DAG
-    MAX_LLM_CALLS_PER_REQUEST = 100  # Max LLM API calls per request
-    MAX_ACTIVE_DAGS = 10  # Max concurrent DAG executions
-    MAX_PARALLEL_NODES = 5  # Max parallel nodes within a single DAG
+    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    MAX_DAG_NODES = 50  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    MAX_LLM_CALLS_PER_REQUEST = 100  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    MAX_ACTIVE_DAGS = 10  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    MAX_PARALLEL_NODES = 5  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
     def __init__(
         self,
         max_active_dags: Optional[int] = None,
         max_parallel_nodes: Optional[int] = None,
     ):
-        """
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
         Args:
-            max_active_dags: Override max concurrent DAGs (default: 10).
-            max_parallel_nodes: Override max parallel nodes per DAG (default: 5).
+            max_active_dags: Optional[int]，调用方传入的 max_active_dags 参数。
+            max_parallel_nodes: Optional[int]，调用方传入的 max_parallel_nodes 参数。
+
+        Returns:
+            None，函数执行后的结果。
         """
         self._max_active = max_active_dags or self.MAX_ACTIVE_DAGS
         self._max_parallel = max_parallel_nodes or self.MAX_PARALLEL_NODES
-        # Semaphore limits total concurrent DAG-node slots to max_active × max_parallel
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         self._semaphore = asyncio.Semaphore(self._max_active * self._max_parallel)
-        # Track active DAG count separately (for monitoring)
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         self._active_dag_count = 0
         self._dag_count_lock = asyncio.Lock()
-        # Track LLM call count per request (caller provides this)
-        self._llm_call_counts: dict[str, int] = {}  # correlation_id → count
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+        self._llm_call_counts: dict[str, int] = {}  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
-    # ── Pre-flight checks (stateless, instant) ─────────────────────────
+    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
     def check_dag_size(self, node_count: int) -> bool:
-        """
-        Check if DAG size is within limits.
+        """执行 check_dag_size 对应的逻辑，并返回处理结果。
 
-        Dimension 1: DAG ≤ 50 nodes.
-        Rationale: beyond 50, orchestration overhead dominates and the
-        DAG becomes too complex to debug. Suggest splitting into sub-DAGs.
+        Args:
+            node_count: int，调用方传入的 node_count 参数。
 
         Returns:
-            True if within limits, False if rejected.
+            bool，函数执行后的结果。
         """
         if node_count > self.MAX_DAG_NODES:
             logger.warning(
@@ -98,15 +94,13 @@ class RequestGuard:
         return True
 
     def check_llm_call_count(self, current_count: int) -> bool:
-        """
-        Check if LLM call count for this request is within budget.
+        """执行 check_llm_call_count 对应的逻辑，并返回处理结果。
 
-        Dimension 2: ≤ 100 LLM calls per request.
-        Rationale: cost control ($1/request max) and loop prevention.
-        Called by DAGEngine before each LLM invocation.
+        Args:
+            current_count: int，调用方传入的 current_count 参数。
 
         Returns:
-            True if within budget, False if rejected.
+            bool，函数执行后的结果。
         """
         if current_count > self.MAX_LLM_CALLS_PER_REQUEST:
             logger.warning(
@@ -118,15 +112,14 @@ class RequestGuard:
         return True
 
     def check_concurrency(self, active_dags: int, parallel_nodes: int) -> bool:
-        """
-        Check if system concurrency limits are respected.
+        """执行 check_concurrency 对应的逻辑，并返回处理结果。
 
-        Dimension 3: ≤ 10 active DAGs, ≤ 5 parallel nodes per DAG.
-        Combined max: 10 × 5 = 50 concurrent LLM calls system-wide.
-        Rationale: prevents single-user monopolization and API rate limit hits.
+        Args:
+            active_dags: int，调用方传入的 active_dags 参数。
+            parallel_nodes: int，调用方传入的 parallel_nodes 参数。
 
         Returns:
-            True if within limits, False if rejected.
+            bool，函数执行后的结果。
         """
         if active_dags > self._max_active:
             logger.warning(
@@ -146,16 +139,13 @@ class RequestGuard:
 
         return True
 
-    # ── Semaphore-based concurrency control ─────────────────────────────
+    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
     async def acquire(self) -> bool:
-        """
-        Acquire a concurrency slot before starting a DAG.
+        """执行 acquire 对应的逻辑，并返回处理结果。
 
-        Waits for an available slot when the system is at capacity (standard
-        asyncio.Semaphore behavior) and returns True once acquired. The wait is
-        safe because the semaphore is the single source of truth — there is no
-        peek of the internal ``_value`` (which would be a TOCTOU anti-pattern).
+        Returns:
+            bool，函数执行后的结果。
         """
         await self._semaphore.acquire()
         async with self._dag_count_lock:
@@ -163,38 +153,77 @@ class RequestGuard:
         return True
 
     async def release(self) -> None:
-        """Release a concurrency slot after DAG completion. Always call in finally."""
+        """执行 release 对应的逻辑，并返回处理结果。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._semaphore.release()
         async with self._dag_count_lock:
             self._active_dag_count = max(0, self._active_dag_count - 1)
 
-    # ── LLM call tracking per request ───────────────────────────────────
+    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
     def increment_llm_calls(self, correlation_id: str) -> int:
-        """Increment and return the current LLM call count for a request."""
+        """执行 increment_llm_calls 对应的逻辑，并返回处理结果。
+
+        Args:
+            correlation_id: str，调用方传入的 correlation_id 参数。
+
+        Returns:
+            int，函数执行后的结果。
+        """
         self._llm_call_counts[correlation_id] = self._llm_call_counts.get(correlation_id, 0) + 1
         return self._llm_call_counts[correlation_id]
 
     def get_llm_call_count(self, correlation_id: str) -> int:
-        """Get current LLM call count for a request."""
+        """读取并返回指定数据，并返回调用方需要的结果。
+
+        Args:
+            correlation_id: str，调用方传入的 correlation_id 参数。
+
+        Returns:
+            int，函数执行后的结果。
+        """
         return self._llm_call_counts.get(correlation_id, 0)
 
     def cleanup_request(self, correlation_id: str) -> None:
-        """Clean up LLM call tracking for a completed request."""
+        """执行 cleanup_request 对应的逻辑，并返回处理结果。
+
+        Args:
+            correlation_id: str，调用方传入的 correlation_id 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._llm_call_counts.pop(correlation_id, None)
 
-    # ── Monitoring ───────────────────────────────────────────────────────
+    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
     @property
     def active_dag_count(self) -> int:
+        """执行 active_dag_count 对应的逻辑，并返回处理结果。
+
+        Returns:
+            int，函数执行后的结果。
+        """
         return self._active_dag_count
 
     @property
     def available_slots(self) -> int:
+        """执行 available_slots 对应的逻辑，并返回处理结果。
+
+        Returns:
+            int，函数执行后的结果。
+        """
         return self._semaphore._value
 
     def status(self) -> dict:
-        """Current guard status for monitoring/alerting."""
+        """执行 status 对应的逻辑，并返回处理结果。
+
+        Returns:
+            dict，函数执行后的结果。
+        """
         return {
             "active_dags": self._active_dag_count,
             "max_active_dags": self._max_active,

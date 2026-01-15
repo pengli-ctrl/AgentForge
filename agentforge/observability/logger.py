@@ -97,6 +97,16 @@ class StructuredLogger:
         level: int = logging.INFO,
         use_json: bool = True,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            name: str，调用方传入的 name 参数。
+            level: int，调用方传入的 level 参数。
+            use_json: bool，调用方传入的 use_json 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.logger = logging.getLogger(name)
         self.logger.setLevel(level)
 
@@ -238,13 +248,13 @@ _logger: StructuredLogger | None = None
 
 
 def get_logger(name: str = "agentforge") -> StructuredLogger:
-    """获取全局 StructuredLogger 单例。
+    """读取并返回指定数据，并返回调用方需要的结果。
 
     Args:
-        name: logger 名称。
+        name: str，调用方传入的 name 参数。
 
     Returns:
-        StructuredLogger 实例。
+        StructuredLogger，函数执行后的结果。
     """
     global _logger
     if _logger is None:

@@ -45,6 +45,14 @@ async def test_publish_to_single_subscriber() -> None:
     received: list[AgentEvent] = []
 
     async def callback(event: AgentEvent) -> None:
+        """执行 callback 对应的逻辑，并返回处理结果。
+
+        Args:
+            event: AgentEvent，调用方传入的 event 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         received.append(event)
 
     bus.subscribe(EventType.TASK_SUBMITTED, callback)
@@ -76,9 +84,25 @@ async def test_publish_to_multiple_subscribers() -> None:
     received_2: list[AgentEvent] = []
 
     async def callback_1(event: AgentEvent) -> None:
+        """执行 callback_1 对应的逻辑，并返回处理结果。
+
+        Args:
+            event: AgentEvent，调用方传入的 event 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         received_1.append(event)
 
     async def callback_2(event: AgentEvent) -> None:
+        """执行 callback_2 对应的逻辑，并返回处理结果。
+
+        Args:
+            event: AgentEvent，调用方传入的 event 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         received_2.append(event)
 
     bus.subscribe(EventType.AGENT_COMPLETED, callback_1)
@@ -111,9 +135,28 @@ async def test_subscriber_exception_isolation() -> None:
     received: list[AgentEvent] = []
 
     async def failing_callback(event: AgentEvent) -> None:
+        """执行 failing_callback 对应的逻辑，并返回处理结果。
+
+        Args:
+            event: AgentEvent，调用方传入的 event 参数。
+
+        Returns:
+            None，函数执行后的结果。
+
+        Raises:
+            RuntimeError: 当输入、状态或外部依赖不满足要求时抛出。
+        """
         raise RuntimeError("Intentional test failure")
 
     async def healthy_callback(event: AgentEvent) -> None:
+        """执行 healthy_callback 对应的逻辑，并返回处理结果。
+
+        Args:
+            event: AgentEvent，调用方传入的 event 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         received.append(event)
 
     bus.subscribe(EventType.TASK_FAILED, failing_callback)
@@ -138,13 +181,25 @@ async def test_subscriber_exception_isolation() -> None:
 
 @pytest.mark.asyncio
 async def test_event_carries_correlation_id_and_snapshot() -> None:
-    """事件携带 correlation_id 和 context_snapshot。"""
+    """验证 event_carries_correlation_id_and_snapshot 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     bus = EventBus(backend="memory")
     await bus.start()
 
     received: list[AgentEvent] = []
 
     async def callback(event: AgentEvent) -> None:
+        """执行 callback 对应的逻辑，并返回处理结果。
+
+        Args:
+            event: AgentEvent，调用方传入的 event 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         received.append(event)
 
     bus.subscribe(EventType.TASK_SUBMITTED, callback)
@@ -178,9 +233,25 @@ async def test_subscribe_different_event_types() -> None:
     completed_received: list[AgentEvent] = []
 
     async def on_submitted(event: AgentEvent) -> None:
+        """执行 on_submitted 对应的逻辑，并返回处理结果。
+
+        Args:
+            event: AgentEvent，调用方传入的 event 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         submitted_received.append(event)
 
     async def on_completed(event: AgentEvent) -> None:
+        """执行 on_completed 对应的逻辑，并返回处理结果。
+
+        Args:
+            event: AgentEvent，调用方传入的 event 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         completed_received.append(event)
 
     bus.subscribe(EventType.TASK_SUBMITTED, on_submitted)

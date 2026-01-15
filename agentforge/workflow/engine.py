@@ -93,6 +93,15 @@ class WorkflowEngine:
         registry: AgentRegistry,
         config_dir: str = "configs/workflows",
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            registry: AgentRegistry，调用方传入的 registry 参数。
+            config_dir: str，调用方传入的 config_dir 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.registry = registry
         self.config_dir = config_dir
         self._workflows: dict[str, Workflow] = {}

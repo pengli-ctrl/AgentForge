@@ -1,3 +1,14 @@
+"""AgentForge 平台应用服务层：support_ticket_service。
+
+本模块实现 support_ticket_service 应用服务，编排多个领域对象和基础设施组件完成业务流程。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+- 主要类：SupportTicketService。
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -16,6 +27,21 @@ from agentforge.platform.domain.ticket import RiskLevel, Ticket, TicketStatus
 
 
 class SupportTicketService:
+    """SupportTicketService。
+
+    SupportTicketService 编排业务流程，协调仓储、模型、策略和外部连接器完成用例。
+
+    主要成员：
+    - 方法 create_from_event()。
+    - 方法 apply_approval()。
+    - 方法 review_draft()。
+    - 方法 publish_reply()。
+
+    设计约束：
+    - 保持接口稳定，不向调用方暴露不必要的数据结构。
+    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    """
+
     def __init__(
         self,
         repository: TicketRepository,
@@ -24,6 +50,18 @@ class SupportTicketService:
         audit_repository: AuditRepository | None = None,
         evaluation_repository: EvaluationRepository | None = None,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            repository: TicketRepository，调用方传入的 repository 参数。
+            classifier: RuleBasedTicketClassifier，调用方传入的 classifier 参数。
+            reply_connector: Any，调用方传入的 reply_connector 参数。
+            audit_repository: AuditRepository | None，调用方传入的 audit_repository 参数。
+            evaluation_repository: EvaluationRepository | None，调用方传入的 evaluation_repository 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self._repository = repository
         self._classifier = classifier
         self._reply_connector = reply_connector
@@ -31,6 +69,14 @@ class SupportTicketService:
         self._evaluation_repository = evaluation_repository
 
     async def create_from_event(self, event: dict[str, Any]) -> Ticket:
+        """创建新的业务对象，并返回调用方需要的结果。
+
+        Args:
+            event: dict[str, Any]，调用方传入的 event 参数。
+
+        Returns:
+            Ticket，函数执行后的结果。
+        """
         tenant_id = self._require(event, "tenant_id")
         source = self._require(event, "source")
         message_id = self._require(event, "message_id")
@@ -82,6 +128,20 @@ class SupportTicketService:
     async def apply_approval(
         self, tenant_id: str, ticket_id: str, decision: str, decided_by: str
     ) -> Ticket:
+        """应用业务变更，并返回调用方需要的结果。
+
+        Args:
+            tenant_id: str，调用方传入的 tenant_id 参数。
+            ticket_id: str，调用方传入的 ticket_id 参数。
+            decision: str，调用方传入的 decision 参数。
+            decided_by: str，调用方传入的 decided_by 参数。
+
+        Returns:
+            Ticket，函数执行后的结果。
+
+        Raises:
+            ValueError: 当输入、状态或外部依赖不满足要求时抛出。
+        """
         ticket = await self._repository.get(tenant_id, ticket_id)
         if ticket is None:
             raise ValueError("Ticket not found")
@@ -122,6 +182,22 @@ class SupportTicketService:
         edited_text: str | None = None,
         reason: str | None = None,
     ) -> Ticket:
+        """执行 review_draft 对应的逻辑，并返回处理结果。
+
+        Args:
+            tenant_id: str，调用方传入的 tenant_id 参数。
+            ticket_id: str，调用方传入的 ticket_id 参数。
+            action: str，调用方传入的 action 参数。
+            reviewer_id: str，调用方传入的 reviewer_id 参数。
+            edited_text: str | None，调用方传入的 edited_text 参数。
+            reason: str | None，调用方传入的 reason 参数。
+
+        Returns:
+            Ticket，函数执行后的结果。
+
+        Raises:
+            ValueError: 当输入、状态或外部依赖不满足要求时抛出。
+        """
         ticket = await self._repository.get(tenant_id, ticket_id)
         if ticket is None:
             raise ValueError("Ticket not found")
@@ -196,6 +272,19 @@ class SupportTicketService:
         ticket_id: str,
         text: str | None = None,
     ) -> Ticket:
+        """执行 publish_reply 对应的逻辑，并返回处理结果。
+
+        Args:
+            tenant_id: str，调用方传入的 tenant_id 参数。
+            ticket_id: str，调用方传入的 ticket_id 参数。
+            text: str | None，调用方传入的 text 参数。
+
+        Returns:
+            Ticket，函数执行后的结果。
+
+        Raises:
+            ValueError: 当输入、状态或外部依赖不满足要求时抛出。
+        """
         ticket = await self._repository.get(tenant_id, ticket_id)
         if ticket is None:
             raise ValueError("Ticket not found")
@@ -243,6 +332,16 @@ class SupportTicketService:
 
     @staticmethod
     def _make_event(event_type: str, ticket: Ticket, trace_id: str | None = None) -> EventEnvelope:
+        """执行 _make_event 对应的逻辑，并返回处理结果。
+
+        Args:
+            event_type: str，调用方传入的 event_type 参数。
+            ticket: Ticket，调用方传入的 ticket 参数。
+            trace_id: str | None，调用方传入的 trace_id 参数。
+
+        Returns:
+            EventEnvelope，函数执行后的结果。
+        """
         return EventEnvelope(
             event_id=str(uuid4()),
             event_type=event_type,
@@ -262,6 +361,19 @@ class SupportTicketService:
         trace_id: str,
         payload: dict[str, Any],
     ) -> None:
+        """执行 _record_audit 对应的逻辑，并返回处理结果。
+
+        Args:
+            action: str，调用方传入的 action 参数。
+            ticket: Ticket，调用方传入的 ticket 参数。
+            actor_type: str，调用方传入的 actor_type 参数。
+            actor_id: str，调用方传入的 actor_id 参数。
+            trace_id: str，调用方传入的 trace_id 参数。
+            payload: dict[str, Any]，调用方传入的 payload 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         if self._audit_repository is None:
             return
         await self._audit_repository.save(
@@ -291,6 +403,22 @@ class SupportTicketService:
         model_name: str,
         provider: str,
     ) -> None:
+        """执行 _record_evaluation_sample 对应的逻辑，并返回处理结果。
+
+        Args:
+            ticket: Ticket，调用方传入的 ticket 参数。
+            action: str，调用方传入的 action 参数。
+            reviewer_id: str，调用方传入的 reviewer_id 参数。
+            original_draft_text: str，调用方传入的 original_draft_text 参数。
+            final_text: str，调用方传入的 final_text 参数。
+            reason: str，调用方传入的 reason 参数。
+            trace_id: str，调用方传入的 trace_id 参数。
+            model_name: str，调用方传入的 model_name 参数。
+            provider: str，调用方传入的 provider 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         if self._evaluation_repository is None:
             return
         await self._evaluation_repository.save(
@@ -315,6 +443,18 @@ class SupportTicketService:
 
     @staticmethod
     def _require(event: dict[str, Any], key: str) -> str:
+        """执行 _require 对应的逻辑，并返回处理结果。
+
+        Args:
+            event: dict[str, Any]，调用方传入的 event 参数。
+            key: str，调用方传入的 key 参数。
+
+        Returns:
+            str，函数执行后的结果。
+
+        Raises:
+            ValueError: 当输入、状态或外部依赖不满足要求时抛出。
+        """
         value = event.get(key)
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"Missing required event field: {key}")

@@ -57,6 +57,17 @@ class HybridRetriever:
         embed_model: Any = None,
         top_k: int = 20,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            bm25_index: Any，调用方传入的 bm25_index 参数。
+            faiss_index: Any，调用方传入的 faiss_index 参数。
+            embed_model: Any，调用方传入的 embed_model 参数。
+            top_k: int，调用方传入的 top_k 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.bm25_index = bm25_index
         self.faiss_index = faiss_index
         self.embed_model = embed_model

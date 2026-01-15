@@ -30,11 +30,21 @@ class TestRerankerInit:
     """初始化测试。"""
 
     def test_default_max_chunks(self) -> None:
+        """验证 default_max_chunks 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         llm = MockLLMGateway()
         reranker = LLMReranker(llm_gateway=llm)
         assert reranker.max_chunks == 20
 
     def test_custom_max_chunks(self) -> None:
+        """验证 custom_max_chunks 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         llm = MockLLMGateway()
         reranker = LLMReranker(llm_gateway=llm, max_chunks=10)
         assert reranker.max_chunks == 10
@@ -198,7 +208,7 @@ class TestJSONParsing:
         reranker = LLMReranker(llm_gateway=llm)
 
         result = await reranker.rerank("query", _make_chunks(3), top_k=3)
-        # chunk_0 (9) > chunk_2 (5) > chunk_1 (0)
+        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         assert result[0][0] == "chunk_0"
         assert result[1][0] == "chunk_2"
         assert result[2][0] == "chunk_1"
@@ -228,6 +238,11 @@ class TestFormatChunks:
     """_format_chunks 方法测试。"""
 
     def test_format_chunks_includes_ids(self) -> None:
+        """验证 format_chunks_includes_ids 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         llm = MockLLMGateway()
         reranker = LLMReranker(llm_gateway=llm)
         chunks = _make_chunks(3)
@@ -237,6 +252,11 @@ class TestFormatChunks:
         assert "chunk_2" in text
 
     def test_format_chunks_includes_metadata(self) -> None:
+        """验证 format_chunks_includes_metadata 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         llm = MockLLMGateway()
         reranker = LLMReranker(llm_gateway=llm)
         chunks = [
@@ -252,6 +272,11 @@ class TestFormatChunks:
         assert "foo" in text
 
     def test_format_chunks_includes_content(self) -> None:
+        """验证 format_chunks_includes_content 对应的业务行为、边界条件和回归场景。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         llm = MockLLMGateway()
         reranker = LLMReranker(llm_gateway=llm)
         content = "def validate_input(data):\n    return True"

@@ -118,10 +118,13 @@ class TrustBoundary:
     }
 
     def __init__(self, api_schema: dict[str, list[str]] | None = None) -> None:
-        """初始化 Trust Boundary。
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
 
         Args:
-            api_schema: API Schema 字典 {api_name: [field_names]}。
+            api_schema: dict[str, list[str]] | None，调用方传入的 api_schema 参数。
+
+        Returns:
+            None，函数执行后的结果。
         """
         self.api_schema = api_schema or {}
 
@@ -181,7 +184,24 @@ class TrustBoundary:
         """
 
         class _Operation:
+            """_Operation。
+
+            _Operation 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+            设计约束：
+            - 保持接口稳定，避免调用方依赖内部实现细节。
+            - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+            """
+
             def __init__(self, op_type: str = "") -> None:
+                """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+                Args:
+                    op_type: str，调用方传入的 op_type 参数。
+
+                Returns:
+                    None，函数执行后的结果。
+                """
                 self.type = op_type
 
         # 从 SQL 语句中提取操作类型
@@ -252,6 +272,14 @@ class TrustBoundary:
         parts: list[str] = []
 
         def _extract(obj: Any) -> None:
+            """执行 _extract 对应的逻辑，并返回处理结果。
+
+            Args:
+                obj: Any，调用方传入的 obj 参数。
+
+            Returns:
+                None，函数执行后的结果。
+            """
             if isinstance(obj, str):
                 parts.append(obj)
             elif isinstance(obj, dict):
@@ -327,7 +355,21 @@ class CrossSourceVerifier:
         """
 
         class _VerificationResult:
+            """_VerificationResult。
+
+            _VerificationResult 封装相关领域行为，保持职责单一并降低调用方复杂度。
+
+            设计约束：
+            - 保持接口稳定，避免调用方依赖内部实现细节。
+            - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+            """
+
             def __init__(self) -> None:
+                """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+                Returns:
+                    None，函数执行后的结果。
+                """
                 self.passed = True
                 self.violations: list[str] = []
 

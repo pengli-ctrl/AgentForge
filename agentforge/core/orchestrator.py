@@ -42,6 +42,14 @@ class Orchestrator:
     """
 
     def __init__(self, state_store: Any = None) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            state_store: Any，调用方传入的 state_store 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         warnings.warn(
             "Orchestrator (V2) is deprecated. Use EventBus + dynamic routing instead.",
             DeprecationWarning,

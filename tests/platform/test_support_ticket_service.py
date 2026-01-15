@@ -1,3 +1,15 @@
+"""AgentForge 平台测试层：test_support_ticket_service。
+
+本测试模块验证 test_support_ticket_service 覆盖的业务路径、边界条件和回归场景。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+-
+主要函数：test_low_risk_event_creates_ticket_waiting_review、test_duplicate_event_returns_existing_ticket、test_webhook_returns_high_risk_ticket、test_approval_api_moves_ticket_to_ready_to_publish、test_reply_api_publishes_approved_ticket、test_reply_api_requires_non_empty_text。
+"""
+
 import asyncio
 
 import pytest
@@ -10,6 +22,11 @@ from agentforge.platform.runtime import build_memory_container
 
 @pytest.mark.asyncio
 async def test_low_risk_event_creates_ticket_waiting_review() -> None:
+    """验证 low_risk_event_creates_ticket_waiting_review 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     container = build_memory_container()
     event = {
         "tenant_id": "tenant-1",
@@ -25,6 +42,11 @@ async def test_low_risk_event_creates_ticket_waiting_review() -> None:
 
 @pytest.mark.asyncio
 async def test_duplicate_event_returns_existing_ticket() -> None:
+    """验证 duplicate_event_returns_existing_ticket 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     container = build_memory_container()
     event = {
         "tenant_id": "tenant-1",
@@ -39,6 +61,11 @@ async def test_duplicate_event_returns_existing_ticket() -> None:
 
 
 def test_webhook_returns_high_risk_ticket() -> None:
+    """验证 webhook_returns_high_risk_ticket 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     client = TestClient(create_platform_app(build_memory_container()))
     response = client.post(
         "/v1/events/im",
@@ -56,6 +83,11 @@ def test_webhook_returns_high_risk_ticket() -> None:
 
 
 def test_approval_api_moves_ticket_to_ready_to_publish() -> None:
+    """验证 approval_api_moves_ticket_to_ready_to_publish 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     client = TestClient(create_platform_app(build_memory_container()))
     created = client.post(
         "/v1/events/im",
@@ -75,6 +107,11 @@ def test_approval_api_moves_ticket_to_ready_to_publish() -> None:
 
 
 def test_reply_api_publishes_approved_ticket() -> None:
+    """验证 reply_api_publishes_approved_ticket 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     container = build_memory_container()
     outcome = asyncio.run(
         container.processing_service.process_event(
@@ -109,6 +146,11 @@ def test_reply_api_publishes_approved_ticket() -> None:
 
 
 def test_reply_api_requires_non_empty_text() -> None:
+    """验证 reply_api_requires_non_empty_text 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     client = TestClient(create_platform_app(build_memory_container()))
 
     response = client.post(

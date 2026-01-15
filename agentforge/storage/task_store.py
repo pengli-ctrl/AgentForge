@@ -1,27 +1,12 @@
-"""TaskStore — 任务持久化存储，CRUD + 状态机管理。
+"""AgentForge 任务存储层：task_store。
 
-提供任务的创建、查询、更新、取消等操作，并管理任务状态转换。
-生产环境使用 MySQL 作为后端，开发/测试环境使用内存字典。
+本模块负责 task_store 相关能力，是 任务存储层 的组成部分。
 
-状态机规则由 Task.can_transition() 定义，不合法的状态转换会被拒绝。
-
-SQL Schema（MySQL）：
-    CREATE TABLE tasks (
-        task_id          VARCHAR(36) PRIMARY KEY,
-        workflow_name    VARCHAR(255) NOT NULL,
-        input_data       JSON,
-        status           VARCHAR(20) NOT NULL DEFAULT 'pending',
-        priority         VARCHAR(20) NOT NULL DEFAULT 'task_primary',
-        correlation_id   VARCHAR(36) NOT NULL,
-        result           JSON,
-        error            TEXT,
-        created_at       DOUBLE,
-        started_at       DOUBLE DEFAULT 0,
-        completed_at     DOUBLE DEFAULT 0,
-        metadata         JSON,
-        INDEX idx_status (status),
-        INDEX idx_correlation_id (correlation_id)
-    );
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
+- 关键路径应保留日志、指标或链路追踪信息。
+- 主要类：TaskStore。
 """
 
 from __future__ import annotations
@@ -46,6 +31,14 @@ class TaskStore:
     """
 
     def __init__(self, db_pool: Any = None) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            db_pool: Any，调用方传入的 db_pool 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.db_pool = db_pool
         self._store: dict[str, Task] = {}
 

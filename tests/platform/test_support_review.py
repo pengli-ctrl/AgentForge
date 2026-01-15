@@ -1,3 +1,15 @@
+"""AgentForge 平台测试层：test_support_review。
+
+本测试模块验证 test_support_review 覆盖的业务路径、边界条件和回归场景。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+-
+主要函数：create_low_risk_ticket、test_accept_reviewed_draft_and_publish_it、test_edit_reviewed_draft_before_publish、test_reject_reviewed_draft_and_keep_tenant_isolation。
+"""
+
 import asyncio
 
 from fastapi.testclient import TestClient
@@ -7,7 +19,22 @@ from agentforge.platform.runtime import build_memory_container
 
 
 def create_low_risk_ticket(container, message_id: str):
+    """创建新的业务对象，并返回调用方需要的结果。
+
+    Args:
+        container: Any，调用方传入的 container 参数。
+        message_id: str，调用方传入的 message_id 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
+
     async def setup():
+        """执行 setup 对应的逻辑，并返回处理结果。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         await container.knowledge_service.ingest_document(
             tenant_id="tenant-1",
             title="Product usage",
@@ -27,6 +54,11 @@ def create_low_risk_ticket(container, message_id: str):
 
 
 def test_accept_reviewed_draft_and_publish_it() -> None:
+    """验证 accept_reviewed_draft_and_publish_it 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     container = build_memory_container()
     ticket = create_low_risk_ticket(container, "review-msg-1")
     client = TestClient(create_platform_app(container))
@@ -56,6 +88,11 @@ def test_accept_reviewed_draft_and_publish_it() -> None:
 
 
 def test_edit_reviewed_draft_before_publish() -> None:
+    """验证 edit_reviewed_draft_before_publish 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     container = build_memory_container()
     ticket = create_low_risk_ticket(container, "review-msg-2")
     client = TestClient(create_platform_app(container))
@@ -87,6 +124,11 @@ def test_edit_reviewed_draft_before_publish() -> None:
 
 
 def test_reject_reviewed_draft_and_keep_tenant_isolation() -> None:
+    """验证 reject_reviewed_draft_and_keep_tenant_isolation 对应的业务行为、边界条件和回归场景。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     container = build_memory_container()
     ticket = create_low_risk_ticket(container, "review-msg-3")
     client = TestClient(create_platform_app(container))

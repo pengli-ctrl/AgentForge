@@ -111,10 +111,26 @@ async def test_event_bus_agent_communication() -> None:
     received_events: list[AgentEvent] = []
 
     async def capture_event(event: AgentEvent) -> None:
+        """执行 capture_event 对应的逻辑，并返回处理结果。
+
+        Args:
+            event: AgentEvent，调用方传入的 event 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         received_events.append(event)
 
     # code_review 执行后把结果事件发回总线
     async def code_review_handler(event: AgentEvent) -> None:
+        """执行 code_review_handler 对应的逻辑，并返回处理结果。
+
+        Args:
+            event: AgentEvent，调用方传入的 event 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         result = await code_review.execute(event)
         await bus.publish(result)
 

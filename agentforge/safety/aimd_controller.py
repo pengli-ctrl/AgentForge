@@ -48,6 +48,11 @@ class AIMDRetryController:
     """
 
     def __init__(self) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.congestion_window: float = 10.0  # 拥塞窗口（类似 TCP cwnd）
         self.slow_start_threshold: float = 20.0  # 慢启动阈值
         self.current_rto: float = 5.0  # 当前重试超时（Retry Timeout）

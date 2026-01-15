@@ -37,6 +37,15 @@ class AuthMiddleware:
         api_keys: set[str] | None = None,
         allow_no_auth: bool = False,
     ) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            api_keys: set[str] | None，调用方传入的 api_keys 参数。
+            allow_no_auth: bool，调用方传入的 allow_no_auth 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.api_keys = api_keys or set()
         self.allow_no_auth = allow_no_auth
 

@@ -1,41 +1,12 @@
-"""TraceStore — Trace 数据存储，记录每个事件的完整链路。
+"""AgentForge 任务存储层：trace_store。
 
-用于全链路可观测性（Layer 4 容错防线）。
-存储 TraceEvent 和 TraceSpan，支持按 correlation_id 查询完整链路。
+本模块负责 trace_store 相关能力，是 任务存储层 的组成部分。
 
-生产环境使用 MySQL 作为后端，开发/测试环境使用内存列表。
-
-SQL Schema（MySQL）：
-    CREATE TABLE trace_events (
-        event_id         VARCHAR(36) PRIMARY KEY,
-        trace_id         VARCHAR(36) NOT NULL,
-        span_id          VARCHAR(36) NOT NULL,
-        parent_span_id   VARCHAR(36),
-        event_type       VARCHAR(50),
-        source_agent     VARCHAR(100),
-        target_agent     VARCHAR(100),
-        timestamp        DOUBLE,
-        duration_ms      DOUBLE,
-        payload_summary  TEXT,
-        status           VARCHAR(20),
-        error_message    TEXT,
-        INDEX idx_trace_id (trace_id),
-        INDEX idx_span_id (span_id)
-    );
-
-    CREATE TABLE trace_spans (
-        span_id          VARCHAR(36) PRIMARY KEY,
-        trace_id         VARCHAR(36) NOT NULL,
-        parent_span_id   VARCHAR(36),
-        agent_name       VARCHAR(100),
-        start_time       DOUBLE,
-        end_time         DOUBLE,
-        duration_ms      DOUBLE,
-        tool_calls       INT DEFAULT 0,
-        llm_calls        INT DEFAULT 0,
-        status           VARCHAR(20),
-        INDEX idx_trace_id (trace_id)
-    );
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
+- 关键路径应保留日志、指标或链路追踪信息。
+- 主要类：TraceStore。
 """
 
 from __future__ import annotations
@@ -60,6 +31,14 @@ class TraceStore:
     """
 
     def __init__(self, db_pool: Any = None) -> None:
+        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+
+        Args:
+            db_pool: Any，调用方传入的 db_pool 参数。
+
+        Returns:
+            None，函数执行后的结果。
+        """
         self.db_pool = db_pool
         self._events: list[TraceEvent] = []
         self._spans: list[TraceSpan] = []

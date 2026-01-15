@@ -1,3 +1,15 @@
+"""AgentForge 平台测试层：test_console_tickets。
+
+本测试模块验证 test_console_tickets 覆盖的业务路径、边界条件和回归场景。
+
+核心说明：
+- 对外接口保持稳定，避免调用方依赖内部实现细节。
+- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
+- 关键执行路径应保留日志、审计或链路追踪信息。
+-
+主要函数：test_console_tickets_lists_and_filters、test_console_inbox_returns_only_waiting_approval、test_console_overview_includes_task_status_counts、test_console_costs_overview_aggregates_tenants、test_ticket_list_pagination_cursor。
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -21,6 +33,18 @@ def _ticket(
     risk: RiskLevel = RiskLevel.LOW,
     subject: str = "subject",
 ) -> Ticket:
+    """执行 _ticket 对应的逻辑，并返回处理结果。
+
+    Args:
+        ticket_id: str，调用方传入的 ticket_id 参数。
+        status: TicketStatus，调用方传入的 status 参数。
+        tenant_id: str，调用方传入的 tenant_id 参数。
+        risk: RiskLevel，调用方传入的 risk 参数。
+        subject: str，调用方传入的 subject 参数。
+
+    Returns:
+        Ticket，函数执行后的结果。
+    """
     return Ticket(
         ticket_id=ticket_id,
         tenant_id=tenant_id,
@@ -36,18 +60,36 @@ def _ticket(
 
 
 def _client():
+    """执行 _client 对应的逻辑，并返回处理结果。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     container = build_memory_container()
     app = create_platform_app(container)
     return container, TestClient(app)
 
 
 async def _seed(container, tickets) -> None:
+    """执行 _seed 对应的逻辑，并返回处理结果。
+
+    Args:
+        container: Any，调用方传入的 container 参数。
+        tickets: Any，调用方传入的 tickets 参数。
+
+    Returns:
+        None，函数执行后的结果。
+    """
     for t in tickets:
         await container.repository.save(t)
 
 
 def test_console_tickets_lists_and_filters() -> None:
+    """验证 console_tickets_lists_and_filters 对应的业务行为、边界条件和回归场景。
 
+    Returns:
+        None，函数执行后的结果。
+    """
     from agentforge.platform.infrastructure.memory_ticket_repository import (
         MemoryTicketRepository,
     )
@@ -75,7 +117,11 @@ def test_console_tickets_lists_and_filters() -> None:
 
 
 def test_console_inbox_returns_only_waiting_approval() -> None:
+    """验证 console_inbox_returns_only_waiting_approval 对应的业务行为、边界条件和回归场景。
 
+    Returns:
+        None，函数执行后的结果。
+    """
     container, client = _client()
     asyncio.run(
         _seed(
@@ -93,7 +139,11 @@ def test_console_inbox_returns_only_waiting_approval() -> None:
 
 
 def test_console_overview_includes_task_status_counts() -> None:
+    """验证 console_overview_includes_task_status_counts 对应的业务行为、边界条件和回归场景。
 
+    Returns:
+        None，函数执行后的结果。
+    """
     container, client = _client()
     asyncio.run(
         _seed(
@@ -113,12 +163,16 @@ def test_console_overview_includes_task_status_counts() -> None:
     tasks = overview["tasks"]
     assert tasks["waiting_approval"] == 1
     assert tasks["published"] == 1
-    # other-tenant's failed ticket must NOT leak into tenant-a
+    # 验证失败场景，确保异常路径能够被正确处理。
     assert tasks["failed"] == 0
 
 
 def test_console_costs_overview_aggregates_tenants() -> None:
+    """验证 console_costs_overview_aggregates_tenants 对应的业务行为、边界条件和回归场景。
 
+    Returns:
+        None，函数执行后的结果。
+    """
     from agentforge.platform.domain.cost import CostRecord
     from agentforge.platform.infrastructure.memory_cost_repository import (
         MemoryCostRepository,
@@ -152,7 +206,11 @@ def test_console_costs_overview_aggregates_tenants() -> None:
 
 
 def test_ticket_list_pagination_cursor() -> None:
+    """验证 ticket_list_pagination_cursor 对应的业务行为、边界条件和回归场景。
 
+    Returns:
+        None，函数执行后的结果。
+    """
     container, client = _client()
     asyncio.run(
         _seed(container, [_ticket(f"t{i}", TicketStatus.NEW, subject=str(i)) for i in range(5)])
