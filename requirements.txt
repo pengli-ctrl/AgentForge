@@ -18,7 +18,7 @@ faiss-cpu>=1.7.4
 
 # API Layer
 fastapi>=0.104.0
-uvicorn>=0.24.0
+uvicorn>=0.51.0
 
 # Storage
 # MySQL driver (install when using MySQL backend)
