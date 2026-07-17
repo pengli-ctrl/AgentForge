@@ -4,7 +4,7 @@
 pyyaml>=6.0
 
 # LLM Gateway
-httpx>=0.25.0
+httpx>=0.28.1
 
 # Event Bus (choose one)
 redis>=5.0.0
