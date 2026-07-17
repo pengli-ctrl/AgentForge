@@ -1,0 +1,52 @@
+# AgentForge Dependencies
+
+# Core
+pyyaml>=6.0
+
+# LLM Gateway
+httpx>=0.25.0
+
+# Event Bus (choose one)
+redis>=5.0.0
+# kafka-python>=2.0.0  # uncomment when migrating to Kafka
+
+# RAG
+tree-sitter>=0.21.0
+tree-sitter-python>=0.21.0
+rank-bm25>=0.2.2
+faiss-cpu>=1.7.4
+
+# API Layer
+fastapi>=0.104.0
+uvicorn>=0.24.0
+
+# Storage
+# MySQL driver (install when using MySQL backend)
+# aiomysql>=0.2.0
+# sqlalchemy>=2.0.0
+
+# Observability
+prometheus-client>=0.19.0
+opentelemetry-api>=1.20.0
+opentelemetry-sdk>=1.20.0
+
+# CLI
+# typer>=0.9.0  # optional, CLI uses argparse by default
+
+# Safety / Observability
+# (already covered by opentelemetry and prometheus-client)
+
+# SDK
+# httpx already included above
+
+# Utils
+numpy>=1.24.0
+
+# Development (install with: pip install -r requirements-dev.txt)
+# pytest>=7.0.0
+# pytest-asyncio>=0.21.0
+# pytest-cov>=4.0.0
+# black>=23.0.0
+# isort>=5.12.0
+# flake8>=6.0.0
+# mypy>=1.5.0

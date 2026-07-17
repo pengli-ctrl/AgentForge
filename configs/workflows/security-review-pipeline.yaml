@@ -1,0 +1,34 @@
+# 安全审查工作流配置
+# 专门针对安全相关代码变更的审查流程
+
+name: "security-review-pipeline"
+description: "安全审查流程：安全扫描 → 代码审查 → 漏洞报告生成"
+
+steps:
+  - agent: security-scan
+    on_complete:
+      - condition: "result.severity == 'critical'"
+        next: code-review      # 发现严重漏洞 → 代码审查详细分析
+      - condition: "result.severity == 'warning'"
+        next: doc-generator    # 仅有警告 → 生成安全报告
+      - condition: "default"
+        next: complete         # 无安全问题 → 结束
+
+  - agent: code-review
+    on_complete:
+      - condition: "result.has_fix"
+        next: test-execution   # 代码审查提供了修复 → 跑测试验证
+      - condition: "default"
+        next: doc-generator    # 无法自动修复 → 生成报告供人工处理
+
+  - agent: test-execution
+    on_complete:
+      - condition: "result.pass_rate < 0.8"
+        next: code-review      # 修复后测试不通过 → 重新审查
+      - condition: "default"
+        next: doc-generator    # 测试通过 → 生成报告
+
+  - agent: doc-generator
+    on_complete:
+      - condition: "default"
+        next: complete         # 报告生成完成 → 工作流结束

@@ -1,0 +1,33 @@
+# 代码审查工作流配置
+# V3 动态路由引擎 — 基于事件路由的条件分支，通过 YAML 配置实现动态分支，不改代码
+
+name: "code-review-pipeline"
+description: "代码审查全流程：代码审查 → 测试执行 → 文档生成"
+
+steps:
+  - agent: code-review
+    on_complete:
+      - condition: "result.severity == 'critical'"
+        next: security-scan    # 发现安全问题 → 先跑安全扫描
+      - condition: "default"
+        next: test-execution   # 正常情况 → 直接跑测试
+
+  - agent: test-execution
+    on_complete:
+      - condition: "result.pass_rate < 0.8"
+        next: code-review      # 测试不通过 → 重新审查
+      - condition: "default"
+        next: doc-generator    # 通过 → 生成文档
+
+  - agent: doc-generator
+    on_complete:
+      - condition: "default"
+        next: complete         # 文档生成完成 → 工作流结束
+
+# 安全扫描分支（由 code-review 的 critical 条件触发）
+  - agent: security-scan
+    on_complete:
+      - condition: "result.has_vulnerabilities"
+        next: code-review      # 发现漏洞 → 回到代码审查
+      - condition: "default"
+        next: test-execution   # 安全检查通过 → 继续测试

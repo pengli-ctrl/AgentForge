@@ -1,0 +1,62 @@
+# AgentForge Logging Configuration
+# Python logging setup with console + rotating file handlers.
+
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  standard:
+    format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+  json:
+    class: agentforge.observability.logger.JsonFormatter
+    format: "%(asctime)s %(levelname)s %(name)s %(message)s"
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: standard
+    stream: ext://sys.stdout
+
+  file:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: json
+    filename: logs/agentforge.log
+    maxBytes: 10485760  # 10 MB
+    backupCount: 5
+    encoding: utf-8
+
+loggers:
+  agentforge:
+    level: DEBUG
+    handlers: [console, file]
+    propagate: false
+
+  agentforge.api:
+    level: INFO
+    propagate: true
+
+  agentforge.core:
+    level: DEBUG
+    propagate: true
+
+  agentforge.safety:
+    level: WARNING
+    propagate: true
+
+  agentforge.llm:
+    level: INFO
+    propagate: true
+
+  uvicorn:
+    level: INFO
+    propagate: true
+
+  uvicorn.access:
+    level: INFO
+    propagate: true
+
+root:
+  level: INFO
+  handlers: [console]

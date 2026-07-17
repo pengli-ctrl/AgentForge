@@ -1,0 +1,106 @@
+# AgentForge Docker Compose — 完整部署编排
+# 包含：app (AgentForge API) + redis (状态存储/事件总线) + kafka (事件总线) + mysql (任务持久化)
+
+services:
+  # ===== AgentForge API 服务 =====
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: agentforge-app
+    ports:
+      - "8000:8000"
+    environment:
+      - AGENTFORGE_API_KEYS=${AGENTFORGE_API_KEYS:-}
+      - AGENTFORGE_DEBUG=${AGENTFORGE_DEBUG:-false}
+      - REDIS_URL=redis://redis:6379
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_DATABASE=agentforge
+      - MYSQL_USER=agentforge
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-agentforge_secret}
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    depends_on:
+      redis:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - agentforge-net
+
+  # ===== Redis — 状态存储 + 事件总线 =====
+  redis:
+    image: redis:7-alpine
+    container_name: agentforge-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - agentforge-net
+
+  # ===== MySQL — 任务持久化 =====
+  mysql:
+    image: mysql:8.0
+    container_name: agentforge-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root_secret}
+      - MYSQL_DATABASE=agentforge
+      - MYSQL_USER=agentforge
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-agentforge_secret}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - agentforge-net
+
+  # ===== Kafka — 事件总线（Agent 数量增长后启用） =====
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: agentforge-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      - KAFKA_BROKER_ID=1
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
+    depends_on:
+      - zookeeper
+    restart: unless-stopped
+    networks:
+      - agentforge-net
+
+  # Zookeeper — Kafka 依赖
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: agentforge-zookeeper
+    environment:
+      - ZOOKEEPER_CLIENT_PORT=2181
+    restart: unless-stopped
+    networks:
+      - agentforge-net
+
+volumes:
+  redis-data:
+  mysql-data:
+
+networks:
+  agentforge-net:
+    driver: bridge

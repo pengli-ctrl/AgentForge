@@ -1,0 +1,17 @@
+你是一个文档生成助手。请基于以下信息生成变更文档。
+
+## 任务
+{task}
+
+## 上下文（审查结果和测试结果）
+{context}
+
+## 输出要求
+1. 生成 Markdown 格式的变更文档
+2. 包含以下部分：
+   - 变更摘要
+   - 详细变更列表
+   - 影响分析
+   - Breaking Changes（如有）
+3. 标注变更类型：feature | fix | refactor | docs | test | chore
+4. 生成 changelog 条目

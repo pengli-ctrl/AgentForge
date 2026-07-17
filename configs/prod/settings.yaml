@@ -1,0 +1,62 @@
+# AgentForge Production Environment Configuration
+
+# General
+debug: false
+log_level: INFO
+
+# Rate Limiting (strict for production)
+rate_limit:
+  capacity: 100
+  rate: 10  # requests per second
+
+# LLM Gateway
+llm:
+  mock_llm: false
+  model: "production-model"
+  endpoint: "http://vllm-service:8000/v1"
+  api_key: "${LLM_API_KEY}"
+  max_tokens: 4096
+  timeout: 60.0
+  temperature: 0.3
+
+# Redis (cluster for high availability)
+redis:
+  url: "redis://redis-cluster:6379"
+  key_prefix: "agentforge:snapshot"
+  default_ttl: 86400
+
+# MySQL (production database)
+mysql:
+  host: "mysql-primary"
+  port: 3306
+  database: "agentforge"
+  user: "agentforge"
+  password: "${MYSQL_PASSWORD}"
+
+# Kafka (enabled for production event bus)
+kafka:
+  enabled: true
+  bootstrap_servers: "kafka-broker-1:9092,kafka-broker-2:9092,kafka-broker-3:9092"
+
+# Event Bus
+event_bus:
+  backend: "kafka"
+
+# API Server
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 4  # multiple workers for production throughput
+
+# Monitoring
+monitoring:
+  prometheus_enabled: true
+  metrics_path: "/metrics"
+  grafana_dashboard: "deploy/grafana/agentforge-dashboard.json"
+
+# Security
+security:
+  api_keys_required: true
+  tls_enabled: true
+  cors_origins:
+    - "https://agentforge.example.com"
