@@ -49,10 +49,10 @@ class RequestGuard:
     """
 
     # Hard limits — these are architectural constraints, not tunable parameters
-    MAX_DAG_NODES = 50            # Max nodes in a single DAG
+    MAX_DAG_NODES = 50  # Max nodes in a single DAG
     MAX_LLM_CALLS_PER_REQUEST = 100  # Max LLM API calls per request
-    MAX_ACTIVE_DAGS = 10          # Max concurrent DAG executions
-    MAX_PARALLEL_NODES = 5        # Max parallel nodes within a single DAG
+    MAX_ACTIVE_DAGS = 10  # Max concurrent DAG executions
+    MAX_PARALLEL_NODES = 5  # Max parallel nodes within a single DAG
 
     def __init__(
         self,
@@ -89,9 +89,9 @@ class RequestGuard:
         """
         if node_count > self.MAX_DAG_NODES:
             logger.warning(
-                "DAG size check FAILED: %d nodes > %d max. "
-                "Consider splitting into sub-DAGs.",
-                node_count, self.MAX_DAG_NODES,
+                "DAG size check FAILED: %d nodes > %d max. " "Consider splitting into sub-DAGs.",
+                node_count,
+                self.MAX_DAG_NODES,
             )
             return False
         return True
@@ -109,16 +109,14 @@ class RequestGuard:
         """
         if current_count > self.MAX_LLM_CALLS_PER_REQUEST:
             logger.warning(
-                "LLM call count check FAILED: %d calls > %d max. "
-                "Request budget exhausted.",
-                current_count, self.MAX_LLM_CALLS_PER_REQUEST,
+                "LLM call count check FAILED: %d calls > %d max. " "Request budget exhausted.",
+                current_count,
+                self.MAX_LLM_CALLS_PER_REQUEST,
             )
             return False
         return True
 
-    def check_concurrency(
-        self, active_dags: int, parallel_nodes: int
-    ) -> bool:
+    def check_concurrency(self, active_dags: int, parallel_nodes: int) -> bool:
         """
         Check if system concurrency limits are respected.
 
@@ -132,14 +130,16 @@ class RequestGuard:
         if active_dags > self._max_active:
             logger.warning(
                 "Concurrency check FAILED: %d active DAGs > %d max",
-                active_dags, self._max_active,
+                active_dags,
+                self._max_active,
             )
             return False
 
         if parallel_nodes > self._max_parallel:
             logger.warning(
                 "Concurrency check FAILED: %d parallel nodes > %d max",
-                parallel_nodes, self._max_parallel,
+                parallel_nodes,
+                self._max_parallel,
             )
             return False
 
@@ -164,7 +164,8 @@ class RequestGuard:
         else:
             logger.warning(
                 "RequestGuard: no slots available (%d/%d DAGs active)",
-                self._active_dag_count, self._max_active,
+                self._active_dag_count,
+                self._max_active,
             )
             return False
 
@@ -178,9 +179,7 @@ class RequestGuard:
 
     def increment_llm_calls(self, correlation_id: str) -> int:
         """Increment and return the current LLM call count for a request."""
-        self._llm_call_counts[correlation_id] = (
-            self._llm_call_counts.get(correlation_id, 0) + 1
-        )
+        self._llm_call_counts[correlation_id] = self._llm_call_counts.get(correlation_id, 0) + 1
         return self._llm_call_counts[correlation_id]
 
     def get_llm_call_count(self, correlation_id: str) -> int:

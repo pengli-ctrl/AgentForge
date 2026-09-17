@@ -20,28 +20,29 @@ Design rationale:
     - on_error() enables graceful degradation per agent type
 """
 
-import time
 import asyncio
 import logging
-from enum import Enum
+import time
 from abc import ABC, abstractmethod
-from typing import Optional, Any
 from dataclasses import dataclass, field
+from enum import Enum
+from typing import Optional
 
-from agentforge.core.memory import MemoryManager, MemoryConfig
-from agentforge.orchestration.timeout import TimeoutManager, TimeoutConfig
-from agentforge.observability.tracing import Span, SpanType, SpanStatus
+from agentforge.core.memory import MemoryConfig, MemoryManager
+from agentforge.observability.tracing import Span, SpanStatus
+from agentforge.orchestration.timeout import TimeoutConfig, TimeoutManager
 
 logger = logging.getLogger(__name__)
 
 
 class AgentState(Enum):
     """Agent lifecycle states. State transitions are enforced."""
-    IDLE = "idle"                 # Ready to accept work
-    RUNNING = "running"           # Currently executing
-    DEGRADED = "degraded"         # Running with degraded capabilities
-    FAILED = "failed"             # Terminal failure, needs reset
-    TIMEOUT = "timeout"           # Timed out, can retry
+
+    IDLE = "idle"  # Ready to accept work
+    RUNNING = "running"  # Currently executing
+    DEGRADED = "degraded"  # Running with degraded capabilities
+    FAILED = "failed"  # Terminal failure, needs reset
+    TIMEOUT = "timeout"  # Timed out, can retry
 
     # Valid state transitions (enforced in _transition_to)
     _TRANSITIONS = {
@@ -59,23 +60,25 @@ class Tool:
     Tool descriptor for Agent tool-use.
     Agents declare which tools they need via get_tools().
     """
+
     name: str
     description: str
-    parameters: dict = field(default_factory=dict)    # JSON Schema for params
+    parameters: dict = field(default_factory=dict)  # JSON Schema for params
     required: bool = True
 
 
 @dataclass
 class AgentResult:
     """Standardized result returned by Agent.execute()."""
+
     success: bool
     data: dict = field(default_factory=dict)
     error: Optional[str] = None
-    degraded: bool = False                  # True if result used fallback/degraded path
+    degraded: bool = False  # True if result used fallback/degraded path
     token_usage: dict = field(default_factory=dict)  # {prompt_tokens, completion_tokens, total}
     cost: float = 0.0
     latency_ms: float = 0.0
-    span: Optional[Span] = None             # The AGENT span for this execution
+    span: Optional[Span] = None  # The AGENT span for this execution
 
 
 class BaseAgent(ABC):
@@ -164,9 +167,7 @@ class BaseAgent(ABC):
         Handle execution errors. Default: return degraded result.
         Override for agent-specific error recovery.
         """
-        logger.warning(
-            "Agent[%s] error: %s", self._name, str(error), exc_info=True
-        )
+        logger.warning("Agent[%s] error: %s", self._name, str(error), exc_info=True)
         return {
             "result": None,
             "error": str(error),
@@ -269,14 +270,14 @@ class BaseAgent(ABC):
         if new_state not in valid:
             logger.warning(
                 "Agent[%s] invalid transition: %s → %s (allowed: %s)",
-                self._name, self._state.value, new_state.value,
+                self._name,
+                self._state.value,
+                new_state.value,
                 {s.value for s in valid},
             )
         self._state = new_state
 
-    async def _end_agent_span(
-        self, span: Span, result: dict, status: SpanStatus
-    ) -> None:
+    async def _end_agent_span(self, span: Span, result: dict, status: SpanStatus) -> None:
         """Finalize the Agent span with execution metrics."""
         span.set_attribute("agent_name", self._name)
         span.set_attribute("execution_count", self._execution_count)

@@ -21,13 +21,13 @@ Eviction strategy: LRU + TTL hybrid.
     This prevents both memory bloat (LRU) and stale answers (TTL).
 """
 
-import time
 import asyncio
 import logging
 import math
-from typing import Optional, Any
-from dataclasses import dataclass, field
+import time
 from collections import OrderedDict
+from dataclasses import dataclass, field
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -41,10 +41,11 @@ class CacheEntry:
     In production, consider using a FAISS index for O(1) approximate nearest
     neighbor search instead of O(N) linear scan.
     """
-    key: str                          # Text hash or original query
-    embedding: list[float]            # Dense vector from embedding model
-    result: dict                      # Cached response to return on hit
-    hit_count: int = 0                # Number of times this entry was returned
+
+    key: str  # Text hash or original query
+    embedding: list[float]  # Dense vector from embedding model
+    result: dict  # Cached response to return on hit
+    hit_count: int = 0  # Number of times this entry was returned
     created_at: float = field(default_factory=time.time)
     last_accessed: float = field(default_factory=time.time)
 
@@ -147,13 +148,16 @@ class SemanticCache:
 
                 logger.debug(
                     "Cache HIT: score=%.4f, key='%s', hit_count=%d",
-                    best_score, best_entry.key[:50], best_entry.hit_count,
+                    best_score,
+                    best_entry.key[:50],
+                    best_entry.hit_count,
                 )
                 return best_entry
             else:
                 logger.debug(
                     "Cache MISS: best_score=%.4f < threshold=%.4f",
-                    best_score, self._threshold,
+                    best_score,
+                    self._threshold,
                 )
                 return None
 
@@ -198,8 +202,7 @@ class SemanticCache:
 
         # Phase 1: Remove expired entries
         expired_keys = [
-            key for key, entry in self._store.items()
-            if (now - entry.created_at) > ttl_seconds
+            key for key, entry in self._store.items() if (now - entry.created_at) > ttl_seconds
         ]
         for key in expired_keys:
             del self._store[key]
@@ -246,11 +249,7 @@ class SemanticCache:
         Returns hit rate, entry count, eviction count, and other metrics.
         Used by CostTracker for cost attribution (cache hits = saved LLM costs).
         """
-        hit_rate = (
-            self._total_hits / self._total_lookups
-            if self._total_lookups > 0
-            else 0.0
-        )
+        hit_rate = self._total_hits / self._total_lookups if self._total_lookups > 0 else 0.0
         return {
             "total_lookups": self._total_lookups,
             "total_hits": self._total_hits,

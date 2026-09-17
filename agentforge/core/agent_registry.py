@@ -18,7 +18,7 @@ Design rationale:
 """
 
 import logging
-from typing import Type, Optional
+from typing import Optional, Type
 
 from agentforge.core.agent import BaseAgent
 
@@ -48,6 +48,7 @@ class AgentRegistry:
         self._instances: dict[str, BaseAgent] = {}
         self._metadata: dict[str, dict] = {}  # agent_name → {registered_at, version, ...}
         import asyncio
+
         self._lock = asyncio.Lock()
 
     async def register(
@@ -95,9 +96,7 @@ class AgentRegistry:
         tools, etc.) before registration.
         """
         if not isinstance(agent, BaseAgent):
-            raise ValueError(
-                f"Cannot register '{name}': instance is not a BaseAgent"
-            )
+            raise ValueError(f"Cannot register '{name}': instance is not a BaseAgent")
 
         async with self._lock:
             if name in self._classes or name in self._instances:

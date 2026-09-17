@@ -22,8 +22,8 @@ Prompt engineering notes:
 
 import json
 import logging
-from typing import Optional, Any
 from dataclasses import dataclass, field
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -80,20 +80,22 @@ Rules:
 @dataclass
 class PlanResult:
     """Result of a planning operation."""
+
     success: bool
-    dag_spec: Optional[dict] = None      # Raw JSON from LLM
+    dag_spec: Optional[dict] = None  # Raw JSON from LLM
     rationale: str = ""
     error: Optional[str] = None
-    fallback_single_agent: str = ""       # If plan fails, which single agent to use
+    fallback_single_agent: str = ""  # If plan fails, which single agent to use
 
 
 @dataclass
 class PlannerConfig:
     """Configuration for the Planner Agent."""
-    max_nodes: int = 50                   # Must match DAGEngine max_nodes
-    max_replan_attempts: int = 2          # Max re-plan tries before giving up
-    model_name: str = "Qwen3-Pro"         # Planner uses the best model
-    timeout_seconds: float = 15.0         # Planning itself should be fast
+
+    max_nodes: int = 50  # Must match DAGEngine max_nodes
+    max_replan_attempts: int = 2  # Max re-plan tries before giving up
+    model_name: str = "Qwen3-Pro"  # Planner uses the best model
+    timeout_seconds: float = 15.0  # Planning itself should be fast
     few_shot_examples: list[dict] = field(default_factory=list)
 
 
@@ -114,8 +116,8 @@ class PlannerAgent:
 
     def __init__(
         self,
-        llm_gateway,                    # LLMGateway instance for LLM calls
-        agent_registry,                 # AgentRegistry to look up available agents
+        llm_gateway,  # LLMGateway instance for LLM calls
+        agent_registry,  # AgentRegistry to look up available agents
         config: Optional[PlannerConfig] = None,
     ):
         self._llm = llm_gateway
@@ -145,6 +147,7 @@ class PlannerAgent:
 
         try:
             import asyncio
+
             response = await asyncio.wait_for(
                 self._llm.achat(
                     messages=[
@@ -152,7 +155,7 @@ class PlannerAgent:
                         {"role": "user", "content": user_prompt},
                     ],
                     model=self._config.model_name,
-                    temperature=0.1,   # Low temperature for structured output
+                    temperature=0.1,  # Low temperature for structured output
                     max_tokens=2000,
                 ),
                 timeout=self._config.timeout_seconds,
@@ -221,6 +224,7 @@ class PlannerAgent:
 
         try:
             import asyncio
+
             response = await asyncio.wait_for(
                 self._llm.achat(
                     messages=[
@@ -310,7 +314,7 @@ class PlannerAgent:
         if text.startswith("```"):
             lines = text.split("\n")
             # Remove first and last lines (```json and ```)
-            lines = [l for l in lines[1:] if l.strip() != "```"]
+            lines = [line for line in lines[1:] if line.strip() != "```"]
             text = "\n".join(lines)
 
         try:
@@ -368,6 +372,7 @@ class PlannerAgent:
             in_degree[edge["to"]] += 1
 
         from collections import deque
+
         queue = deque(nid for nid, d in in_degree.items() if d == 0)
         sorted_count = 0
         while queue:

@@ -3,8 +3,8 @@ Three-tier Memory system — runtime layer core component.
 
 Architecture analogy (CPU hierarchy):
     WorkingMemory    = CPU Registers   → fastest, smallest, current context only
-    ShortTermMemory  = RAM             → session-scoped, cross-turn retention, cleared on session end
-    LongTermMemory   = Disk (FAISS+BM25) → persistent, vector-indexed knowledge base
+    ShortTermMemory  = RAM             -> session-scoped, cleared on session end
+    LongTermMemory   = Disk (FAISS+BM25) -> persistent knowledge base
 
 Why three tiers?
     LLM Agents need different memory horizons. A single dict is too simple —
@@ -18,22 +18,23 @@ Integration:
     read/write memory. DAG nodes can share short-term memory via ContextStore.
 """
 
-import time
 import asyncio
-from typing import Any, Optional
-from dataclasses import dataclass, field
+import time
 from collections import OrderedDict
+from dataclasses import dataclass
+from typing import Any, Optional
 
 
 @dataclass
 class MemoryConfig:
     """Per-agent memory configuration. Each Agent declares which tiers it needs."""
+
     enable_working: bool = True
     enable_short_term: bool = True
     enable_long_term: bool = False
-    max_working_items: int = 20          # Small: current turn context only
-    max_short_term_items: int = 200      # Medium: full session history
-    max_long_term_items: int = 50000     # Large: persistent knowledge base
+    max_working_items: int = 20  # Small: current turn context only
+    max_short_term_items: int = 200  # Medium: full session history
+    max_long_term_items: int = 50000  # Large: persistent knowledge base
     long_term_collection: str = "default"  # FAISS collection name
 
 
@@ -104,7 +105,7 @@ class ShortTermMemory:
 
     def __init__(self, session_id: str, max_items: int = 200):
         self._session_id = session_id
-        self._store: dict[str, dict] = {}   # key → {value, created_at, last_accessed}
+        self._store: dict[str, dict] = {}  # key → {value, created_at, last_accessed}
         self._max_items = max_items
         self._lock = asyncio.Lock()
 
@@ -231,12 +232,14 @@ class LongTermMemory:
             for key, doc in self._vectors.items():
                 score = self._cosine_similarity(query_embedding, doc["embedding"])
                 if score >= min_similarity:
-                    results.append({
-                        "key": key,
-                        "text": doc["text"],
-                        "score": score,
-                        "metadata": doc["metadata"],
-                    })
+                    results.append(
+                        {
+                            "key": key,
+                            "text": doc["text"],
+                            "score": score,
+                            "metadata": doc["metadata"],
+                        }
+                    )
 
         # Sort by score descending, return top_k
         results.sort(key=lambda x: x["score"], reverse=True)
@@ -284,9 +287,19 @@ class MemoryManager:
         session_id: str = "default",
     ):
         self._config = config
-        self.working = WorkingMemory(max_items=config.max_working_items) if config.enable_working else None
-        self.short_term = ShortTermMemory(session_id, max_items=config.max_short_term_items) if config.enable_short_term else None
-        self.long_term = LongTermMemory(config.long_term_collection, max_items=config.max_long_term_items) if config.enable_long_term else None
+        self.working = (
+            WorkingMemory(max_items=config.max_working_items) if config.enable_working else None
+        )
+        self.short_term = (
+            ShortTermMemory(session_id, max_items=config.max_short_term_items)
+            if config.enable_short_term
+            else None
+        )
+        self.long_term = (
+            LongTermMemory(config.long_term_collection, max_items=config.max_long_term_items)
+            if config.enable_long_term
+            else None
+        )
 
     async def read(self, level: str, key: str) -> Optional[Any]:
         """
