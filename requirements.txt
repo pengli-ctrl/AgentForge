@@ -20,7 +20,7 @@ rank-bm25>=0.2.2
 faiss-cpu>=1.7.4
 
 # --- API 服务层 ---
-fastapi>=0.104.0
+fastapi>=0.141.1
 uvicorn[standard]>=0.24.0
 
 # --- 校验与配置，platform 层存在顶层导入 ---
