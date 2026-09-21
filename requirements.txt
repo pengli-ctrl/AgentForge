@@ -10,7 +10,7 @@ pyyaml>=6.0
 httpx>=0.25.0
 
 # --- 事件总线，按部署方案选择 ---
-redis>=5.0.0
+redis>=8.1.0
 # 生产环境使用 aiokafka，详见下方 Workflow / Eventing 分组。
 
 # --- RAG 检索与向量能力 ---
