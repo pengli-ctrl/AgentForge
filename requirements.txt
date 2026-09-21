@@ -37,7 +37,7 @@ pgvector>=0.2.0
 
 # --- 工作流、事件流和 LLM ---
 temporalio>=1.6.0
-aiokafka>=0.10.0
+aiokafka>=0.14.0
 litellm>=1.40.0
 
 # --- 可观测性 ---
