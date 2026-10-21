@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentforge-module-template"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["agentforge"]
+
+[project.entry-points."agentforge.modules"]
+asset = "agentforge_module_template.module:DemoAssetModule"
+
+[tool.setuptools.packages.find]
+include = ["agentforge_module_template*"]

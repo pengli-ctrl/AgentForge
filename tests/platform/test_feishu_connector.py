@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_feishu_connector。
+"""飞书连接器测试模块。
 
 本测试模块验证 test_feishu_connector 覆盖的业务路径、边界条件和回归场景。
 
@@ -7,7 +7,8 @@
 - 所有租户相关数据都必须携带 tenant_id 并保持隔离。
 - 关键执行路径应保留日志、审计或链路追踪信息。
 -
-主要函数：make_signature、test_feishu_challenge、test_feishu_signed_message_creates_ticket、test_feishu_invalid_signature_is_rejected。
+主要函数：make_signature、test_feishu_challenge、test_feishu_signed_message_creates_ticket、test_feishu_
+    invalid_signature_is_rejected。
 """
 
 import hashlib
@@ -20,27 +21,23 @@ from agentforge.platform.runtime import build_memory_container
 
 
 def make_signature(timestamp: str, nonce: str, key: str, body: bytes) -> str:
-    """执行 make_signature 对应的逻辑，并返回处理结果。
+    """构造签名。
 
     Args:
-        timestamp: str，调用方传入的 timestamp 参数。
-        nonce: str，调用方传入的 nonce 参数。
-        key: str，调用方传入的 key 参数。
-        body: bytes，调用方传入的 body 参数。
+        timestamp: 输入参数。
+        nonce: 输入参数。
+        key: 缓存或配置键。
+        body: 请求体数据。
 
     Returns:
-        str，函数执行后的结果。
+        字符串结果。
     """
     payload = timestamp + nonce + key + body.decode("utf-8")
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def test_feishu_challenge() -> None:
-    """验证 feishu_challenge 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证飞书对应的测试场景。"""
     client = TestClient(
         create_platform_app(build_memory_container(), feishu_verification_token="verify-token")
     )
@@ -53,11 +50,7 @@ def test_feishu_challenge() -> None:
 
 
 def test_feishu_signed_message_creates_ticket() -> None:
-    """验证 feishu_signed_message_creates_ticket 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证飞书创建工单对应的测试场景。"""
     key = "encrypt-key"
     client = TestClient(
         create_platform_app(
@@ -95,11 +88,7 @@ def test_feishu_signed_message_creates_ticket() -> None:
 
 
 def test_feishu_invalid_signature_is_rejected() -> None:
-    """验证 feishu_invalid_signature_is_rejected 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证飞书无效签名是否拒绝对应的测试场景。"""
     client = TestClient(
         create_platform_app(build_memory_container(), feishu_encrypt_key="encrypt-key")
     )

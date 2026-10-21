@@ -1,9 +1,4 @@
-"""
-事件类型定义 — 事件驱动架构的基础数据结构。
-
-所有 Agent 通过事件总线通信，事件携带 correlation_id（同一工作流共享）
-和 context_snapshot（上下文快照 — 状态隔离的关键）。
-"""
+"""事件模块。"""
 
 from __future__ import annotations
 
@@ -13,10 +8,7 @@ from typing import Any, Optional
 
 
 class EventType(str, Enum):
-    """事件类型枚举 — 定义事件总线上流转的所有事件类型。
-
-    事件类型遵循命名约定：{来源}_{动作}，如 AGENT_COMPLETED、TASK_SUBMITTED。
-    """
+    """事件类型枚举 — 定义事件总线上流转的所有事件类型。"""
 
     # 任务生命周期
     TASK_SUBMITTED = "task_submitted"
@@ -49,21 +41,16 @@ class EventType(str, Enum):
 
 @dataclass
 class AgentEvent:
-    """Agent 间通信的标准事件格式。
-
-    事件驱动架构的核心数据结构。每个事件携带：
-    - correlation_id: 同一工作流共享，用于 trace 链路追踪
-    - context_snapshot: 上下文快照，实现 Agent 间状态隔离
-    - payload: 事件负载，包含具体的业务数据
+    """智能体事件领域组件。
 
     Attributes:
-        event_type: 事件类型。
-        source_agent: 事件来源 Agent 名称。
-        payload: 事件负载，包含任务数据和结果。
-        correlation_id: 关联 ID，同一工作流内的所有事件共享。
-        context_snapshot: 上下文快照，冻结发送时刻的上下文副本。
-        target_agent: 目标 Agent 名称（可选，用于定向路由）。
-        timestamp: 事件创建时间戳。
+        event_type: 事件。
+        source_agent: 来源智能体。
+        payload: 事件、工作流或请求载荷。
+        correlation_id: 用于关联同一业务链路的关联 ID。
+        context_snapshot: 上下文快照。
+        target_agent: 目标智能体。
+        timestamp: 字段值。
     """
 
     event_type: EventType
@@ -75,7 +62,7 @@ class AgentEvent:
     timestamp: float = field(default_factory=lambda: __import__("time").time())
 
     def __post_init__(self) -> None:
-        """确保 correlation_id 非空。"""
+        """校验并补全初始化后的字段。"""
         if not self.correlation_id:
             self.correlation_id = f"{self.source_agent}-{self.timestamp}"
 
@@ -84,14 +71,11 @@ class AgentEvent:
 class BatchEvent:
     """批量事件 — 脉冲整形器将多个统计趋同的并发事件合并为单个批量事件。
 
-    用于解决并发同步脉冲故障模式：多个独立任务的子任务完成时间
-    在统计上趋同时，合并为批量事件避免下游 Agent 过载。
-
     Attributes:
-        correlation_id: 关联 ID。
-        target_agent: 目标 Agent 名称。
-        sub_events: 合并的子事件列表。
-        batch_size: 批量大小。
+        correlation_id: 用于关联同一业务链路的关联 ID。
+        target_agent: 目标智能体。
+        sub_events: 事件。
+        batch_size: 批次大小。
     """
 
     correlation_id: str
@@ -100,10 +84,6 @@ class BatchEvent:
     batch_size: int = 0
 
     def __post_init__(self) -> None:
-        """执行 __post_init__ 对应的逻辑，并返回处理结果。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """校验并补全初始化后的字段。"""
         if self.batch_size == 0:
             self.batch_size = len(self.sub_events)

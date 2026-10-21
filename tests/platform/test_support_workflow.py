@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_support_workflow。
+"""客服工作流测试模块。
 
 本测试模块验证 test_support_workflow 覆盖的业务路径、边界条件和回归场景。
 
@@ -13,21 +13,18 @@ import pytest
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
-from agentforge.platform.runtime import build_memory_container, configure_container
-from agentforge.platform.workflows.support_ticket import (
+from agentforge.platform.modules.support.workflows.support_ticket import (
     SupportTicketWorkflow,
     intake_ticket_activity,
 )
+from agentforge.platform.runtime import build_memory_container, configure_container
+from tests.platform.support_fixtures import configure_memory_support
 
 
 @pytest.mark.asyncio
 @pytest.mark.slow
 async def test_temporal_workflow_reaches_waiting_review() -> None:
-    """验证 temporal_workflow_reaches_waiting_review 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证Temporal工作流达到等待审核对应的测试场景。"""
     container = build_memory_container()
     await container.knowledge_service.ingest_document(
         tenant_id="tenant-1",
@@ -35,6 +32,7 @@ async def test_temporal_workflow_reaches_waiting_review() -> None:
         content="How to use this product: open the dashboard and follow the setup guide.",
     )
     configure_container(container)
+    configure_memory_support(container)
     env = await WorkflowEnvironment.start_time_skipping()
     try:
         worker = Worker(

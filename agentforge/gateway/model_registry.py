@@ -1,13 +1,4 @@
-"""AgentForge 模型网关层：model_registry。
-
-本模块负责 model_registry 相关能力，是 模型网关层 的组成部分。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
-- 关键路径应保留日志、指标或链路追踪信息。
-- 主要类：ModelProfile、ModelRegistry。
-"""
+"""模型注册表模块。"""
 
 import asyncio
 import logging
@@ -19,80 +10,42 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ModelProfile:
-    """ModelProfile。
+    """模型配置相关组件。
 
-    ModelProfile 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - name: str。
-    - capability_score: float。
-    - cost_per_1k_tokens: float。
-    - avg_latency_ms: float。
-    - max_context_length: int。
-    - is_available: bool。
-    - description: str。
-    - specializations: list[str]。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    Attributes:
+        name: 名称。
+        capability_score: 能力评分。
+        cost_per_1k_tokens: 成本。
+        avg_latency_ms: 延迟毫秒。
+        max_context_length: 最大上下文。
+        is_available: 是否可用。
+        description: 描述信息。
+        specializations: 字段值。
     """
 
     name: str
-    capability_score: float  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-    cost_per_1k_tokens: float  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-    avg_latency_ms: float  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-    max_context_length: int = 32000  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-    is_available: bool = True  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    capability_score: float
+    cost_per_1k_tokens: float
+    avg_latency_ms: float
+    max_context_length: int = 32000
+    is_available: bool = True
     description: str = ""
     specializations: list[str] = field(default_factory=list)
 
 
 class ModelRegistry:
-    """ModelRegistry。
-
-    ModelRegistry 是核心运行时组件，负责状态管理、调度和跨模块协作。
-
-    主要成员：
-    - 方法 get()。
-    - 方法 get_available()。
-    - 方法 mark_unavailable()。
-    - 方法 mark_available()。
-    - 方法 register_model()。
-    - 方法 unregister_model()。
-    - 方法 list_models()。
-    - 方法 get_all_profiles()。
-    - 方法 get_by_specialization()。
-    - 方法 get_cheapest()。
-    - 方法 get_fastest()。
-    - 方法 get_most_capable()。
-    - 方法 status_summary()。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-    """
+    """模型注册表。"""
 
     def __init__(self):
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """初始化 ModelRegistry。"""
         self._models: dict[str, ModelProfile] = {}
         self._lock = asyncio.Lock()
         # 执行中状态。
-        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         self._pending_recovery: dict[str, asyncio.Task] = {}
         self._register_defaults()
 
     def _register_defaults(self) -> None:
-        """执行 _register_defaults 对应的逻辑，并返回处理结果。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """注册默认项。"""
         defaults = [
             ModelProfile(
                 name="Qwen3-Pro",
@@ -117,7 +70,7 @@ class ModelRegistry:
                 capability_score=7.5,
                 cost_per_1k_tokens=0.012,
                 avg_latency_ms=2000,
-                max_context_length=200000,  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+                max_context_length=200000,
                 description="200K context window — best for long-document processing",
                 specializations=["long_context", "summarization"],
             ),
@@ -144,33 +97,30 @@ class ModelRegistry:
             self._models[model.name] = model
 
     def get(self, name: str) -> Optional[ModelProfile]:
-        """执行 get 对应的核心操作，并保持调用契约稳定。
+        """读取模型。
 
         Args:
-            name: str，调用方传入的 name 参数。
+            name: 资源或对象名称。
 
         Returns:
-            Optional[ModelProfile]，函数执行后的结果。
+            处理结果对象。
         """
         return self._models.get(name)
 
     def get_available(self) -> list[ModelProfile]:
-        """读取并返回指定数据，并返回调用方需要的结果。
+        """读取可用。
 
         Returns:
-            list[ModelProfile]，函数执行后的结果。
+            结果列表。
         """
         return [m for m in self._models.values() if m.is_available]
 
     async def mark_unavailable(self, name: str, duration_seconds: float = 900) -> None:
-        """执行 mark_unavailable 对应的逻辑，并返回处理结果。
+        """标记不可用。
 
         Args:
-            name: str，调用方传入的 name 参数。
-            duration_seconds: float，调用方传入的 duration_seconds 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            name: 资源或对象名称。
+            duration_seconds: 输入参数。
         """
         async with self._lock:
             model = self._models.get(name)
@@ -185,19 +135,15 @@ class ModelRegistry:
             if previous is not None and not previous.done():
                 previous.cancel()
 
-            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             recovery = asyncio.create_task(self._recover_model_after(name, duration_seconds))
             self._pending_recovery[name] = recovery
 
     async def _recover_model_after(self, name: str, duration_seconds: float) -> None:
-        """执行 _recover_model_after 对应的逻辑，并返回处理结果。
+        """处理模型之后。
 
         Args:
-            name: str，调用方传入的 name 参数。
-            duration_seconds: float，调用方传入的 duration_seconds 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            name: 资源或对象名称。
+            duration_seconds: 输入参数。
         """
         try:
             await asyncio.sleep(duration_seconds)
@@ -216,13 +162,10 @@ class ModelRegistry:
             logger.info("Circuit breaker: %s recovered", name)
 
     async def mark_available(self, name: str) -> None:
-        """执行 mark_available 对应的逻辑，并返回处理结果。
+        """标记可用。
 
         Args:
-            name: str，调用方传入的 name 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            name: 资源或对象名称。
         """
         async with self._lock:
             model = self._models.get(name)
@@ -235,13 +178,10 @@ class ModelRegistry:
             logger.info("Model %s marked available (cancelled pending recovery)", name)
 
     async def register_model(self, profile: ModelProfile) -> None:
-        """执行 register_model 对应的逻辑，并返回处理结果。
+        """注册模型。
 
         Args:
-            profile: ModelProfile，调用方传入的 profile 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            profile: 配置。
         """
         async with self._lock:
             if profile.name in self._models:
@@ -255,13 +195,13 @@ class ModelRegistry:
             )
 
     async def unregister_model(self, name: str) -> bool:
-        """执行 unregister_model 对应的逻辑，并返回处理结果。
+        """注销模型。
 
         Args:
-            name: str，调用方传入的 name 参数。
+            name: 资源或对象名称。
 
         Returns:
-            bool，函数执行后的结果。
+            操作是否成功。
         """
         async with self._lock:
             if name in self._models:
@@ -271,39 +211,39 @@ class ModelRegistry:
             return False
 
     def list_models(self) -> list[str]:
-        """查询并返回列表结果，并返回调用方需要的结果。
+        """查询数据模型。
 
         Returns:
-            list[str]，函数执行后的结果。
+            结果列表。
         """
         return list(self._models.keys())
 
     def get_all_profiles(self) -> list[ModelProfile]:
-        """读取并返回指定数据，并返回调用方需要的结果。
+        """获取全部。
 
         Returns:
-            list[ModelProfile]，函数执行后的结果。
+            结果列表。
         """
         return list(self._models.values())
 
     def get_by_specialization(self, task_type: str) -> list[ModelProfile]:
-        """读取并返回指定数据，并返回调用方需要的结果。
+        """获取由。
 
         Args:
-            task_type: str，调用方传入的 task_type 参数。
+            task_type: 任务类型。
 
         Returns:
-            list[ModelProfile]，函数执行后的结果。
+            结果列表。
         """
         return [
             m for m in self._models.values() if m.is_available and task_type in m.specializations
         ]
 
     def get_cheapest(self) -> Optional[ModelProfile]:
-        """读取并返回指定数据，并返回调用方需要的结果。
+        """获取模型。
 
         Returns:
-            Optional[ModelProfile]，函数执行后的结果。
+            处理结果对象。
         """
         available = self.get_available()
         if not available:
@@ -311,10 +251,10 @@ class ModelRegistry:
         return min(available, key=lambda m: m.cost_per_1k_tokens)
 
     def get_fastest(self) -> Optional[ModelProfile]:
-        """读取并返回指定数据，并返回调用方需要的结果。
+        """获取模型。
 
         Returns:
-            Optional[ModelProfile]，函数执行后的结果。
+            处理结果对象。
         """
         available = self.get_available()
         if not available:
@@ -322,10 +262,10 @@ class ModelRegistry:
         return min(available, key=lambda m: m.avg_latency_ms)
 
     def get_most_capable(self) -> Optional[ModelProfile]:
-        """读取并返回指定数据，并返回调用方需要的结果。
+        """获取模型。
 
         Returns:
-            Optional[ModelProfile]，函数执行后的结果。
+            处理结果对象。
         """
         available = self.get_available()
         if not available:
@@ -333,10 +273,10 @@ class ModelRegistry:
         return max(available, key=lambda m: m.capability_score)
 
     def status_summary(self) -> dict[str, Any]:
-        """执行 status_summary 对应的逻辑，并返回处理结果。
+        """获取状态摘要。
 
         Returns:
-            dict[str, Any]，函数执行后的结果。
+            结构化结果字典。
         """
         total = len(self._models)
         available = len(self.get_available())

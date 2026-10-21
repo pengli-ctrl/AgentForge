@@ -1,4 +1,4 @@
-"""事件总线测试 — publish/subscribe/异常隔离。
+"""事件测试模块。
 
 测试内容：
 - 发布事件到无订阅者时不报错
@@ -45,13 +45,10 @@ async def test_publish_to_single_subscriber() -> None:
     received: list[AgentEvent] = []
 
     async def callback(event: AgentEvent) -> None:
-        """执行 callback 对应的逻辑，并返回处理结果。
+        """处理回调。
 
         Args:
-            event: AgentEvent，调用方传入的 event 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            event: 待处理事件。
         """
         received.append(event)
 
@@ -84,24 +81,18 @@ async def test_publish_to_multiple_subscribers() -> None:
     received_2: list[AgentEvent] = []
 
     async def callback_1(event: AgentEvent) -> None:
-        """执行 callback_1 对应的逻辑，并返回处理结果。
+        """处理回调。
 
         Args:
-            event: AgentEvent，调用方传入的 event 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            event: 待处理事件。
         """
         received_1.append(event)
 
     async def callback_2(event: AgentEvent) -> None:
-        """执行 callback_2 对应的逻辑，并返回处理结果。
+        """处理回调。
 
         Args:
-            event: AgentEvent，调用方传入的 event 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            event: 待处理事件。
         """
         received_2.append(event)
 
@@ -135,27 +126,21 @@ async def test_subscriber_exception_isolation() -> None:
     received: list[AgentEvent] = []
 
     async def failing_callback(event: AgentEvent) -> None:
-        """执行 failing_callback 对应的逻辑，并返回处理结果。
+        """处理失败回调。
 
         Args:
-            event: AgentEvent，调用方传入的 event 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            event: 待处理事件。
 
         Raises:
-            RuntimeError: 当输入、状态或外部依赖不满足要求时抛出。
+            RuntimeError: 运行时依赖或状态不满足要求时抛出。
         """
         raise RuntimeError("Intentional test failure")
 
     async def healthy_callback(event: AgentEvent) -> None:
-        """执行 healthy_callback 对应的逻辑，并返回处理结果。
+        """处理回调。
 
         Args:
-            event: AgentEvent，调用方传入的 event 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            event: 待处理事件。
         """
         received.append(event)
 
@@ -181,24 +166,17 @@ async def test_subscriber_exception_isolation() -> None:
 
 @pytest.mark.asyncio
 async def test_event_carries_correlation_id_and_snapshot() -> None:
-    """验证 event_carries_correlation_id_and_snapshot 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证事件关联ID及快照对应的测试场景。"""
     bus = EventBus(backend="memory")
     await bus.start()
 
     received: list[AgentEvent] = []
 
     async def callback(event: AgentEvent) -> None:
-        """执行 callback 对应的逻辑，并返回处理结果。
+        """处理回调。
 
         Args:
-            event: AgentEvent，调用方传入的 event 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            event: 待处理事件。
         """
         received.append(event)
 
@@ -233,24 +211,18 @@ async def test_subscribe_different_event_types() -> None:
     completed_received: list[AgentEvent] = []
 
     async def on_submitted(event: AgentEvent) -> None:
-        """执行 on_submitted 对应的逻辑，并返回处理结果。
+        """处理时。
 
         Args:
-            event: AgentEvent，调用方传入的 event 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            event: 待处理事件。
         """
         submitted_received.append(event)
 
     async def on_completed(event: AgentEvent) -> None:
-        """执行 on_completed 对应的逻辑，并返回处理结果。
+        """处理时已完成。
 
         Args:
-            event: AgentEvent，调用方传入的 event 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            event: 待处理事件。
         """
         completed_received.append(event)
 

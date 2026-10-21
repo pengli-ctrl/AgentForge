@@ -1,8 +1,4 @@
-"""代码审查工具 — AgentForge 的核心工具之一。
-
-提供代码质量分析、安全漏洞检测、编码规范检查等功能。
-通过 BaseTool 统一接口封装，Agent 通过工具注册表调用。
-"""
+"""代码审查工具模块。"""
 
 from __future__ import annotations
 
@@ -16,19 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class CodeReviewTool(BaseTool):
-    """代码审查工具 — 分析代码质量、检测安全漏洞和规范问题。
-
-    功能：
-    - AST 静态分析：圈复杂度、函数长度、嵌套深度
-    - 安全扫描：SQL 注入、XSS、硬编码密钥检测
-    - 规范检查：命名规范、注释覆盖率、import 顺序
-
-    此工具封装了代码审查的核心逻辑，Agent 通过工具注册表调用。
-
-    Args:
-        rules_path: 自定义规则文件路径（可选）。
-        max_file_size: 最大文件大小（字节），超过则拒绝处理。
-    """
+    """代码审查工具 — 分析代码质量、检测安全漏洞和规范问题。"""
 
     # 复杂度阈值
     MAX_COMPLEXITY = 10
@@ -40,25 +24,30 @@ class CodeReviewTool(BaseTool):
         rules_path: str | None = None,
         max_file_size: int = 1024 * 1024,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 CodeReviewTool。
 
         Args:
-            rules_path: str | None，调用方传入的 rules_path 参数。
-            max_file_size: int，调用方传入的 max_file_size 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            rules_path: 规则路径。
+            max_file_size: 最大文件大小。
         """
         self.rules_path = rules_path
         self.max_file_size = max_file_size
 
     @property
     def name(self) -> str:
-        """工具唯一标识。"""
+        """工具唯一标识。
+
+        Returns:
+            字符串结果。
+        """
         return "code_review"
 
     def schema(self) -> dict:
-        """返回 JSON Schema，告诉 LLM 这个工具的参数格式。"""
+        """返回工具参数的结构定义。
+
+        Returns:
+            结构化结果字典。
+        """
         return {
             "type": "function",
             "function": {
@@ -100,9 +89,7 @@ class CodeReviewTool(BaseTool):
             },
         }
 
-    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
     # AST 分析辅助方法
-    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
     @staticmethod
     def _calc_complexity(
@@ -110,14 +97,11 @@ class CodeReviewTool(BaseTool):
     ) -> int:
         """计算函数的圈复杂度。
 
-        统计 if/elif/for/while/and/or/try-except 等分支节点数量，
-        基础值为 1，每个分支节点 +1。
-
         Args:
-            node: 函数定义 AST 节点。
+            node: 待处理节点。
 
         Returns:
-            圈复杂度数值。
+            整数结果。
         """
         complexity = 1
         for child in ast.walk(node):
@@ -140,10 +124,10 @@ class CodeReviewTool(BaseTool):
         """计算函数体行数。
 
         Args:
-            node: 函数定义 AST 节点。
+            node: 待处理节点。
 
         Returns:
-            函数从起始行到结束行的总行数。
+            整数结果。
         """
         if hasattr(node, "end_lineno") and node.end_lineno:
             return node.end_lineno - node.lineno + 1
@@ -153,13 +137,11 @@ class CodeReviewTool(BaseTool):
     def _calc_max_nesting(node: ast.AST) -> int:
         """计算 AST 节点树中的最大嵌套深度。
 
-        统计 if/for/while/try/with 嵌套层级。
-
         Args:
-            node: AST 节点。
+            node: 待处理节点。
 
         Returns:
-            最大嵌套深度。
+            整数结果。
         """
         nesting_nodes = (
             ast.If,
@@ -172,14 +154,14 @@ class CodeReviewTool(BaseTool):
         )
 
         def _depth(n: ast.AST, current: int) -> int:
-            """执行 _depth 对应的逻辑，并返回处理结果。
+            """处理深度。
 
             Args:
-                n: ast.AST，调用方传入的 n 参数。
-                current: int，调用方传入的 current 参数。
+                n: 输入参数。
+                current: 输入参数。
 
             Returns:
-                int，函数执行后的结果。
+                整数结果。
             """
             max_d = current
             for child in ast.iter_child_nodes(n):
@@ -191,28 +173,16 @@ class CodeReviewTool(BaseTool):
 
         return _depth(node, 0)
 
-    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
     # 核心执行方法
-    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
     async def execute(self, **kwargs: Any) -> ToolResult:
-        """执行代码审查。
-
-        使用 Python 标准库 ast 模块解析代码，检测以下指标：
-        - 函数圈复杂度（超过 10 标记 warning）
-        - 函数长度（超过 50 行标记 warning）
-        - 嵌套深度（超过 4 层标记 warning）
-
-        如果代码有语法错误（ast.parse 失败），返回 success=False。
+        """执行核心处理逻辑并返回结果。
 
         Args:
-            file_path: 要审查的文件路径。
-            code_content: 代码内容（可选，如果无法通过路径访问）。
-            review_types: 审查类型列表。
+            kwargs: 关键字参数。
 
         Returns:
-            审查结果，metadata 包含 findings 列表，
-            每项含 rule/severity/description/line 信息。
+            工具结果结果。
         """
         file_path = kwargs.get("file_path", "")
         code_content = kwargs.get("code_content", "")

@@ -40,10 +40,11 @@ jobs:
             requirements.txt
             requirements-dev.txt
 
-      - name: Install linting tools
+      - name: Install linting and runtime dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install black isort flake8 mypy
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
       # flake8 不读取 pyproject.toml，因此显式传入参数。
       # black 固定 target-version，避免 Python 3.10 解析更新语法时出现警告。
@@ -93,6 +94,9 @@ jobs:
         run: |
           python -m pytest tests/ -v --tb=short --cov=agentforge --cov-report=term-missing
 
+      - name: Verify Alembic migration chain (offline)
+        run: python -m pytest tests/platform/test_migrations.py -q
+
   # ===== 语法检查 =====
   syntax-check:
     name: Syntax Check
@@ -111,14 +115,137 @@ jobs:
           find . -name "*.py" -not -path "*__pycache__*" -exec python3 -m py_compile {} \;
           echo "All Python files compiled successfully"
 
-  # ===== Docker 构建 =====
-  build:
-    name: Docker Build
+  # ===== Security Scan =====
+  security:
+    name: Security Scan
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     needs: [lint, test, syntax-check]
     steps:
       - uses: actions/checkout@v7
 
-      - name: Build Docker image
-        run: docker build -t agentforge:ci .
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install security tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Dependency vulnerability audit
+        run: pip-audit -r requirements.txt
+
+      - name: Bandit high-severity scan
+        run: bandit -r agentforge -q -lll
+
+      - name: Local secret and dangerous-call scan
+        run: python scripts/security_scan.py
+
+      - name: Upload security evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-evidence
+          path: dist/security-scan.json
+
+  # ===== Infrastructure Integration =====
+  infra:
+    name: Infrastructure Integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: [lint, test, syntax-check]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+          pip install -e .
+
+      - name: Run real infrastructure tests
+        run: bash scripts/run_infra_tests.sh
+
+  # ===== Release Artifacts =====
+  release:
+    name: Release Artifacts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    needs: [lint, test, syntax-check, security]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+          pip install -e .
+
+      - name: Verify release metadata and migration head
+        run: python scripts/verify_release.py
+
+      - name: Build source distribution
+        run: python -m build --sdist --outdir dist/python
+
+      - name: Build deterministic wheel
+        run: python scripts/build_wheel.py --output-dir dist/python
+
+      - name: Check Python package metadata
+        run: |
+          python -m twine check dist/python/*.whl
+          python -m twine check dist/python/*.tar.gz
+
+      - name: Build deterministic private package
+        run: python scripts/build_private_release.py --output-dir dist/private
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentforge-release
+          path: dist/
+
+  # ===== Docker 构建 =====
+  build:
+    name: Docker Build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    needs: [lint, test, syntax-check, infra, security]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build versioned Docker image
+        run: |
+          VERSION=$(python3 -c "import re,pathlib; t=pathlib.Path('pyproject.toml').read_text(); print(re.search(r'version = \"([^\"]+)\"', t).group(1))")
+          docker build --build-arg APP_VERSION="$VERSION" -t "agentforge:$VERSION" .
+          docker save "agentforge:$VERSION" | gzip -9 > "agentforge-image-$VERSION.tar.gz"
+
+      - name: Upload container image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentforge-image
+          path: agentforge-image-*.tar.gz

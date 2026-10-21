@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_console_tickets。
+"""控制台工单测试模块。
 
 本测试模块验证 test_console_tickets 覆盖的业务路径、边界条件和回归场景。
 
@@ -7,23 +7,26 @@
 - 所有租户相关数据都必须携带 tenant_id 并保持隔离。
 - 关键执行路径应保留日志、审计或链路追踪信息。
 -
-主要函数：test_console_tickets_lists_and_filters、test_console_inbox_returns_only_waiting_approval、test_console_overview_includes_task_status_counts、test_console_costs_overview_aggregates_tenants、test_ticket_list_pagination_cursor。
+主要函数：test_console_tickets_lists_and_filters、test_console_inbox_returns_only_waiting_approval、tes
+    t_console_overview_includes_task_status_counts、test_console_costs_overview_aggregates_tenant
+    s、test_ticket_list_pagination_cursor。
 """
 
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 
-from agentforge.platform.api.app import create_platform_app
-from agentforge.platform.domain.ticket import (
+from agentforge.platform.modules.support.domain.ticket import (
     RiskLevel,
     Ticket,
     TicketPriority,
     TicketStatus,
 )
 from agentforge.platform.runtime import build_memory_container
+from tests.platform.support_fixtures import configure_memory_support, create_app_with_support
 
 
 def _ticket(
@@ -32,18 +35,26 @@ def _ticket(
     tenant_id: str = "tenant-a",
     risk: RiskLevel = RiskLevel.LOW,
     subject: str = "subject",
+    assigned_team: str | None = None,
+    assignee_id: str | None = None,
+    queue: str | None = None,
+    sla_due_at: datetime | None = None,
 ) -> Ticket:
-    """执行 _ticket 对应的逻辑，并返回处理结果。
+    """处理工单。
 
     Args:
-        ticket_id: str，调用方传入的 ticket_id 参数。
-        status: TicketStatus，调用方传入的 status 参数。
-        tenant_id: str，调用方传入的 tenant_id 参数。
-        risk: RiskLevel，调用方传入的 risk 参数。
-        subject: str，调用方传入的 subject 参数。
+        ticket_id: 工单 ID。
+        status: 目标状态。
+        tenant_id: 租户 ID，用于数据隔离。
+        risk: 风险。
+        subject: 输入参数。
+        assigned_team: 输入参数。
+        assignee_id: 处理人 ID。
+        queue: 队列。
+        sla_due_at: SLA到期时间。
 
     Returns:
-        Ticket，函数执行后的结果。
+        工单结果。
     """
     return Ticket(
         ticket_id=ticket_id,
@@ -56,52 +67,64 @@ def _ticket(
         confidence=0.8,
         idempotency_key=f"ik-{ticket_id}",
         risk_level=risk,
+        assigned_team=assigned_team,
+        assignee_id=assignee_id,
+        metadata={
+            "queue": queue,
+            "sla": (
+                {"due_at": sla_due_at.isoformat(), "status": "open"}
+                if sla_due_at is not None
+                else None
+            ),
+        },
     )
 
 
 def _client():
-    """执行 _client 对应的逻辑，并返回处理结果。
+    """处理客户端。
 
     Returns:
-        None，函数执行后的结果。
+        处理结果。
     """
     container = build_memory_container()
-    app = create_platform_app(container)
-    return container, TestClient(app)
+    support = configure_memory_support(container)
+    app = create_app_with_support(container, support)
+    return container, support, TestClient(app)
 
 
-async def _seed(container, tickets) -> None:
-    """执行 _seed 对应的逻辑，并返回处理结果。
+async def _seed(support, tickets) -> None:
+    """初始化初始数据。
 
     Args:
-        container: Any，调用方传入的 container 参数。
-        tickets: Any，调用方传入的 tickets 参数。
-
-    Returns:
-        None，函数执行后的结果。
+        support: 客服。
+        tickets: 工单。
     """
     for t in tickets:
-        await container.repository.save(t)
+        await support.repository.save(t)
 
 
 def test_console_tickets_lists_and_filters() -> None:
-    """验证 console_tickets_lists_and_filters 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
-    from agentforge.platform.infrastructure.memory_ticket_repository import (
+    """验证控制台工单及筛选条件对应的测试场景。"""
+    from agentforge.platform.modules.support.infrastructure.memory_repository import (
         MemoryTicketRepository,
     )
 
-    container, client = _client()
-    assert isinstance(container.repository, MemoryTicketRepository)
+    container, support, client = _client()
+    assert isinstance(support.repository, MemoryTicketRepository)
     asyncio.run(
         _seed(
-            container,
+            support,
             [
-                _ticket("t1", TicketStatus.WAITING_APPROVAL, risk=RiskLevel.HIGH),
-                _ticket("t2", TicketStatus.PUBLISHED),
+                _ticket(
+                    "t1",
+                    TicketStatus.WAITING_APPROVAL,
+                    risk=RiskLevel.HIGH,
+                    assigned_team="finance-invoice-gate",
+                    assignee_id="finance-bot",
+                    queue="finance-invoice-gate",
+                    sla_due_at=datetime.now(timezone.utc) - timedelta(minutes=5),
+                ),
+                _ticket("t2", TicketStatus.PUBLISHED, assigned_team="support"),
             ],
         )
     )
@@ -115,17 +138,44 @@ def test_console_tickets_lists_and_filters() -> None:
     ).json()
     assert [t["ticket_id"] for t in only_approved["tickets"]] == ["t1"]
 
+    finance = client.get(
+        "/v1/console/tickets",
+        params={"tenant_id": "tenant-a", "assigned_team": "finance-invoice-gate"},
+    ).json()
+    assert [t["ticket_id"] for t in finance["tickets"]] == ["t1"]
+
+    assigned = client.get(
+        "/v1/console/tickets",
+        params={"tenant_id": "tenant-a", "assignee_id": "finance-bot"},
+    ).json()
+    assert [t["ticket_id"] for t in assigned["tickets"]] == ["t1"]
+
+    queued = client.get(
+        "/v1/console/tickets",
+        params={"tenant_id": "tenant-a", "queue": "finance-invoice-gate"},
+    ).json()
+    assert [t["ticket_id"] for t in queued["tickets"]] == ["t1"]
+
+    overdue = client.get(
+        "/v1/console/tickets",
+        params={"tenant_id": "tenant-a", "overdue": "true"},
+    ).json()
+    assert [t["ticket_id"] for t in overdue["tickets"]] == ["t1"]
+
+    due_before = (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat()
+    due = client.get(
+        "/v1/console/tickets",
+        params={"tenant_id": "tenant-a", "due_before": due_before},
+    ).json()
+    assert [t["ticket_id"] for t in due["tickets"]] == ["t1"]
+
 
 def test_console_inbox_returns_only_waiting_approval() -> None:
-    """验证 console_inbox_returns_only_waiting_approval 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
-    container, client = _client()
+    """验证控制台收件箱返回等待审批对应的测试场景。"""
+    container, support, client = _client()
     asyncio.run(
         _seed(
-            container,
+            support,
             [
                 _ticket("t1", TicketStatus.WAITING_APPROVAL, risk=RiskLevel.HIGH),
                 _ticket("t2", TicketStatus.READY_TO_PUBLISH),
@@ -139,18 +189,19 @@ def test_console_inbox_returns_only_waiting_approval() -> None:
 
 
 def test_console_overview_includes_task_status_counts() -> None:
-    """验证 console_overview_includes_task_status_counts 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
-    container, client = _client()
+    """验证控制台总览包含任务状态对应的测试场景。"""
+    container, support, client = _client()
     asyncio.run(
         _seed(
-            container,
+            support,
             [
-                _ticket("t1", TicketStatus.WAITING_APPROVAL, risk=RiskLevel.HIGH),
-                _ticket("t2", TicketStatus.PUBLISHED),
+                _ticket(
+                    "t1",
+                    TicketStatus.WAITING_APPROVAL,
+                    risk=RiskLevel.HIGH,
+                    assigned_team="finance-invoice-gate",
+                ),
+                _ticket("t2", TicketStatus.PUBLISHED, assigned_team="support"),
                 _ticket(
                     "t3",
                     TicketStatus.FAILED,
@@ -168,17 +219,11 @@ def test_console_overview_includes_task_status_counts() -> None:
 
 
 def test_console_costs_overview_aggregates_tenants() -> None:
-    """验证 console_costs_overview_aggregates_tenants 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证控制台成本总览聚合租户对应的测试场景。"""
     from agentforge.platform.domain.cost import CostRecord
-    from agentforge.platform.infrastructure.memory_cost_repository import (
-        MemoryCostRepository,
-    )
+    from agentforge.platform.infrastructure.memory_cost_repository import MemoryCostRepository
 
-    container, client = _client()
+    container, support, client = _client()
     assert isinstance(container.cost_repository, MemoryCostRepository)
     for amount, tenant in [(10.0, "t1"), (5.0, "t2")]:
         container.cost_repository.records.append(
@@ -206,14 +251,10 @@ def test_console_costs_overview_aggregates_tenants() -> None:
 
 
 def test_ticket_list_pagination_cursor() -> None:
-    """验证 ticket_list_pagination_cursor 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
-    container, client = _client()
+    """验证工单查询分页游标对应的测试场景。"""
+    container, support, client = _client()
     asyncio.run(
-        _seed(container, [_ticket(f"t{i}", TicketStatus.NEW, subject=str(i)) for i in range(5)])
+        _seed(support, [_ticket(f"t{i}", TicketStatus.NEW, subject=str(i)) for i in range(5)])
     )
     page1 = client.get(
         "/v1/console/tickets",

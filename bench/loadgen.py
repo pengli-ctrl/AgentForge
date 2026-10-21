@@ -1,15 +1,4 @@
-"""P1-1 压测 · 轻量自包含异步负载生成器（支持多进程，规避单进程客户端瓶颈）。
-
-不依赖 k6/locust 等外部工具：用 httpx + asyncio 直接压测真实 uvicorn 服务。
-
-为什么需要多进程？
-  单进程 asyncio + httpx 自身受 GIL / 单事件循环限制，客户端吞吐封顶（实测 ~75-190 rps），
-  会掩盖服务端真实容量。k6 / locust 同样靠多 worker / 多进程突破客户端瓶颈。
-  因此高频压测走「多进程」：父进程按需起 N 个子进程，每个子进程用自己的事件循环 +
-  独立连接池跑 clients/N 并发，父进程汇总各并发梯度下的吞吐 / 延迟分位 / 错误率。
-
-输出：每个并发梯度下的 吞吐(req/s)、延迟分位(P50/P90/P95/P99)、错误率。
-"""
+"""负载生成模块。"""
 
 from __future__ import annotations
 
@@ -33,18 +22,25 @@ def make_requests(
     fn: RequestFn,
     base_url: str,
 ) -> tuple[list[tuple[str, float]], list[str]]:
-    """跑一轮：clients 个并发协程，各自持续请求到 duration 秒耗尽。返回 (结果, 错误) 二元组。"""
+    """构造请求。
+
+    Args:
+        clients: 输入参数。
+        duration: 执行持续时间。
+        fn: 函数。
+        base_url: 服务基础 URL。
+
+    Returns:
+        结果元组。
+    """
     results: list[tuple[str, float]] = []
     errors: list[str] = []
 
     async def worker(client: httpx.AsyncClient) -> None:
-        """执行 worker 对应的逻辑，并返回处理结果。
+        """执行工作进程。
 
         Args:
-            client: httpx.AsyncClient，调用方传入的 client 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            client: 客户端实例。
         """
         deadline = time.monotonic() + duration
         path = "req"
@@ -60,11 +56,7 @@ def make_requests(
                 errors.append(f"{path}:{type(exc).__name__}")
 
     async def run() -> None:
-        """执行 run 对应的逻辑，并返回处理结果。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """运行任务。"""
         limits = httpx.Limits(max_connections=clients * 4, max_keepalive_connections=clients)
         async with httpx.AsyncClient(timeout=30.0, limits=limits) as client:
             await asyncio.gather(*(worker(client) for _ in range(clients)))
@@ -74,7 +66,15 @@ def make_requests(
 
 
 def percentile(sorted_lat: list[float], p: float) -> float:
-    """sorted_lat 升序；返回 p 分位（0-100）。"""
+    """计算百分位。
+
+    Args:
+        sorted_lat: 输入参数。
+        p: 输入参数。
+
+    Returns:
+        数值结果。
+    """
     if not sorted_lat:
         return 0.0
     k = (len(sorted_lat) - 1) * (p / 100.0)
@@ -85,27 +85,21 @@ def percentile(sorted_lat: list[float], p: float) -> float:
 
 @dataclass
 class LadderResult:
-    """LadderResult。
+    """梯度结果领域组件。
 
-    LadderResult 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - clients: int。
-    - duration: float。
-    - reqs: int。
-    - errors: int。
-    - rps: float。
-    - total_time: float。
-    - p50: float。
-    - p90: float。
-    - p95: float。
-    - p99: float。
-    - max_lat: float。
-    - error_rate: float。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    Attributes:
+        clients: 字段值。
+        duration: 执行持续时间。
+        reqs: 字段值。
+        errors: 字段值。
+        rps: 字段值。
+        total_time: 总计。
+        p50: 字段值。
+        p90: 字段值。
+        p95: 字段值。
+        p99: 字段值。
+        max_lat: 最大。
+        error_rate: 错误速率。
     """
 
     clients: int
@@ -128,7 +122,17 @@ def run_ladder(
     clients_ladder: list[int],
     duration_per_step: float,
 ) -> list[LadderResult]:
-    """单进程并发梯度压测（低并发/快速排查用；高频请用 run_ladder_mp）。"""
+    """运行梯度。
+
+    Args:
+        fn: 函数。
+        base_url: 服务基础 URL。
+        clients_ladder: 输入参数。
+        duration_per_step: 步骤。
+
+    Returns:
+        结果列表。
+    """
     out: list[LadderResult] = []
     for c in clients_ladder:
         t0 = time.monotonic()
@@ -163,7 +167,7 @@ def run_ladder(
 
 
 def _mp_worker_inline():
-    """内联子进程入口：读取 b c d n 参数并打印请求数。用于多进程压测子进程。"""
+    """处理工作进程。"""
     import sys
 
     sys.path.insert(0, ".")
@@ -185,10 +189,15 @@ def run_ladder_mp(
 ) -> list[LadderResult]:
     """多进程并发梯度压测：突破单进程客户端瓶颈，逼近服务端真实容量。
 
-    - 吞吐/总量：由 processes 个子进程（每进程 clients/processes 并发）取回请求数汇总，
-      客户端瓶颈被解除，吞吐代表服务端该并发下的真实处理能力。
-    - 延迟分位：多进程聚合难以回传逐请求延迟；故对同一并发梯度再用单进程补测一轮，
-      该轮在服务端同一并发度下观测到的逐请求延迟即为该负载下的真实 P50/P90/P99。
+    Args:
+        fn: 函数。
+        base_url: 服务基础 URL。
+        clients_ladder: 输入参数。
+        duration_per_step: 步骤。
+        processes: 输入参数。
+
+    Returns:
+        结果列表。
     """
     fn_name = next((k for k, v in REQUEST_FNS.items() if v == fn), "health")
     out: list[LadderResult] = []
@@ -253,10 +262,10 @@ def run_ladder_mp(
 
 
 def _mp_worker_inline_code() -> str:
-    """执行 _mp_worker_inline_code 对应的逻辑，并返回处理结果。
+    """返回多进程工作进程执行的内联代码。
 
     Returns:
-        str，函数执行后的结果。
+        字符串结果。
     """
     return (
         "import sys;sys.path.insert(0,'.');"
@@ -269,35 +278,56 @@ def _mp_worker_inline_code() -> str:
 
 
 def dump_json(results: list[LadderResult], path: str) -> None:
-    """执行 dump_json 对应的逻辑，并返回处理结果。
+    """导出JSON。
 
     Args:
-        results: list[LadderResult]，调用方传入的 results 参数。
-        path: str，调用方传入的 path 参数。
-
-    Returns:
-        None，函数执行后的结果。
+        results: 待处理或待保存的结果。
+        path: 文件或资源路径。
     """
     with open(path, "w", encoding="utf-8") as f:
         json.dump([r.__dict__ for r in results], f, ensure_ascii=False, indent=2)
 
 
 async def bench_health(client: httpx.AsyncClient, base_url: str) -> tuple[str, int, float]:
-    """/health/live —— 纯框架基线（近零业务逻辑）。"""
+    """执行基准测试健康。
+
+    Args:
+        client: 客户端实例。
+        base_url: 服务基础 URL。
+
+    Returns:
+        结果元组。
+    """
     t0 = time.monotonic()
     r = await client.get(f"{base_url}/health/live")
     return ("/health/live", r.status_code, time.monotonic() - t0)
 
 
 async def bench_overview(client: httpx.AsyncClient, base_url: str) -> tuple[str, int, float]:
-    """/v1/console/overview —— 平台聚合读（配额+成本读，代表性平台业务读路径）。"""
+    """执行基准测试总览。
+
+    Args:
+        client: 客户端实例。
+        base_url: 服务基础 URL。
+
+    Returns:
+        结果元组。
+    """
     t0 = time.monotonic()
     r = await client.get(f"{base_url}/v1/console/overview?tenant_id=tenant-a")
     return ("/v1/console/overview", r.status_code, time.monotonic() - t0)
 
 
 async def bench_dashboard(client: httpx.AsyncClient, base_url: str) -> tuple[str, int, float]:
-    """/v1/console/dashboard —— 仪表盘聚合（成本趋势+模型分布，较重读路径）。"""
+    """执行基准测试看板。
+
+    Args:
+        client: 客户端实例。
+        base_url: 服务基础 URL。
+
+    Returns:
+        结果元组。
+    """
     t0 = time.monotonic()
     r = await client.get(f"{base_url}/v1/console/dashboard?tenant_id=tenant-a")
     return ("/v1/console/dashboard", r.status_code, time.monotonic() - t0)
@@ -311,16 +341,16 @@ REQUEST_FNS = {
 
 
 def choose_fn(name: str) -> RequestFn:
-    """执行 choose_fn 对应的逻辑，并返回处理结果。
+    """选择函数。
 
     Args:
-        name: str，调用方传入的 name 参数。
+        name: 资源或对象名称。
 
     Returns:
-        RequestFn，函数执行后的结果。
+        请求函数结果。
 
     Raises:
-        KeyError: 当输入、状态或外部依赖不满足要求时抛出。
+        KeyError: 缺少必要配置或目标对象时抛出。
     """
     if name not in REQUEST_FNS:
         raise KeyError(f"unknown request fn: {name}; choose from {list(REQUEST_FNS)}")

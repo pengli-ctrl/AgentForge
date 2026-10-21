@@ -1,13 +1,4 @@
-"""API Key 认证中间件 — 基于 API Key 的请求认证。
-
-从请求头 X-API-Key 或 Authorization: Bearer <key> 提取 API Key，
-与配置的合法 Key 列表比对。
-
-设计原则：
-- 开发环境可禁用认证（设置 allow_no_auth=True）
-- 生产环境必须配置 API Key
-- 认证失败返回 401 Unauthorized
-"""
+"""鉴权模块。"""
 
 from __future__ import annotations
 
@@ -20,13 +11,8 @@ logger = logging.getLogger(__name__)
 class AuthMiddleware:
     """API Key 认证中间件。
 
-    支持两种 Key 传递方式：
-    - 请求头 X-API-Key: <key>
-    - Authorization: Bearer <key>
-
-    Args:
-        api_keys: 合法的 API Key 集合。
-        allow_no_auth: 是否允许无认证访问（仅开发环境）。
+    Attributes:
+        PUBLIC_PATHS: 公共。
     """
 
     # 不需要认证的路径
@@ -37,14 +23,11 @@ class AuthMiddleware:
         api_keys: set[str] | None = None,
         allow_no_auth: bool = False,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 AuthMiddleware。
 
         Args:
-            api_keys: set[str] | None，调用方传入的 api_keys 参数。
-            allow_no_auth: bool，调用方传入的 allow_no_auth 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            api_keys: API键。
+            allow_no_auth: 允许无鉴权。
         """
         self.api_keys = api_keys or set()
         self.allow_no_auth = allow_no_auth
@@ -53,11 +36,11 @@ class AuthMiddleware:
         """认证请求。
 
         Args:
-            headers: 请求头字典。
-            path: 请求路径。
+            headers: 输入参数。
+            path: 文件或资源路径。
 
         Returns:
-            是否认证通过。
+            操作是否成功。
         """
         # 公开路径不需要认证
         if path in self.PUBLIC_PATHS:
@@ -84,15 +67,11 @@ class AuthMiddleware:
     def _extract_api_key(self, headers: dict[str, str]) -> str | None:
         """从请求头提取 API Key。
 
-        支持两种格式：
-        - X-API-Key: <key>
-        - Authorization: Bearer <key>
-
         Args:
-            headers: 请求头字典。
+            headers: 输入参数。
 
         Returns:
-            API Key 字符串，不存在则返回 None。
+            无结果。
         """
         # 方式 1: X-API-Key 头
         api_key = headers.get("x-api-key") or headers.get("X-API-Key")
@@ -111,6 +90,6 @@ class AuthMiddleware:
         """生成一个新的 API Key。
 
         Returns:
-            32 字符的随机 API Key。
+            字符串结果。
         """
         return secrets.token_urlsafe(24)

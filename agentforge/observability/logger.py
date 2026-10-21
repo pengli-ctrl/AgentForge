@@ -1,19 +1,4 @@
-"""结构化日志 — JSON 格式，含 correlation_id、agent_name、event_type。
-
-用于全链路可观测性（Layer 4 容错防线）。
-所有日志输出为 JSON 格式，包含追踪上下文信息，
-便于在 ELK/Loki 等日志聚合系统中检索和分析。
-
-日志字段：
-- timestamp: 时间戳（ISO 8601 格式）
-- level: 日志级别
-- logger: logger 名称
-- message: 日志消息
-- correlation_id: 关联 ID
-- agent_name: Agent 名称
-- event_type: 事件类型
-- extra: 额外字段
-"""
+"""日志器模块。"""
 
 from __future__ import annotations
 
@@ -36,20 +21,16 @@ _TRACE_FIELDS = {
 
 
 class StructuredFormatter(logging.Formatter):
-    """JSON 结构化日志格式化器。
-
-    将日志记录格式化为 JSON 字符串，包含时间戳、级别、消息
-    和追踪上下文字段。
-    """
+    """结构化格式化器相关组件。"""
 
     def format(self, record: logging.LogRecord) -> str:
-        """将日志记录格式化为 JSON 字符串。
+        """格式化结构化格式化器。
 
         Args:
-            record: 日志记录。
+            record: 待处理的领域记录。
 
         Returns:
-            JSON 格式的日志字符串。
+            字符串结果。
         """
         log_entry: dict[str, Any] = {
             "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
@@ -81,15 +62,7 @@ class StructuredFormatter(logging.Formatter):
 
 
 class StructuredLogger:
-    """结构化日志记录器 — 提供 JSON 格式的日志输出。
-
-    封装标准 logging.Logger，自动注入追踪上下文字段。
-
-    Args:
-        name: logger 名称。
-        level: 日志级别。
-        use_json: 是否使用 JSON 格式（False 时使用普通文本格式）。
-    """
+    """结构化日志器相关组件。"""
 
     def __init__(
         self,
@@ -97,15 +70,12 @@ class StructuredLogger:
         level: int = logging.INFO,
         use_json: bool = True,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 StructuredLogger。
 
         Args:
-            name: str，调用方传入的 name 参数。
-            level: int，调用方传入的 level 参数。
-            use_json: bool，调用方传入的 use_json 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            name: 资源或对象名称。
+            level: 级别。
+            use_json: JSON。
         """
         self.logger = logging.getLogger(name)
         self.logger.setLevel(level)
@@ -135,12 +105,12 @@ class StructuredLogger:
         """记录日志（内部方法）。
 
         Args:
-            level: 日志级别。
-            message: 日志消息。
-            correlation_id: 关联 ID。
-            agent_name: Agent 名称。
+            level: 级别。
+            message: 输入参数。
+            correlation_id: 用于关联同一业务链路的关联 ID。
+            agent_name: 智能体名称。
             event_type: 事件类型。
-            extra: 额外字段。
+            extra: 输入参数。
         """
         extra_data: dict[str, Any] = {}
         if correlation_id:
@@ -162,14 +132,14 @@ class StructuredLogger:
         event_type: str = "",
         extra: dict[str, Any] | None = None,
     ) -> None:
-        """记录 DEBUG 级别日志。
+        """输出调试级别日志。
 
         Args:
-            message: 日志消息。
-            correlation_id: 关联 ID。
-            agent_name: Agent 名称。
+            message: 输入参数。
+            correlation_id: 用于关联同一业务链路的关联 ID。
+            agent_name: 智能体名称。
             event_type: 事件类型。
-            extra: 额外字段。
+            extra: 输入参数。
         """
         self._log(logging.DEBUG, message, correlation_id, agent_name, event_type, extra)
 
@@ -181,14 +151,14 @@ class StructuredLogger:
         event_type: str = "",
         extra: dict[str, Any] | None = None,
     ) -> None:
-        """记录 INFO 级别日志。
+        """执行信息。
 
         Args:
-            message: 日志消息。
-            correlation_id: 关联 ID。
-            agent_name: Agent 名称。
+            message: 输入参数。
+            correlation_id: 用于关联同一业务链路的关联 ID。
+            agent_name: 智能体名称。
             event_type: 事件类型。
-            extra: 额外字段。
+            extra: 输入参数。
         """
         self._log(logging.INFO, message, correlation_id, agent_name, event_type, extra)
 
@@ -200,14 +170,14 @@ class StructuredLogger:
         event_type: str = "",
         extra: dict[str, Any] | None = None,
     ) -> None:
-        """记录 WARNING 级别日志。
+        """输出警告级别日志。
 
         Args:
-            message: 日志消息。
-            correlation_id: 关联 ID。
-            agent_name: Agent 名称。
+            message: 输入参数。
+            correlation_id: 用于关联同一业务链路的关联 ID。
+            agent_name: 智能体名称。
             event_type: 事件类型。
-            extra: 额外字段。
+            extra: 输入参数。
         """
         self._log(logging.WARNING, message, correlation_id, agent_name, event_type, extra)
 
@@ -220,15 +190,15 @@ class StructuredLogger:
         extra: dict[str, Any] | None = None,
         exc_info: bool = False,
     ) -> None:
-        """记录 ERROR 级别日志。
+        """执行错误。
 
         Args:
-            message: 日志消息。
-            correlation_id: 关联 ID。
-            agent_name: Agent 名称。
+            message: 输入参数。
+            correlation_id: 用于关联同一业务链路的关联 ID。
+            agent_name: 智能体名称。
             event_type: 事件类型。
-            extra: 额外字段。
-            exc_info: 是否包含异常堆栈。
+            extra: 输入参数。
+            exc_info: 输入参数。
         """
         extra_data: dict[str, Any] = {}
         if correlation_id:
@@ -248,13 +218,13 @@ _logger: StructuredLogger | None = None
 
 
 def get_logger(name: str = "agentforge") -> StructuredLogger:
-    """读取并返回指定数据，并返回调用方需要的结果。
+    """获取日志器。
 
     Args:
-        name: str，调用方传入的 name 参数。
+        name: 资源或对象名称。
 
     Returns:
-        StructuredLogger，函数执行后的结果。
+        结构化日志器结果。
     """
     global _logger
     if _logger is None:

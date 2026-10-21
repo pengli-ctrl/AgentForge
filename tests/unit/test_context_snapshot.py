@@ -63,7 +63,7 @@ def test_extract_keys() -> None:
 
 
 def test_merge_snapshots() -> None:
-    """合并多个快照 — last-write-wins 策略。"""
+    """验证快照对应的测试场景。"""
     manager = ContextSnapshotManager()
 
     snapshot_1 = manager.create_snapshot("task-004", {"a": 1, "b": 2})
@@ -132,7 +132,7 @@ def test_snapshot_to_dict() -> None:
 
 
 def test_snapshot_get_with_default() -> None:
-    """快照 get 方法支持默认值。"""
+    """验证快照获取使用默认对应的测试场景。"""
     manager = ContextSnapshotManager()
     snapshot = manager.create_snapshot("task-009", {"existing": "yes"})
 

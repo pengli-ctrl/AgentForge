@@ -15,7 +15,14 @@ from tests.conftest import MockLLMGateway
 
 
 def _make_chunks(n: int = 5) -> list[dict]:
-    """构造测试用 chunk 列表。"""
+    """构造分片。
+
+    Args:
+        n: 输入参数。
+
+    Returns:
+        结果列表。
+    """
     return [
         {
             "chunk_id": f"chunk_{i}",
@@ -30,21 +37,13 @@ class TestRerankerInit:
     """初始化测试。"""
 
     def test_default_max_chunks(self) -> None:
-        """验证 default_max_chunks 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证默认最大分片对应的测试场景。"""
         llm = MockLLMGateway()
         reranker = LLMReranker(llm_gateway=llm)
         assert reranker.max_chunks == 20
 
     def test_custom_max_chunks(self) -> None:
-        """验证 custom_max_chunks 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证自定义最大分片对应的测试场景。"""
         llm = MockLLMGateway()
         reranker = LLMReranker(llm_gateway=llm, max_chunks=10)
         assert reranker.max_chunks == 10
@@ -61,11 +60,11 @@ class TestRerankerInit:
 
 
 class TestRerank:
-    """rerank 方法测试。"""
+    """验证测试重排行为的测试集合。"""
 
     @pytest.mark.asyncio
     async def test_rerank_returns_sorted_results(self) -> None:
-        """rerank 应按评分降序返回结果。"""
+        """验证重排返回结果对应的测试场景。"""
         scores_json = json.dumps(
             {
                 "scores": [
@@ -97,7 +96,7 @@ class TestRerank:
 
     @pytest.mark.asyncio
     async def test_rerank_empty_chunks(self) -> None:
-        """空 chunk 列表应返回空结果。"""
+        """验证重排空分片对应的测试场景。"""
         llm = MockLLMGateway()
         reranker = LLMReranker(llm_gateway=llm)
         result = await reranker.rerank("query", [], top_k=5)
@@ -105,7 +104,7 @@ class TestRerank:
 
     @pytest.mark.asyncio
     async def test_rerank_top_k_limits_results(self) -> None:
-        """top_k 应限制返回数量。"""
+        """验证重排K结果对应的测试场景。"""
         scores_json = json.dumps(
             {"scores": [{"chunk_id": f"chunk_{i}", "score": 10 - i} for i in range(5)]}
         )
@@ -117,7 +116,7 @@ class TestRerank:
 
     @pytest.mark.asyncio
     async def test_rerank_calls_llm_once(self) -> None:
-        """rerank 应只调用 LLM 一次。"""
+        """验证重排调用LLM一次对应的测试场景。"""
         scores_json = json.dumps({"scores": [{"chunk_id": "chunk_0", "score": 7}]})
         llm = MockLLMGateway(responses=[LLMResponse(content=scores_json)])
         reranker = LLMReranker(llm_gateway=llm)
@@ -127,7 +126,7 @@ class TestRerank:
 
     @pytest.mark.asyncio
     async def test_rerank_returns_tuples(self) -> None:
-        """返回值应为 (chunk_id, score) 元组列表。"""
+        """验证重排返回对应的测试场景。"""
         scores_json = json.dumps({"scores": [{"chunk_id": "chunk_0", "score": 8}]})
         llm = MockLLMGateway(responses=[LLMResponse(content=scores_json)])
         reranker = LLMReranker(llm_gateway=llm)
@@ -144,7 +143,7 @@ class TestJSONParsing:
 
     @pytest.mark.asyncio
     async def test_rerank_markdown_wrapped_json(self) -> None:
-        """LLM 返回 markdown 包裹的 JSON 时应正确解析。"""
+        """验证重排MarkdownJSON对应的测试场景。"""
         scores_json = (
             "```json\n"
             + json.dumps(
@@ -194,7 +193,7 @@ class TestJSONParsing:
 
     @pytest.mark.asyncio
     async def test_rerank_missing_chunk_id_in_scores(self) -> None:
-        """LLM 遗漏某些 chunk 的评分时应给 0 分。"""
+        """验证重排缺失分块ID在评分对应的测试场景。"""
         scores_json = json.dumps(
             {
                 "scores": [
@@ -208,7 +207,6 @@ class TestJSONParsing:
         reranker = LLMReranker(llm_gateway=llm)
 
         result = await reranker.rerank("query", _make_chunks(3), top_k=3)
-        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         assert result[0][0] == "chunk_0"
         assert result[1][0] == "chunk_2"
         assert result[2][0] == "chunk_1"
@@ -238,11 +236,7 @@ class TestFormatChunks:
     """_format_chunks 方法测试。"""
 
     def test_format_chunks_includes_ids(self) -> None:
-        """验证 format_chunks_includes_ids 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证格式化分片包含对应的测试场景。"""
         llm = MockLLMGateway()
         reranker = LLMReranker(llm_gateway=llm)
         chunks = _make_chunks(3)
@@ -252,11 +246,7 @@ class TestFormatChunks:
         assert "chunk_2" in text
 
     def test_format_chunks_includes_metadata(self) -> None:
-        """验证 format_chunks_includes_metadata 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证格式化分片包含元数据对应的测试场景。"""
         llm = MockLLMGateway()
         reranker = LLMReranker(llm_gateway=llm)
         chunks = [
@@ -272,11 +262,7 @@ class TestFormatChunks:
         assert "foo" in text
 
     def test_format_chunks_includes_content(self) -> None:
-        """验证 format_chunks_includes_content 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证格式化分片包含内容对应的测试场景。"""
         llm = MockLLMGateway()
         reranker = LLMReranker(llm_gateway=llm)
         content = "def validate_input(data):\n    return True"

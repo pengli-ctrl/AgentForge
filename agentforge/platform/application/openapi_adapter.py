@@ -1,14 +1,4 @@
-"""AgentForge 平台应用服务层：openapi_adapter。
-
-本模块封装 openapi_adapter 对应外部系统或基础设施协议，提供稳定、可替换的适配接口。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：OpenAPIAdapter。
-- 主要函数：build_openapi_adapter。
-"""
+"""OpenAPI适配器模块。"""
 
 from __future__ import annotations
 
@@ -29,22 +19,12 @@ RequestFn = Callable[..., Awaitable[Any]]
 
 
 class OpenAPIAdapter(Connector):
-    """OpenAPIAdapter。
+    """打开API 适配器相关组件。
 
-    OpenAPIAdapter 封装外部系统或基础设施协议，向上提供稳定、可测试的接口。
-
-    主要成员：
-    - name: str。
-    - version: str。
-    - risk_level: str。
-    - IDEMPOTENCY_HEADER: 'X-Idempotency-Key'。
-    - 方法 health()。
-    - 方法 invoke()。
-    - 方法 compensate()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        name: 名称。
+        version: 版本号。
+        risk_level: 风险级别。
     """
 
     name: str = "openapi"
@@ -67,22 +47,19 @@ class OpenAPIAdapter(Connector):
         audit_sink: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
         request_fn: RequestFn | None = None,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 OpenAPIAdapter。
 
         Args:
-            endpoint: str，调用方传入的 endpoint 参数。
-            headers: dict[str, str] | None，调用方传入的 headers 参数。
-            auth_header: str | None，调用方传入的 auth_header 参数。
-            auth_value_provider: Callable[[], str] | None，调用方传入的 auth_value_provider 参数。
-            timeout_seconds: float，调用方传入的 timeout_seconds 参数。
-            max_retries: int，调用方传入的 max_retries 参数。
-            retry_backoff_seconds: float，调用方传入的 retry_backoff_seconds 参数。
-            rate_per_second: float | None，调用方传入的 rate_per_second 参数。
-            audit_sink: Callable[[dict[str, Any]], Awaitable[None]] | None，调用方传入的 audit_sink 参数。
-            request_fn: RequestFn | None，调用方传入的 request_fn 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            endpoint: 端点。
+            headers: 输入参数。
+            auth_header: 鉴权。
+            auth_value_provider: 鉴权值提供方。
+            timeout_seconds: 超时。
+            max_retries: 最大重试。
+            retry_backoff_seconds: 重试。
+            rate_per_second: 速率第二。
+            audit_sink: 审计接收器。
+            request_fn: 请求函数。
         """
         self._endpoint = endpoint.rstrip("/")
         self._headers = dict(headers or {})
@@ -102,15 +79,15 @@ class OpenAPIAdapter(Connector):
             self._rate_per_second = None
 
     async def _request(self, method: str, url: str, **kwargs: Any) -> Any:
-        """执行 _request 对应的逻辑，并返回处理结果。
+        """执行请求。
 
         Args:
-            method: str，调用方传入的 method 参数。
-            url: str，调用方传入的 url 参数。
-            **kwargs: Any，调用方传入的 **kwargs 参数。
+            method: HTTP 或业务方法名。
+            url: 目标 URL。
+            kwargs: 关键字参数。
 
         Returns:
-            Any，函数执行后的结果。
+            处理结果对象。
         """
         if self._request_fn is not None:
             return await self._request_fn(method, url, **kwargs)
@@ -122,17 +99,15 @@ class OpenAPIAdapter(Connector):
             return response.json()
 
     def _acquire_token(self) -> bool:
-        """执行 _acquire_token 对应的逻辑，并返回处理结果。
+        """判断令牌是否成立。
 
         Returns:
-            bool，函数执行后的结果。
+            操作是否成功。
         """
         if self._rate_per_second is None:
             return True
         now = time.monotonic()
         elapsed = now - self._bucket_updated
-        # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
-        # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
         self._bucket_tokens = min(
             self._bucket_capacity,
             self._bucket_tokens + elapsed * self._rate_per_second,
@@ -144,13 +119,13 @@ class OpenAPIAdapter(Connector):
         return True
 
     def _build_headers(self, context: ConnectorContext) -> dict[str, str]:
-        """执行 _build_headers 对应的逻辑，并返回处理结果。
+        """构建打开API 适配器。
 
         Args:
-            context: ConnectorContext，调用方传入的 context 参数。
+            context: 执行上下文。
 
         Returns:
-            dict[str, str]，函数执行后的结果。
+            结构化结果字典。
         """
         headers = dict(self._headers)
         if context.idempotency_key:
@@ -160,10 +135,10 @@ class OpenAPIAdapter(Connector):
         return headers
 
     async def health(self) -> ConnectorHealth:
-        """执行 health 对应的逻辑，并返回处理结果。
+        """检查打开API 适配器健康状态。
 
         Returns:
-            ConnectorHealth，函数执行后的结果。
+            连接器健康结果。
         """
         return ConnectorHealth(
             connector_id="openapi",
@@ -177,15 +152,15 @@ class OpenAPIAdapter(Connector):
         payload: dict,
         context: ConnectorContext,
     ) -> ConnectorInvocationResult:
-        """执行 invoke 对应的逻辑，并返回处理结果。
+        """调用打开API 适配器。
 
         Args:
-            action: str，调用方传入的 action 参数。
-            payload: dict，调用方传入的 payload 参数。
-            context: ConnectorContext，调用方传入的 context 参数。
+            action: 待执行动作名称。
+            payload: 事件、工作流或请求载荷。
+            context: 执行上下文。
 
         Returns:
-            ConnectorInvocationResult，函数执行后的结果。
+            连接器结果结果。
         """
         spec = payload.get("method", "GET").upper()
         path = payload.get("path", "/")
@@ -196,8 +171,6 @@ class OpenAPIAdapter(Connector):
         last_error: str | None = None
         for attempt in range(self._max_retries + 1):
             if not self._acquire_token():
-                # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
-                # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
                 await asyncio.sleep(self._retry_backoff * (2**attempt))
                 last_error = "rate limited"
                 continue
@@ -234,17 +207,15 @@ class OpenAPIAdapter(Connector):
         payload: dict,
         context: ConnectorContext,
     ) -> ConnectorInvocationResult:
-        # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
-        # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
-        """执行 compensate 对应的逻辑，并返回处理结果。
+        """补偿打开API 适配器。
 
         Args:
-            action: str，调用方传入的 action 参数。
-            payload: dict，调用方传入的 payload 参数。
-            context: ConnectorContext，调用方传入的 context 参数。
+            action: 待执行动作名称。
+            payload: 事件、工作流或请求载荷。
+            context: 执行上下文。
 
         Returns:
-            ConnectorInvocationResult，函数执行后的结果。
+            连接器结果结果。
         """
         result = await self.invoke(action, payload, context)
         return result
@@ -258,17 +229,14 @@ class OpenAPIAdapter(Connector):
         data: Any = None,
         error: str | None = None,
     ) -> None:
-        """执行 _audit 对应的逻辑，并返回处理结果。
+        """审计打开API 适配器。
 
         Args:
-            action: str，调用方传入的 action 参数。
-            context: ConnectorContext，调用方传入的 context 参数。
-            ok: bool，调用方传入的 ok 参数。
-            data: Any，调用方传入的 data 参数。
-            error: str | None，调用方传入的 error 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            action: 待执行动作名称。
+            context: 执行上下文。
+            ok: 输入参数。
+            data: 待处理数据。
+            error: 错误。
         """
         if self._audit_sink is None:
             return
@@ -294,14 +262,14 @@ def build_openapi_adapter(
     spec: ConnectorSpec,
     auth_value_provider: Callable[[], str] | None = None,
 ) -> OpenAPIAdapter:
-    """构建目标对象，并返回调用方需要的结果。
+    """构建OpenAPI适配器。
 
     Args:
-        spec: ConnectorSpec，调用方传入的 spec 参数。
-        auth_value_provider: Callable[[], str] | None，调用方传入的 auth_value_provider 参数。
+        spec: 资源规格定义。
+        auth_value_provider: 鉴权值提供方。
 
     Returns:
-        OpenAPIAdapter，函数执行后的结果。
+        打开API 适配器结果。
     """
     config = spec.config or {}
     if auth_value_provider is None:

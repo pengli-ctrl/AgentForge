@@ -1,14 +1,4 @@
-"""AgentForge 平台领域模型层：quality。
-
-本模块定义 quality 领域模型，约束业务状态、输入输出结构和跨层数据契约。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
--
-主要类：PromptStatus、ModelVersionStatus、QualityGateVerdict、PromptTemplate、ModelVersion、ReleaseCandidate、QualityGateResult、ClassificationGoldenItem。
-"""
+"""质量模块。"""
 
 from __future__ import annotations
 
@@ -20,19 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class PromptStatus(str, Enum):
-    """PromptStatus。
-
-    PromptStatus 是状态或类型枚举，用于约束系统内部取值，避免使用散落的字符串常量。
-
-    主要成员：
-    - DRAFT: 'draft'。
-    - ACTIVE: 'active'。
-    - DEPRECATED: 'deprecated'。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """提示词状态枚举。"""
 
     DRAFT = "draft"
     ACTIVE = "active"
@@ -40,19 +18,7 @@ class PromptStatus(str, Enum):
 
 
 class ModelVersionStatus(str, Enum):
-    """ModelVersionStatus。
-
-    ModelVersionStatus 是状态或类型枚举，用于约束系统内部取值，避免使用散落的字符串常量。
-
-    主要成员：
-    - AVAILABLE: 'available'。
-    - DEPRECATED: 'deprecated'。
-    - RETIRED: 'retired'。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """模型版本状态枚举。"""
 
     AVAILABLE = "available"
     DEPRECATED = "deprecated"
@@ -60,19 +26,7 @@ class ModelVersionStatus(str, Enum):
 
 
 class QualityGateVerdict(str, Enum):
-    """QualityGateVerdict。
-
-    QualityGateVerdict 是状态或类型枚举，用于约束系统内部取值，避免使用散落的字符串常量。
-
-    主要成员：
-    - PASS: 'pass'。
-    - HOLD: 'hold'。
-    - BLOCK: 'block'。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """质量门禁状态枚举。"""
 
     PASS = "pass"
     HOLD = "hold"
@@ -80,22 +34,14 @@ class QualityGateVerdict(str, Enum):
 
 
 class PromptTemplate(BaseModel):
-    """PromptTemplate。
+    """提示词模板相关组件。
 
-    PromptTemplate 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - name: str。
-    - version: str。
-    - content: str。
-    - status: PromptStatus。
-    - created_at: datetime。
-    - 方法 render()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        name: 名称。
+        version: 版本号。
+        content: 写入内容。
+        status: 当前状态。
+        created_at: 创建时间。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -108,16 +54,16 @@ class PromptTemplate(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     def render(self, **kwargs: Any) -> str:
-        """执行 render 对应的逻辑，并返回处理结果。
+        """渲染提示词模板。
 
         Args:
-            **kwargs: Any，调用方传入的 **kwargs 参数。
+            kwargs: 关键字参数。
 
         Returns:
-            str，函数执行后的结果。
+            字符串结果。
 
         Raises:
-            ValueError: 当输入、状态或外部依赖不满足要求时抛出。
+            ValueError: 输入值或业务状态不合法时抛出。
         """
         try:
             return self.content.format(**kwargs)
@@ -126,24 +72,17 @@ class PromptTemplate(BaseModel):
 
 
 class ModelVersion(BaseModel):
-    """ModelVersion。
+    """模型版本领域组件。
 
-    ModelVersion 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - name: str。
-    - provider: str。
-    - model_id: str。
-    - version: str。
-    - capability_score: float。
-    - is_available: bool。
-    - status: ModelVersionStatus。
-    - released_at: datetime。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        name: 名称。
+        provider: 提供方。
+        model_id: 模型ID。
+        version: 版本号。
+        capability_score: 能力评分。
+        is_available: 是否可用。
+        status: 当前状态。
+        released_at: 已释放于。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -159,24 +98,17 @@ class ModelVersion(BaseModel):
 
 
 class ReleaseCandidate(BaseModel):
-    """ReleaseCandidate。
+    """释放候选结果相关组件。
 
-    ReleaseCandidate 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - candidate_id: str。
-    - tenant_id: str。
-    - label: str。
-    - prompt_name: str。
-    - prompt_version: str。
-    - model_name: str。
-    - model_version: str。
-    - metadata: dict[str, Any]。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        candidate_id: 候选结果ID。
+        tenant_id: 租户 ID，用于数据隔离。
+        label: 标签。
+        prompt_name: 提示词名称。
+        prompt_version: 提示词版本。
+        model_name: 模型名称。
+        model_version: 模型版本。
+        metadata: 附加元数据。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -192,23 +124,16 @@ class ReleaseCandidate(BaseModel):
 
 
 class QualityGateResult(BaseModel):
-    """QualityGateResult。
+    """质量门禁结果相关组件。
 
-    QualityGateResult 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - verdict: QualityGateVerdict。
-    - passed: list[str]。
-    - warned: list[str]。
-    - failed: list[str]。
-    - metrics: dict[str, float]。
-    - thresholds: dict[str, float]。
-    - evaluated_at: datetime。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        verdict: 字段值。
+        passed: 通过。
+        warned: 字段值。
+        failed: 失败。
+        metrics: 指标。
+        thresholds: 阈值。
+        evaluated_at: 于。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -224,22 +149,15 @@ class QualityGateResult(BaseModel):
 
 
 class ClassificationGoldenItem(BaseModel):
-    """ClassificationGoldenItem。
+    """分类基准条目相关组件。
 
-    ClassificationGoldenItem 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - tenant_id: str。
-    - query: str。
-    - expected_intent: str。
-    - expected_priority: str。
-    - expected_risk_level: str。
-    - expect_structured: bool。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        tenant_id: 租户 ID，用于数据隔离。
+        query: 查询。
+        expected_intent: 字段值。
+        expected_priority: 优先级。
+        expected_risk_level: 风险级别。
+        expect_structured: 结构化。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -254,26 +172,19 @@ class ClassificationGoldenItem(BaseModel):
 
 
 class ClassificationEvaluation(BaseModel):
-    """ClassificationEvaluation。
+    """分类评估相关组件。
 
-    ClassificationEvaluation 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - query: str。
-    - predicted_intent: str。
-    - predicted_priority: str。
-    - predicted_risk_level: str。
-    - structured_valid: bool。
-    - intent_correct: bool。
-    - priority_correct: bool。
-    - risk_correct: bool。
-    - high_risk_missed: bool。
-    - confidence: float。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        query: 查询。
+        predicted_intent: 字段值。
+        predicted_priority: 优先级。
+        predicted_risk_level: 风险级别。
+        structured_valid: 结构化有效。
+        intent_correct: 正确。
+        priority_correct: 优先级正确。
+        risk_correct: 风险正确。
+        high_risk_missed: 高风险。
+        confidence: 字段值。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -291,23 +202,16 @@ class ClassificationEvaluation(BaseModel):
 
 
 class ClassificationReport(BaseModel):
-    """ClassificationReport。
+    """分类报告相关组件。
 
-    ClassificationReport 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - sample_count: int。
-    - classification_accuracy: float。
-    - priority_accuracy: float。
-    - risk_accuracy: float。
-    - structured_output_rate: float。
-    - high_risk_miss_rate: float。
-    - per_sample: list[ClassificationEvaluation]。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        sample_count: 样本数量。
+        classification_accuracy: 分类准确率。
+        priority_accuracy: 优先级准确率。
+        risk_accuracy: 风险准确率。
+        structured_output_rate: 结构化输出速率。
+        high_risk_miss_rate: 高风险速率。
+        per_sample: 样本。
     """
 
     model_config = ConfigDict(extra="forbid")

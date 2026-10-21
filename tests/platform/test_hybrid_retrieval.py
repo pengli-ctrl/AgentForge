@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_hybrid_retrieval。
+"""混合检索测试模块。
 
 本测试模块验证 test_hybrid_retrieval 覆盖的业务路径、边界条件和回归场景。
 
@@ -7,7 +7,8 @@
 - 所有租户相关数据都必须携带 tenant_id 并保持隔离。
 - 关键执行路径应保留日志、审计或链路追踪信息。
 -
-主要函数：make_document、test_hybrid_recall_returns_keyword_hits、test_tenant_isolation、test_search_empty_repository_and_no_match、test_mode_keyword_versus_vector、test_backfill_embeddings。
+主要函数：make_document、test_hybrid_recall_returns_keyword_hits、test_tenant_isolation、test_search_emp
+    ty_repository_and_no_match、test_mode_keyword_versus_vector、test_backfill_embeddings。
 """
 
 import pytest
@@ -21,19 +22,35 @@ from agentforge.platform.infrastructure.sqlalchemy_knowledge_repository import (
     SQLAlchemyKnowledgeRepository,
 )
 
+_ENGINES = []
+
+
+@pytest.fixture(autouse=True)
+async def _dispose_sqlalchemy_engines():
+    """释放SQLAlchemy引擎。
+
+    Yields:
+        逐次生成的结果。
+    """
+    _ENGINES.clear()
+    yield
+    for engine in _ENGINES:
+        await engine.dispose()
+    _ENGINES.clear()
+
 
 def make_document(
     tenant_id: str, title: str, content: str
 ) -> tuple[KnowledgeDocument, list[KnowledgeChunk]]:
-    """执行 make_document 对应的逻辑，并返回处理结果。
+    """构造文档。
 
     Args:
-        tenant_id: str，调用方传入的 tenant_id 参数。
-        title: str，调用方传入的 title 参数。
-        content: str，调用方传入的 content 参数。
+        tenant_id: 租户 ID，用于数据隔离。
+        title: 输入参数。
+        content: 写入内容。
 
     Returns:
-        tuple[KnowledgeDocument, list[KnowledgeChunk]]，函数执行后的结果。
+        结果元组。
     """
     document = KnowledgeDocument(
         document_id=f"doc-{tenant_id}-{title}",
@@ -74,13 +91,10 @@ DOCS = [
 @pytest.mark.asyncio
 @pytest.mark.parametrize("repository_factory", ["memory", "sqlalchemy"])
 async def test_hybrid_recall_returns_keyword_hits(repository_factory: str) -> None:
-    """验证 hybrid_recall_returns_keyword_hits 对应的业务行为、边界条件和回归场景。
+    """验证混合召回返回关键词对应的测试场景。
 
     Args:
-        repository_factory: str，调用方传入的 repository_factory 参数。
-
-    Returns:
-        None，函数执行后的结果。
+        repository_factory: 仓储工厂。
     """
     repository = await _build(repository_factory)
     for tenant_id, title, content in DOCS:
@@ -95,13 +109,10 @@ async def test_hybrid_recall_returns_keyword_hits(repository_factory: str) -> No
 @pytest.mark.asyncio
 @pytest.mark.parametrize("repository_factory", ["memory", "sqlalchemy"])
 async def test_tenant_isolation(repository_factory: str) -> None:
-    """验证 tenant_isolation 对应的业务行为、边界条件和回归场景。
+    """验证租户隔离对应的测试场景。
 
     Args:
-        repository_factory: str，调用方传入的 repository_factory 参数。
-
-    Returns:
-        None，函数执行后的结果。
+        repository_factory: 仓储工厂。
     """
     repository = await _build(repository_factory)
     for tenant_id, title, content in DOCS:
@@ -118,13 +129,10 @@ async def test_tenant_isolation(repository_factory: str) -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("repository_factory", ["memory", "sqlalchemy"])
 async def test_search_empty_repository_and_no_match(repository_factory: str) -> None:
-    """验证 search_empty_repository_and_no_match 对应的业务行为、边界条件和回归场景。
+    """验证搜索空仓储及无匹配对应的测试场景。
 
     Args:
-        repository_factory: str，调用方传入的 repository_factory 参数。
-
-    Returns:
-        None，函数执行后的结果。
+        repository_factory: 仓储工厂。
     """
     repository = await _build(repository_factory)
     assert await repository.search("tenant-1", "anything", mode="hybrid") == []
@@ -137,13 +145,10 @@ async def test_search_empty_repository_and_no_match(repository_factory: str) -> 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("repository_factory", ["memory", "sqlalchemy"])
 async def test_mode_keyword_versus_vector(repository_factory: str) -> None:
-    """验证 mode_keyword_versus_vector 对应的业务行为、边界条件和回归场景。
+    """验证模式关键词对应的测试场景。
 
     Args:
-        repository_factory: str，调用方传入的 repository_factory 参数。
-
-    Returns:
-        None，函数执行后的结果。
+        repository_factory: 仓储工厂。
     """
     repository = await _build(repository_factory)
     for tenant_id, title, content in DOCS:
@@ -165,13 +170,10 @@ async def test_mode_keyword_versus_vector(repository_factory: str) -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("repository_factory", ["memory", "sqlalchemy"])
 async def test_backfill_embeddings(repository_factory: str) -> None:
-    """验证 backfill_embeddings 对应的业务行为、边界条件和回归场景。
+    """验证回填向量对应的测试场景。
 
     Args:
-        repository_factory: str，调用方传入的 repository_factory 参数。
-
-    Returns:
-        None，函数执行后的结果。
+        repository_factory: 仓储工厂。
     """
     repository = await _build(repository_factory)
     for tenant_id, title, content in DOCS:
@@ -184,13 +186,13 @@ async def test_backfill_embeddings(repository_factory: str) -> None:
 
 
 async def _build(kind: str):
-    """执行 _build 对应的逻辑，并返回处理结果。
+    """构建对象。
 
     Args:
-        kind: str，调用方传入的 kind 参数。
+        kind: 输入参数。
 
     Returns:
-        None，函数执行后的结果。
+        处理结果。
     """
     if kind == "memory":
         return MemoryKnowledgeRepository()
@@ -201,5 +203,6 @@ async def _build(kind: str):
     )
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
+    _ENGINES.append(engine)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     return SQLAlchemyKnowledgeRepository(session_factory)

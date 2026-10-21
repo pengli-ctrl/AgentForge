@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_outbox_retry。
+"""Outbox重试测试模块。
 
 本测试模块验证 test_outbox_retry 覆盖的业务路径、边界条件和回归场景。
 
@@ -18,43 +18,27 @@ from agentforge.platform.infrastructure.db.base import Base
 from agentforge.platform.infrastructure.outbox_dispatcher import OutboxDispatcher
 from agentforge.platform.infrastructure.outbox_store import SQLAlchemyOutboxStore
 from agentforge.platform.runtime import build_sqlalchemy_container
+from tests.platform.support_fixtures import configure_sqlalchemy_support
 
 
 class FailingPublisher:
-    """FailingPublisher。
-
-    FailingPublisher 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - 方法 publish()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """失败发布器相关组件。"""
 
     async def publish(self, event):
-        """执行 publish 对应的核心操作，并保持调用契约稳定。
+        """发布失败发布器。
 
         Args:
-            event: Any，调用方传入的 event 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            event: 待处理事件。
 
         Raises:
-            RuntimeError: 当输入、状态或外部依赖不满足要求时抛出。
+            RuntimeError: 运行时依赖或状态不满足要求时抛出。
         """
         raise RuntimeError("broker unavailable")
 
 
 @pytest.mark.asyncio
 async def test_outbox_moves_to_failed_and_can_be_replayed() -> None:
-    """验证 outbox_moves_to_failed_and_can_be_replayed 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证Outbox移动到失败及可以为对应的测试场景。"""
     engine = create_async_engine(
         "sqlite+aiosqlite://",
         poolclass=StaticPool,
@@ -64,7 +48,8 @@ async def test_outbox_moves_to_failed_and_can_be_replayed() -> None:
         await connection.run_sync(Base.metadata.create_all)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     container = build_sqlalchemy_container(session_factory)
-    await container.ticket_service.create_from_event(
+    support = configure_sqlalchemy_support(container, session_factory)
+    await support.ticket_service.create_from_event(
         {
             "tenant_id": "tenant-1",
             "source": "feishu",

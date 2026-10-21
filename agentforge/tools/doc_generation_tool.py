@@ -1,7 +1,4 @@
-"""文档生成工具 — 基于代码变更生成变更文档。
-
-Agent 通过工具注册表调用此工具生成 Markdown 格式的文档。
-"""
+"""生成工具模块。"""
 
 from __future__ import annotations
 
@@ -14,39 +11,30 @@ logger = logging.getLogger(__name__)
 
 
 class DocGenerationTool(BaseTool):
-    """文档生成工具 — 生成 Markdown 格式的变更文档。
-
-    功能：
-    - 基于代码审查结果和测试报告生成变更文档
-    - 生成 API 变更说明
-    - 生成 changelog 条目
-    - 标注 breaking changes
-
-    Args:
-        output_dir: 文档输出目录。
-    """
+    """生成工具相关组件。"""
 
     def __init__(self, output_dir: str = "./docs/generated") -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 DocGenerationTool。
 
         Args:
-            output_dir: str，调用方传入的 output_dir 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            output_dir: 输出目录。
         """
         self.output_dir = output_dir
 
     @property
     def name(self) -> str:
-        """工具唯一标识。"""
+        """工具唯一标识。
+
+        Returns:
+            字符串结果。
+        """
         return "doc_generation"
 
     def schema(self) -> dict:
-        """执行 schema 对应的逻辑，并返回处理结果。
+        """返回工具参数的结构定义。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         return {
             "type": "function",
@@ -77,15 +65,13 @@ class DocGenerationTool(BaseTool):
         }
 
     async def execute(self, **kwargs: Any) -> ToolResult:
-        """生成文档。
+        """执行核心处理逻辑并返回结果。
 
         Args:
-            review_result: 代码审查结果摘要。
-            test_result: 测试执行结果摘要。
-            doc_type: 文档类型。
+            kwargs: 关键字参数。
 
         Returns:
-            文档生成结果。
+            工具结果结果。
         """
         doc_type = kwargs.get("doc_type", "changelog")
         review_result = kwargs.get("review_result", "")

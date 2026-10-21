@@ -1,13 +1,4 @@
-"""AgentForge 平台领域模型层：regression。
-
-本模块定义 regression 领域模型，约束业务状态、输入输出结构和跨层数据契约。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：GoldenItem、RegressionRunStatus、RegressionRun、QualityReport。
-"""
+"""回归模块。"""
 
 from __future__ import annotations
 
@@ -19,34 +10,27 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 def _utcnow() -> datetime:
-    """执行 _utcnow 对应的逻辑，并返回处理结果。
+    """处理当前 UTC 时间。
 
     Returns:
-        datetime，函数执行后的结果。
+        处理结果对象。
     """
     return datetime.now(timezone.utc)
 
 
 class GoldenItem(BaseModel):
-    """GoldenItem。
+    """基准条目相关组件。
 
-    GoldenItem 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - item_id: str。
-    - tenant_id: str。
-    - query: str。
-    - expected_chunk_ids: list[str]。
-    - expected_citations: list[str]。
-    - expected_intent: str | None。
-    - expected_priority: str | None。
-    - expected_risk_level: str | None。
-    - created_at: datetime。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        item_id: 条目ID。
+        tenant_id: 租户 ID，用于数据隔离。
+        query: 查询。
+        expected_chunk_ids: 分块。
+        expected_citations: 引用。
+        expected_intent: 字段值。
+        expected_priority: 优先级。
+        expected_risk_level: 风险级别。
+        created_at: 创建时间。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -63,19 +47,7 @@ class GoldenItem(BaseModel):
 
 
 class RegressionRunStatus(str, Enum):
-    """RegressionRunStatus。
-
-    RegressionRunStatus 是状态或类型枚举，用于约束系统内部取值，避免使用散落的字符串常量。
-
-    主要成员：
-    - PASSED: 'passed'。
-    - FAILED: 'failed'。
-    - HOLD: 'hold'。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """回归运行状态枚举。"""
 
     PASSED = "passed"
     FAILED = "failed"
@@ -83,28 +55,21 @@ class RegressionRunStatus(str, Enum):
 
 
 class RegressionRun(BaseModel):
-    """RegressionRun。
+    """回归运行相关组件。
 
-    RegressionRun 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - run_id: str。
-    - tenant_id: str。
-    - candidate_id: str。
-    - status: RegressionRunStatus。
-    - recall_at_k: float。
-    - citation_accuracy: float。
-    - classification_accuracy: float。
-    - priority_accuracy: float。
-    - structured_output_rate: float。
-    - high_risk_miss_rate: float。
-    - verdict: str。
-    - created_at: datetime。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        run_id: 运行ID。
+        tenant_id: 租户 ID，用于数据隔离。
+        candidate_id: 候选结果ID。
+        status: 当前状态。
+        recall_at_k: 召回于K。
+        citation_accuracy: 引用准确率。
+        classification_accuracy: 分类准确率。
+        priority_accuracy: 优先级准确率。
+        structured_output_rate: 结构化输出速率。
+        high_risk_miss_rate: 高风险速率。
+        verdict: 字段值。
+        created_at: 创建时间。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -124,27 +89,20 @@ class RegressionRun(BaseModel):
 
 
 class QualityReport(BaseModel):
-    """QualityReport。
+    """质量报告相关组件。
 
-    QualityReport 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - report_id: str。
-    - run_id: str。
-    - candidate_id: str。
-    - tenant_id: str。
-    - verdict: str。
-    - metrics: dict[str, float]。
-    - passed: list[str]。
-    - warned: list[str]。
-    - failed: list[str]。
-    - generated_at: datetime。
-    - extra: dict[str, Any]。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        report_id: 报告ID。
+        run_id: 运行ID。
+        candidate_id: 候选结果ID。
+        tenant_id: 租户 ID，用于数据隔离。
+        verdict: 字段值。
+        metrics: 指标。
+        passed: 通过。
+        warned: 字段值。
+        failed: 失败。
+        generated_at: 于。
+        extra: 字段值。
     """
 
     model_config = ConfigDict(extra="forbid")

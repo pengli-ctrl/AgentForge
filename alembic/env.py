@@ -1,4 +1,4 @@
-"""AgentForge AgentForge 项目：env。
+"""Alembic 数据库迁移环境。
 
 本模块负责 env 相关能力，是 AgentForge 项目 的组成部分。
 
@@ -35,24 +35,17 @@ target_metadata = None
 
 
 def run_migrations_offline() -> None:
-    """执行完整流程，并返回调用方需要的结果。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """在离线模式下生成数据库迁移 SQL。"""
     context.configure(url=config.get_main_option("sqlalchemy.url"), target_metadata=target_metadata)
     with context.begin_transaction():
         context.run_migrations()
 
 
 def do_run_migrations(connection) -> None:
-    """执行 do_run_migrations 对应的逻辑，并返回处理结果。
+    """在数据库连接上执行迁移。
 
     Args:
-        connection: Any，调用方传入的 connection 参数。
-
-    Returns:
-        None，函数执行后的结果。
+        connection: 连接。
     """
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
@@ -60,11 +53,7 @@ def do_run_migrations(connection) -> None:
 
 
 async def run_migrations_online() -> None:
-    """执行完整流程，并返回调用方需要的结果。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """使用数据库连接执行在线迁移。"""
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",

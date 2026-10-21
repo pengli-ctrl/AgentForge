@@ -7,32 +7,20 @@ from __future__ import annotations
 
 import pytest
 
-from agentforge.safety.trust_boundary import (
-    CrossSourceVerifier,
-    TrustBoundary,
-    ValidationResult,
-)
+from agentforge.safety.trust_boundary import CrossSourceVerifier, TrustBoundary, ValidationResult
 
 
 class TestValidationResult:
     """ValidationResult 数据类测试。"""
 
     def test_default_passed_result(self) -> None:
-        """验证 default_passed_result 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证默认通过结果对应的测试场景。"""
         result = ValidationResult(passed=True)
         assert result.passed is True
         assert result.errors == []
 
     def test_failed_result_with_errors(self) -> None:
-        """验证 failed_result_with_errors 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证失败结果使用对应的测试场景。"""
         result = ValidationResult(
             passed=False,
             errors=["field A invalid", "operation forbidden"],
@@ -45,30 +33,18 @@ class TestTrustBoundaryInit:
     """TrustBoundary 初始化测试。"""
 
     def test_default_init_empty_schema(self) -> None:
-        """验证 default_init_empty_schema 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证默认初始化空结构对应的测试场景。"""
         tb = TrustBoundary()
         assert tb.api_schema == {}
 
     def test_init_with_api_schema(self) -> None:
-        """验证 init_with_api_schema 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证初始化使用API结构对应的测试场景。"""
         schema = {"user_api": ["id", "name", "email"]}
         tb = TrustBoundary(api_schema=schema)
         assert tb.api_schema == schema
 
     def test_deterministic_rules_exist(self) -> None:
-        """验证 deterministic_rules_exist 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证规则存在对应的测试场景。"""
         tb = TrustBoundary()
         assert "forbidden_operations" in tb.DETERMINISTIC_RULES
         assert "api_field_names" in tb.DETERMINISTIC_RULES
@@ -80,11 +56,7 @@ class TestTrustBoundaryForbiddenOperations:
     """操作类型白名单 / 黑名单测试。"""
 
     def test_delete_blocked_for_user_deactivation(self) -> None:
-        """验证 delete_blocked_for_user_deactivation 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证删除阻塞用于用户停用对应的测试场景。"""
         tb = TrustBoundary()
         output = {"sql": "DELETE FROM users WHERE id = 1"}
         context = {"business_action": "user_deactivation"}
@@ -93,11 +65,7 @@ class TestTrustBoundaryForbiddenOperations:
         assert any("forbidden" in err.lower() for err in result.errors)
 
     def test_truncate_blocked_for_user_deactivation(self) -> None:
-        """验证 truncate_blocked_for_user_deactivation 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证截断阻塞用于用户停用对应的测试场景。"""
         tb = TrustBoundary()
         output = {"sql": "TRUNCATE TABLE users"}
         context = {"business_action": "user_deactivation"}
@@ -105,11 +73,7 @@ class TestTrustBoundaryForbiddenOperations:
         assert result.passed is False
 
     def test_update_allowed_for_user_deactivation(self) -> None:
-        """验证 update_allowed_for_user_deactivation 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证更新允许用于用户停用对应的测试场景。"""
         tb = TrustBoundary()
         output = {"sql": "UPDATE users SET status = 'inactive' WHERE id = 1"}
         context = {"business_action": "user_deactivation"}
@@ -117,11 +81,7 @@ class TestTrustBoundaryForbiddenOperations:
         assert result.passed is True
 
     def test_delete_blocked_for_order_cancellation(self) -> None:
-        """验证 delete_blocked_for_order_cancellation 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证删除阻塞用于排序对应的测试场景。"""
         tb = TrustBoundary()
         output = {"sql": "DELETE FROM orders WHERE id = 1"}
         context = {"business_action": "order_cancellation"}
@@ -129,7 +89,7 @@ class TestTrustBoundaryForbiddenOperations:
         assert result.passed is False
 
     def test_delete_and_update_blocked_for_log_entry(self) -> None:
-        """log_entry 同时禁止 DELETE 和 UPDATE。"""
+        """验证删除及更新阻塞用于日志条目对应的测试场景。"""
         tb = TrustBoundary()
 
         output_del = {"sql": "DELETE FROM logs WHERE id = 1"}
@@ -140,7 +100,7 @@ class TestTrustBoundaryForbiddenOperations:
         assert tb.validate(output_upd, context).passed is False
 
     def test_no_business_action_passes(self) -> None:
-        """没有 business_action 时不应触发禁止操作规则。"""
+        """验证无操作通过对应的测试场景。"""
         tb = TrustBoundary()
         output = {"sql": "DELETE FROM users WHERE id = 1"}
         context = {}
@@ -152,82 +112,44 @@ class TestTrustBoundaryExtractOperation:
     """操作类型提取测试。"""
 
     def test_extract_delete_operation(self) -> None:
-        """验证 extract_delete_operation 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证提取删除操作对应的测试场景。"""
         tb = TrustBoundary()
         op = tb._extract_operation({"sql": "DELETE FROM t"})
         assert op.type == "DELETE"
 
     def test_extract_truncate_operation(self) -> None:
-        """验证 extract_truncate_operation 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证提取截断操作对应的测试场景。"""
         tb = TrustBoundary()
         op = tb._extract_operation({"sql": "truncate table t"})
         assert op.type == "TRUNCATE"
 
     def test_extract_update_operation(self) -> None:
-        """验证 extract_update_operation 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证提取更新操作对应的测试场景。"""
         tb = TrustBoundary()
         op = tb._extract_operation({"sql": "UPDATE t SET x=1"})
         assert op.type == "UPDATE"
 
     def test_extract_no_sql(self) -> None:
-        """验证 extract_no_sql 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证提取无SQL对应的测试场景。"""
         tb = TrustBoundary()
         op = tb._extract_operation({})
         assert op.type == ""
 
 
 class TestCrossSourceVerifier:
-    """TestCrossSourceVerifier。
-
-    TestCrossSourceVerifier 组织一组相关测试，覆盖正常流程、边界条件和回归场景。
-
-    主要成员：
-    - 方法 test_verify_no_rule_engine()。
-    - 方法 test_verify_with_rule_engine_pass()。
-    - 方法 test_verify_with_rule_engine_violation()。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-    """
+    """验证跨来源事实核验行为的测试集合。"""
 
     @pytest.mark.asyncio
     async def test_verify_no_rule_engine(self) -> None:
-        """验证 verify_no_rule_engine 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证校验无规则引擎对应的测试场景。"""
         verifier = CrossSourceVerifier(rule_engine=None)
 
         class _Ctx:
-            """_Ctx。
+            """上下文相关组件。
 
-            _Ctx 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-            主要成员：
-            - target_tables: list[str]。
-            - action: str。
-
-            设计约束：
-            - 保持接口稳定，避免调用方依赖内部实现细节。
-            - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+            Attributes:
+                target_tables: 目标。
+                action: 操作。
             """
 
             target_tables: list[str] = ["users"]
@@ -239,78 +161,51 @@ class TestCrossSourceVerifier:
 
     @pytest.mark.asyncio
     async def test_verify_with_rule_engine_pass(self) -> None:
-        """验证 verify_with_rule_engine_pass 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证校验使用规则引擎通过对应的测试场景。"""
 
         class _MockRule:
-            """_MockRule。
+            """模拟规则相关组件。
 
-            _MockRule 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-            主要成员：
-            - description: str。
-            - 方法 check()。
-
-            设计约束：
-            - 保持接口稳定，避免调用方依赖内部实现细节。
-            - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+            Attributes:
+                description: 描述信息。
             """
 
             description: str = "Rule A"
 
             def check(self, output: dict, constraints: dict) -> bool:
-                """执行 check 对应的逻辑，并返回处理结果。
+                """检查模拟规则。
 
                 Args:
-                    output: dict，调用方传入的 output 参数。
-                    constraints: dict，调用方传入的 constraints 参数。
+                    output: 输出。
+                    constraints: 约束。
 
                 Returns:
-                    bool，函数执行后的结果。
+                    操作是否成功。
                 """
                 return True
 
         class _MockRuleEngine:
-            """_MockRuleEngine。
-
-            _MockRuleEngine 是核心运行时组件，负责状态管理、调度和跨模块协作。
-
-            主要成员：
-            - 方法 get_rules()。
-
-            设计约束：
-            - 保持接口稳定，避免调用方依赖内部实现细节。
-            - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-            """
+            """模拟规则相关组件。"""
 
             def get_rules(self, action: str) -> list:
-                """读取并返回指定数据，并返回调用方需要的结果。
+                """获取规则。
 
                 Args:
-                    action: str，调用方传入的 action 参数。
+                    action: 待执行动作名称。
 
                 Returns:
-                    list，函数执行后的结果。
+                    结果列表。
                 """
                 return [_MockRule()]
 
         verifier = CrossSourceVerifier(rule_engine=_MockRuleEngine())
 
         class _Ctx:
-            """_Ctx。
+            """上下文相关组件。
 
-            _Ctx 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-            主要成员：
-            - target_tables: list[str]。
-            - action: str。
-
-            设计约束：
-            - 保持接口稳定，避免调用方依赖内部实现细节。
-            - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+            Attributes:
+                target_tables: 目标。
+                action: 操作。
             """
 
             target_tables: list[str] = []
@@ -321,78 +216,51 @@ class TestCrossSourceVerifier:
 
     @pytest.mark.asyncio
     async def test_verify_with_rule_engine_violation(self) -> None:
-        """验证 verify_with_rule_engine_violation 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证校验使用规则引擎违规对应的测试场景。"""
 
         class _MockRule:
-            """_MockRule。
+            """模拟规则相关组件。
 
-            _MockRule 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-            主要成员：
-            - description: str。
-            - 方法 check()。
-
-            设计约束：
-            - 保持接口稳定，避免调用方依赖内部实现细节。
-            - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+            Attributes:
+                description: 描述信息。
             """
 
             description: str = "Rule B"
 
             def check(self, output: dict, constraints: dict) -> bool:
-                """执行 check 对应的逻辑，并返回处理结果。
+                """检查模拟规则。
 
                 Args:
-                    output: dict，调用方传入的 output 参数。
-                    constraints: dict，调用方传入的 constraints 参数。
+                    output: 输出。
+                    constraints: 约束。
 
                 Returns:
-                    bool，函数执行后的结果。
+                    操作是否成功。
                 """
                 return False
 
         class _MockRuleEngine:
-            """_MockRuleEngine。
-
-            _MockRuleEngine 是核心运行时组件，负责状态管理、调度和跨模块协作。
-
-            主要成员：
-            - 方法 get_rules()。
-
-            设计约束：
-            - 保持接口稳定，避免调用方依赖内部实现细节。
-            - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-            """
+            """模拟规则相关组件。"""
 
             def get_rules(self, action: str) -> list:
-                """读取并返回指定数据，并返回调用方需要的结果。
+                """获取规则。
 
                 Args:
-                    action: str，调用方传入的 action 参数。
+                    action: 待执行动作名称。
 
                 Returns:
-                    list，函数执行后的结果。
+                    结果列表。
                 """
                 return [_MockRule()]
 
         verifier = CrossSourceVerifier(rule_engine=_MockRuleEngine())
 
         class _Ctx:
-            """_Ctx。
+            """上下文相关组件。
 
-            _Ctx 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-            主要成员：
-            - target_tables: list[str]。
-            - action: str。
-
-            设计约束：
-            - 保持接口稳定，避免调用方依赖内部实现细节。
-            - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+            Attributes:
+                target_tables: 目标。
+                action: 操作。
             """
 
             target_tables: list[str] = []
@@ -443,7 +311,7 @@ class TestExtractFieldReferences:
         assert ("order_api", "status") in api_fields
 
     def test_extract_from_nested_dict(self) -> None:
-        """从嵌套 dict 中提取字段引用。"""
+        """验证提取从字典对应的测试场景。"""
         tb = TrustBoundary()
         output = {
             "analysis": {
@@ -464,7 +332,7 @@ class TestExtractFieldReferences:
         assert refs == []
 
     def test_extract_excludes_common_prefixes(self) -> None:
-        """排除常见的非 API 引用（http、self 等）。"""
+        """验证提取公共对应的测试场景。"""
         tb = TrustBoundary()
         output = {"code": "http.url and self.value should not match"}
         refs = tb._extract_field_references(output)
@@ -473,7 +341,7 @@ class TestExtractFieldReferences:
         assert ("self", "value") not in api_fields
 
     def test_extract_returns_field_ref_objects(self) -> None:
-        """返回的对象应包含 api_name 和 field 属性。"""
+        """验证提取返回字段引用对应的测试场景。"""
         tb = TrustBoundary()
         output = {"code": "user_api.email"}
         refs = tb._extract_field_references(output)
@@ -485,7 +353,7 @@ class TestExtractFieldReferences:
         assert ref.field == "email"
 
     def test_validate_with_field_references(self) -> None:
-        """validate 应检测未知字段引用。"""
+        """验证使用字段对应的测试场景。"""
         schema = {"user_api": ["id", "name", "email"]}
         tb = TrustBoundary(api_schema=schema)
         output = {"code": "user_api.email and user_api.unknown_field"}
@@ -494,7 +362,7 @@ class TestExtractFieldReferences:
         assert any("unknown_field" in err for err in result.errors)
 
     def test_validate_with_known_field_references(self) -> None:
-        """validate 应通过已知字段引用。"""
+        """验证使用字段对应的测试场景。"""
         schema = {"user_api": ["id", "name", "email"]}
         tb = TrustBoundary(api_schema=schema)
         output = {"code": "user_api.email and user_api.name"}
@@ -503,28 +371,11 @@ class TestExtractFieldReferences:
 
 
 class TestCrossSourceVerifierSchemaDict:
-    """TestCrossSourceVerifierSchemaDict。
-
-    TestCrossSourceVerifierSchemaDict 组织一组相关测试，覆盖正常流程、边界条件和回归场景。
-
-    主要成员：
-    - 方法 test_load_schema_constraints_with_dict()。
-    - 方法 test_load_schema_constraints_multiple_tables()。
-    - 方法 test_load_schema_constraints_empty_dict()。
-    - 方法 test_load_schema_constraints_table_not_found()。
-    - 方法 test_load_schema_constraints_case_insensitive()。
-    - 方法 test_load_schema_constraints_empty_tables()。
-    - 方法 test_verify_with_schema_dict_pass()。
-    - 方法 test_verify_with_schema_dict_violation()。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-    """
+    """验证字典结构模式下跨来源事实核验的测试集合。"""
 
     @pytest.mark.asyncio
     async def test_load_schema_constraints_with_dict(self) -> None:
-        """传入 schema_dict 时应返回对应约束。"""
+        """验证加载结构约束使用字典对应的测试场景。"""
         schema_dict = {
             "users": {"id": {"type": "integer", "nullable": False}},
             "orders": {"status": {"type": "varchar", "nullable": False}},
@@ -550,7 +401,7 @@ class TestCrossSourceVerifierSchemaDict:
 
     @pytest.mark.asyncio
     async def test_load_schema_constraints_empty_dict(self) -> None:
-        """未传入 schema_dict 时返回空字典。"""
+        """验证加载结构约束空字典对应的测试场景。"""
         verifier = CrossSourceVerifier()
         constraints = await verifier._load_schema_constraints(["users"])
         assert constraints == {}
@@ -580,59 +431,42 @@ class TestCrossSourceVerifierSchemaDict:
 
     @pytest.mark.asyncio
     async def test_verify_with_schema_dict_pass(self) -> None:
-        """verify 在有 schema_dict 且规则通过时返回 passed=True。"""
+        """验证校验使用结构字典通过对应的测试场景。"""
         schema_dict = {"users": {"id": {"type": "integer", "nullable": False}}}
 
         class _MockRule:
-            """_MockRule。
+            """模拟规则相关组件。
 
-            _MockRule 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-            主要成员：
-            - description: str。
-            - 方法 check()。
-
-            设计约束：
-            - 保持接口稳定，避免调用方依赖内部实现细节。
-            - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+            Attributes:
+                description: 描述信息。
             """
 
             description: str = "id must be non-null"
 
             def check(self, output: dict, constraints: dict) -> bool:
                 # 检查 output 中是否有 id 字段
-                """执行 check 对应的逻辑，并返回处理结果。
+                """检查模拟规则。
 
                 Args:
-                    output: dict，调用方传入的 output 参数。
-                    constraints: dict，调用方传入的 constraints 参数。
+                    output: 输出。
+                    constraints: 约束。
 
                 Returns:
-                    bool，函数执行后的结果。
+                    操作是否成功。
                 """
                 return "id" in output
 
         class _MockRuleEngine:
-            """_MockRuleEngine。
-
-            _MockRuleEngine 是核心运行时组件，负责状态管理、调度和跨模块协作。
-
-            主要成员：
-            - 方法 get_rules()。
-
-            设计约束：
-            - 保持接口稳定，避免调用方依赖内部实现细节。
-            - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-            """
+            """模拟规则相关组件。"""
 
             def get_rules(self, action: str) -> list:
-                """读取并返回指定数据，并返回调用方需要的结果。
+                """获取规则。
 
                 Args:
-                    action: str，调用方传入的 action 参数。
+                    action: 待执行动作名称。
 
                 Returns:
-                    list，函数执行后的结果。
+                    结果列表。
                 """
                 return [_MockRule()]
 
@@ -642,17 +476,11 @@ class TestCrossSourceVerifierSchemaDict:
         )
 
         class _Ctx:
-            """_Ctx。
+            """上下文相关组件。
 
-            _Ctx 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-            主要成员：
-            - target_tables: list[str]。
-            - action: str。
-
-            设计约束：
-            - 保持接口稳定，避免调用方依赖内部实现细节。
-            - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+            Attributes:
+                target_tables: 目标。
+                action: 操作。
             """
 
             target_tables: list[str] = ["users"]
@@ -663,58 +491,41 @@ class TestCrossSourceVerifierSchemaDict:
 
     @pytest.mark.asyncio
     async def test_verify_with_schema_dict_violation(self) -> None:
-        """verify 在规则违反时返回 passed=False。"""
+        """验证校验使用结构字典违规对应的测试场景。"""
         schema_dict = {"users": {"id": {"type": "integer", "nullable": False}}}
 
         class _MockRule:
-            """_MockRule。
+            """模拟规则相关组件。
 
-            _MockRule 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-            主要成员：
-            - description: str。
-            - 方法 check()。
-
-            设计约束：
-            - 保持接口稳定，避免调用方依赖内部实现细节。
-            - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+            Attributes:
+                description: 描述信息。
             """
 
             description: str = "id must be non-null"
 
             def check(self, output: dict, constraints: dict) -> bool:
-                """执行 check 对应的逻辑，并返回处理结果。
+                """检查模拟规则。
 
                 Args:
-                    output: dict，调用方传入的 output 参数。
-                    constraints: dict，调用方传入的 constraints 参数。
+                    output: 输出。
+                    constraints: 约束。
 
                 Returns:
-                    bool，函数执行后的结果。
+                    操作是否成功。
                 """
                 return False
 
         class _MockRuleEngine:
-            """_MockRuleEngine。
-
-            _MockRuleEngine 是核心运行时组件，负责状态管理、调度和跨模块协作。
-
-            主要成员：
-            - 方法 get_rules()。
-
-            设计约束：
-            - 保持接口稳定，避免调用方依赖内部实现细节。
-            - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-            """
+            """模拟规则相关组件。"""
 
             def get_rules(self, action: str) -> list:
-                """读取并返回指定数据，并返回调用方需要的结果。
+                """获取规则。
 
                 Args:
-                    action: str，调用方传入的 action 参数。
+                    action: 待执行动作名称。
 
                 Returns:
-                    list，函数执行后的结果。
+                    结果列表。
                 """
                 return [_MockRule()]
 
@@ -724,17 +535,11 @@ class TestCrossSourceVerifierSchemaDict:
         )
 
         class _Ctx:
-            """_Ctx。
+            """上下文相关组件。
 
-            _Ctx 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-            主要成员：
-            - target_tables: list[str]。
-            - action: str。
-
-            设计约束：
-            - 保持接口稳定，避免调用方依赖内部实现细节。
-            - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+            Attributes:
+                target_tables: 目标。
+                action: 操作。
             """
 
             target_tables: list[str] = ["users"]

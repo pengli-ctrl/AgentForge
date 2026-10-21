@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_tenant_quota_repository。
+"""租户配额仓储测试模块。
 
 本测试模块验证 test_tenant_quota_repository 覆盖的业务路径、边界条件和回归场景。
 
@@ -25,14 +25,14 @@ from agentforge.platform.infrastructure.sqlalchemy_tenant_quota_repository impor
 
 
 def _quota(tenant_id: str, limit: float) -> TenantQuota:
-    """执行 _quota 对应的逻辑，并返回处理结果。
+    """处理配额。
 
     Args:
-        tenant_id: str，调用方传入的 tenant_id 参数。
-        limit: float，调用方传入的 limit 参数。
+        tenant_id: 租户 ID，用于数据隔离。
+        limit: 返回记录的最大数量。
 
     Returns:
-        TenantQuota，函数执行后的结果。
+        租户配额结果。
     """
     return TenantQuota(
         tenant_id=tenant_id,
@@ -44,10 +44,10 @@ def _quota(tenant_id: str, limit: float) -> TenantQuota:
 
 
 def _sqlite_factory():
-    """执行 _sqlite_factory 对应的逻辑，并返回处理结果。
+    """处理SQLite工厂。
 
     Returns:
-        None，函数执行后的结果。
+        处理结果。
     """
     engine = create_async_engine(
         "sqlite+aiosqlite://",
@@ -58,11 +58,7 @@ def _sqlite_factory():
 
 
 async def test_memory_quota_upsert_get_delete() -> None:
-    """验证 memory_quota_upsert_get_delete 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证记忆配额新建或更新获取删除对应的测试场景。"""
     repo = MemoryTenantQuotaRepository()
     await repo.upsert(_quota("t1", 100.0))
     assert (await repo.get("t1")).monthly_limit == 100.0
@@ -74,11 +70,7 @@ async def test_memory_quota_upsert_get_delete() -> None:
 
 
 async def test_sqlalchemy_quota_roundtrip() -> None:
-    """验证 sqlalchemy_quota_roundtrip 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证SQLAlchemy配额往返对应的测试场景。"""
     engine, session_factory = _sqlite_factory()
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
@@ -96,11 +88,7 @@ async def test_sqlalchemy_quota_roundtrip() -> None:
 
 
 async def test_quota_usage_status() -> None:
-    """验证 quota_usage_status 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证配额用量状态对应的测试场景。"""
     quota = _quota("t1", 100.0)
     assert quota.usage_status(50.0)["status"] == "active"
     assert quota.usage_status(85.0)["status"] == "warning"

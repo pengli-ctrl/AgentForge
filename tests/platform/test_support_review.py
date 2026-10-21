@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_support_review。
+"""客服审核测试模块。
 
 本测试模块验证 test_support_review 覆盖的业务路径、边界条件和回归场景。
 
@@ -7,40 +7,42 @@
 - 所有租户相关数据都必须携带 tenant_id 并保持隔离。
 - 关键执行路径应保留日志、审计或链路追踪信息。
 -
-主要函数：create_low_risk_ticket、test_accept_reviewed_draft_and_publish_it、test_edit_reviewed_draft_before_publish、test_reject_reviewed_draft_and_keep_tenant_isolation。
+主要函数：create_low_risk_ticket、test_accept_reviewed_draft_and_publish_it、test_edit_reviewed_draft_b
+    efore_publish、test_reject_reviewed_draft_and_keep_tenant_isolation。
 """
 
 import asyncio
 
 from fastapi.testclient import TestClient
 
-from agentforge.platform.api.app import create_platform_app
 from agentforge.platform.runtime import build_memory_container
+from tests.platform.support_fixtures import configure_memory_support, create_app_with_support
 
 
-def create_low_risk_ticket(container, message_id: str):
-    """创建新的业务对象，并返回调用方需要的结果。
+def create_low_risk_ticket(container, support, message_id: str):
+    """创建低风险工单。
 
     Args:
-        container: Any，调用方传入的 container 参数。
-        message_id: str，调用方传入的 message_id 参数。
+        container: 服务容器。
+        support: 客服。
+        message_id: 消息 ID。
 
     Returns:
-        None，函数执行后的结果。
+        处理结果。
     """
 
     async def setup():
-        """执行 setup 对应的逻辑，并返回处理结果。
+        """装配测试环境。
 
         Returns:
-            None，函数执行后的结果。
+            处理结果。
         """
         await container.knowledge_service.ingest_document(
             tenant_id="tenant-1",
             title="Product usage",
             content="How to use this product: open the dashboard and follow the setup guide.",
         )
-        return await container.processing_service.process_event(
+        return await support.processing_service.process_event(
             {
                 "tenant_id": "tenant-1",
                 "source": "feishu",
@@ -54,14 +56,11 @@ def create_low_risk_ticket(container, message_id: str):
 
 
 def test_accept_reviewed_draft_and_publish_it() -> None:
-    """验证 accept_reviewed_draft_and_publish_it 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证已审核草稿及发布对应的测试场景。"""
     container = build_memory_container()
-    ticket = create_low_risk_ticket(container, "review-msg-1")
-    client = TestClient(create_platform_app(container))
+    support = configure_memory_support(container)
+    ticket = create_low_risk_ticket(container, support, "review-msg-1")
+    client = TestClient(create_app_with_support(container, support))
 
     reviewed = client.post(
         f"/v1/tickets/{ticket.ticket_id}/review",
@@ -82,20 +81,17 @@ def test_accept_reviewed_draft_and_publish_it() -> None:
     assert published.status_code == 200
     assert published.json()["status"] == "published"
     assert (
-        container.reply_connector.messages[0]["text"]
+        support.reply_connector.messages[0]["text"]
         == "Draft response generated from approved knowledge."
     )
 
 
 def test_edit_reviewed_draft_before_publish() -> None:
-    """验证 edit_reviewed_draft_before_publish 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证已审核草稿之前发布对应的测试场景。"""
     container = build_memory_container()
-    ticket = create_low_risk_ticket(container, "review-msg-2")
-    client = TestClient(create_platform_app(container))
+    support = configure_memory_support(container)
+    ticket = create_low_risk_ticket(container, support, "review-msg-2")
+    client = TestClient(create_app_with_support(container, support))
 
     reviewed = client.post(
         f"/v1/tickets/{ticket.ticket_id}/review",
@@ -118,20 +114,17 @@ def test_edit_reviewed_draft_before_publish() -> None:
     )
     assert published.status_code == 200
     assert (
-        container.reply_connector.messages[0]["text"]
+        support.reply_connector.messages[0]["text"]
         == "Open the dashboard and complete the setup guide."
     )
 
 
 def test_reject_reviewed_draft_and_keep_tenant_isolation() -> None:
-    """验证 reject_reviewed_draft_and_keep_tenant_isolation 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证拒绝已审核草稿及保留租户隔离对应的测试场景。"""
     container = build_memory_container()
-    ticket = create_low_risk_ticket(container, "review-msg-3")
-    client = TestClient(create_platform_app(container))
+    support = configure_memory_support(container)
+    ticket = create_low_risk_ticket(container, support, "review-msg-3")
+    client = TestClient(create_app_with_support(container, support))
 
     rejected = client.post(
         f"/v1/tickets/{ticket.ticket_id}/review",

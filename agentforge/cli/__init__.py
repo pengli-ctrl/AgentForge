@@ -1,4 +1,4 @@
-"""AgentForge CLI 模块 — 命令行入口。"""
+"""包公共导出。"""
 
 from agentforge.cli.main import app
 

@@ -1,13 +1,4 @@
-"""AgentForge 任务存储层：trace_store。
-
-本模块负责 trace_store 相关能力，是 任务存储层 的组成部分。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
-- 关键路径应保留日志、指标或链路追踪信息。
-- 主要类：TraceStore。
-"""
+"""链路存储模块。"""
 
 from __future__ import annotations
 
@@ -20,34 +11,23 @@ logger = logging.getLogger(__name__)
 
 
 class TraceStore:
-    """Trace 数据存储 — 记录和查询事件的完整链路。
-
-    支持两种后端：
-    - in-memory（默认）：使用列表存储，适合开发/测试
-    - MySQL（生产环境）：通过数据库连接池操作
-
-    Args:
-        db_pool: 数据库连接池（可选，不传则使用内存存储）。
-    """
+    """链路领域组件。"""
 
     def __init__(self, db_pool: Any = None) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 TraceStore。
 
         Args:
-            db_pool: Any，调用方传入的 db_pool 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            db_pool: 数据库。
         """
         self.db_pool = db_pool
         self._events: list[TraceEvent] = []
         self._spans: list[TraceSpan] = []
 
     async def save_event(self, event: TraceEvent) -> None:
-        """保存一个 Trace 事件。
+        """保存事件。
 
         Args:
-            event: 要保存的 TraceEvent。
+            event: 待处理事件。
         """
         if self.db_pool:
             await self._db_save_event(event)
@@ -62,10 +42,10 @@ class TraceStore:
         )
 
     async def save_span(self, span: TraceSpan) -> None:
-        """保存一个 Trace Span。
+        """保存链路段。
 
         Args:
-            span: 要保存的 TraceSpan。
+            span: 链路片段对象。
         """
         if self.db_pool:
             await self._db_save_span(span)
@@ -80,13 +60,13 @@ class TraceStore:
         )
 
     async def get_trace_events(self, trace_id: str) -> list[TraceEvent]:
-        """查询指定 Trace 的所有事件。
+        """获取链路事件。
 
         Args:
-            trace_id: Trace ID。
+            trace_id: 链路追踪 ID。
 
         Returns:
-            按时间排序的 TraceEvent 列表。
+            结果列表。
         """
         if self.db_pool:
             return await self._db_get_events(trace_id)
@@ -96,13 +76,13 @@ class TraceStore:
         return events
 
     async def get_trace_spans(self, trace_id: str) -> list[TraceSpan]:
-        """查询指定 Trace 的所有 Span。
+        """获取链路。
 
         Args:
-            trace_id: Trace ID。
+            trace_id: 链路追踪 ID。
 
         Returns:
-            按开始时间排序的 TraceSpan 列表。
+            结果列表。
         """
         if self.db_pool:
             return await self._db_get_spans(trace_id)
@@ -112,13 +92,13 @@ class TraceStore:
         return spans
 
     async def get_trace_summary(self, trace_id: str) -> dict[str, Any]:
-        """获取 Trace 摘要信息。
+        """读取链路摘要。
 
         Args:
-            trace_id: Trace ID。
+            trace_id: 链路追踪 ID。
 
         Returns:
-            包含事件数、Span 数、总耗时、Agent 列表的摘要字典。
+            结构化结果字典。
         """
         events = await self.get_trace_events(trace_id)
         spans = await self.get_trace_spans(trace_id)
@@ -138,10 +118,10 @@ class TraceStore:
         }
 
     async def cleanup(self, trace_id: str) -> None:
-        """清理指定 Trace 的所有数据。
+        """清理链路。
 
         Args:
-            trace_id: Trace ID。
+            trace_id: 链路追踪 ID。
         """
         if self.db_pool:
             await self._db_cleanup(trace_id)
@@ -152,7 +132,11 @@ class TraceStore:
     # --- MySQL 后端方法 ---
 
     async def _db_save_event(self, event: TraceEvent) -> None:
-        """MySQL 后端：保存事件。"""
+        """处理数据库保存事件。
+
+        Args:
+            event: 待处理事件。
+        """
         d = event.to_dict()
         async with self.db_pool.acquire() as conn:
             await conn.execute(
@@ -177,7 +161,11 @@ class TraceStore:
             )
 
     async def _db_save_span(self, span: TraceSpan) -> None:
-        """MySQL 后端：保存 Span。"""
+        """处理数据库保存链路片段。
+
+        Args:
+            span: 链路片段对象。
+        """
         d = span.to_dict()
         async with self.db_pool.acquire() as conn:
             await conn.execute(
@@ -200,7 +188,14 @@ class TraceStore:
             )
 
     async def _db_get_events(self, trace_id: str) -> list[TraceEvent]:
-        """MySQL 后端：查询事件。"""
+        """处理数据库获取事件。
+
+        Args:
+            trace_id: 链路追踪 ID。
+
+        Returns:
+            结果列表。
+        """
         async with self.db_pool.acquire() as conn:
             rows = await conn.fetchall(
                 "SELECT * FROM trace_events WHERE trace_id = %s " "ORDER BY timestamp ASC",
@@ -209,7 +204,14 @@ class TraceStore:
             return [_row_to_event(row) for row in rows]
 
     async def _db_get_spans(self, trace_id: str) -> list[TraceSpan]:
-        """MySQL 后端：查询 Span。"""
+        """处理数据库获取。
+
+        Args:
+            trace_id: 链路追踪 ID。
+
+        Returns:
+            结果列表。
+        """
         async with self.db_pool.acquire() as conn:
             rows = await conn.fetchall(
                 "SELECT * FROM trace_spans WHERE trace_id = %s " "ORDER BY start_time ASC",
@@ -218,14 +220,25 @@ class TraceStore:
             return [_row_to_span(row) for row in rows]
 
     async def _db_cleanup(self, trace_id: str) -> None:
-        """MySQL 后端：清理 Trace 数据。"""
+        """处理数据库清理。
+
+        Args:
+            trace_id: 链路追踪 ID。
+        """
         async with self.db_pool.acquire() as conn:
             await conn.execute("DELETE FROM trace_events WHERE trace_id = %s", (trace_id,))
             await conn.execute("DELETE FROM trace_spans WHERE trace_id = %s", (trace_id,))
 
 
 def _row_to_event(row: Any) -> TraceEvent:
-    """将数据库行转换为 TraceEvent。"""
+    """处理记录到事件。
+
+    Args:
+        row: 记录。
+
+    Returns:
+        链路事件结果。
+    """
     data = dict(row) if isinstance(row, dict) else dict(row._asdict())
     return TraceEvent(
         event_id=data.get("event_id", ""),
@@ -244,7 +257,14 @@ def _row_to_event(row: Any) -> TraceEvent:
 
 
 def _row_to_span(row: Any) -> TraceSpan:
-    """将数据库行转换为 TraceSpan。"""
+    """处理记录到链路片段。
+
+    Args:
+        row: 记录。
+
+    Returns:
+        链路链路片段结果。
+    """
     data = dict(row) if isinstance(row, dict) else dict(row._asdict())
     return TraceSpan(
         span_id=data.get("span_id", ""),

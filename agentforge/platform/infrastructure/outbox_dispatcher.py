@@ -1,62 +1,83 @@
-"""AgentForge 平台基础设施层：outbox_dispatcher。
-
-本模块负责 outbox_dispatcher 相关的平台能力，是 平台基础设施层 的组成部分。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：OutboxDispatcher。
-"""
+"""Outbox调度器模块。"""
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable, Mapping
+
 from agentforge.platform.application.ports import EventPublisher
+from agentforge.platform.domain.events import EventEnvelope
 from agentforge.platform.infrastructure.outbox_store import SQLAlchemyOutboxStore
 
 
 class OutboxDispatcher:
-    """OutboxDispatcher。
+    """Outbox调度器相关组件。"""
 
-    OutboxDispatcher 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - 方法 dispatch_once()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
-
-    def __init__(self, store: SQLAlchemyOutboxStore, publisher: EventPublisher) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+    def __init__(
+        self,
+        store: SQLAlchemyOutboxStore,
+        publisher: EventPublisher,
+        event_handlers: Mapping[str, Callable[[EventEnvelope], Awaitable[None]]] | None = None,
+    ) -> None:
+        """初始化 OutboxDispatcher。
 
         Args:
-            store: SQLAlchemyOutboxStore，调用方传入的 store 参数。
-            publisher: EventPublisher，调用方传入的 publisher 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            store: 状态存储实例。
+            publisher: 发布器。
+            event_handlers: 事件。
         """
         self._store = store
         self._publisher = publisher
+        self._event_handlers = dict(event_handlers or {})
 
     async def dispatch_once(self, limit: int = 100) -> int:
-        """执行 dispatch_once 对应的逻辑，并返回处理结果。
+        """分发一次。
 
         Args:
-            limit: int，调用方传入的 limit 参数。
+            limit: 返回记录的最大数量。
 
         Returns:
-            int，函数执行后的结果。
+            整数结果。
         """
         events = await self._store.fetch_pending(limit=limit)
         published = 0
         for event in events:
+            handler = self._event_handlers.get(event.event_type)
+            handler_name = _handler_name(handler)
+            claimed_here = False
             try:
+                if handler is not None:
+                    claim = await self._store.claim_handler(event.event_id, handler_name)
+                    if claim == "busy":
+                        continue
+                    if claim == "claimed":
+                        claimed_here = True
+                        await handler(event)
+                        await self._store.complete_handler(event.event_id, handler_name)
                 await self._publisher.publish(event)
                 await self._store.mark_published(event.event_id)
                 published += 1
             except Exception as exc:
+                if claimed_here and handler is not None:
+                    await self._store.release_handler(
+                        event.event_id,
+                        handler_name,
+                        error=str(exc),
+                    )
                 await self._store.mark_failed(event.event_id, str(exc))
         return published
+
+
+def _handler_name(handler: Callable[[EventEnvelope], Awaitable[None]] | None) -> str:
+    """处理器名称。
+
+    Args:
+        handler: 处理器。
+
+    Returns:
+        字符串结果。
+    """
+    if handler is None:
+        return ""
+    module = getattr(handler, "__module__", "unknown")
+    qualname = getattr(handler, "__qualname__", "handler")
+    return f"{module}.{qualname}"

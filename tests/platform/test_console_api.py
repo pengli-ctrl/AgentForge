@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_console_api。
+"""控制台API测试模块。
 
 本测试模块验证 test_console_api 覆盖的业务路径、边界条件和回归场景。
 
@@ -22,10 +22,10 @@ from agentforge.platform.runtime import build_memory_container
 
 
 def _client():
-    """执行 _client 对应的逻辑，并返回处理结果。
+    """处理客户端。
 
     Returns:
-        None，函数执行后的结果。
+        处理结果。
     """
     container = build_memory_container()
     app = create_platform_app(container)
@@ -33,11 +33,7 @@ def _client():
 
 
 def test_quota_crud() -> None:
-    """验证 quota_crud 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证配额增删改查对应的测试场景。"""
     container, client = _client()
     r = client.put(
         "/v1/quotas/t1",
@@ -64,11 +60,7 @@ def test_quota_crud() -> None:
 
 
 def test_console_overview() -> None:
-    """验证 console_overview 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证控制台总览对应的测试场景。"""
     container, client = _client()
     client.put(
         "/v1/quotas/t1",

@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_observability_trace。
+"""链路测试模块。
 
 本测试模块验证 test_observability_trace 覆盖的业务路径、边界条件和回归场景。
 
@@ -7,7 +7,8 @@
 - 所有租户相关数据都必须携带 tenant_id 并保持隔离。
 - 关键执行路径应保留日志、审计或链路追踪信息。
 -
-主要函数：test_trace_llm_call_recorded、test_trace_recorder_fifo_cap、test_trace_recorder_summary_metrics、test_dashboard_traces_endpoint、test_support_processing_propagates_trace_id_to_recorder。
+主要函数：test_trace_llm_call_recorded、test_trace_recorder_fifo_cap、test_trace_recorder_summary_metri
+    cs、test_dashboard_traces_endpoint、test_support_processing_propagates_trace_id_to_recorder。
 """
 
 from __future__ import annotations
@@ -16,22 +17,19 @@ import pytest
 from fastapi.testclient import TestClient
 
 from agentforge.platform.api.app import create_platform_app
-from agentforge.platform.application.support_ticket_processing_service import (
-    SupportTicketProcessingService,
-)
 from agentforge.platform.domain.model import ModelRequest
 from agentforge.platform.infrastructure.llm.static_gateway import StaticModelGateway
+from agentforge.platform.modules.support.application.processing import (
+    SupportTicketProcessingService,
+)
 from agentforge.platform.observability.trace_recorder import TraceRecord, TraceRecorder
 from agentforge.platform.runtime import build_memory_container
+from tests.platform.support_fixtures import configure_memory_support
 
 
 @pytest.mark.asyncio
 async def test_trace_llm_call_recorded() -> None:
-    """验证 trace_llm_call_recorded 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证链路LLM调用已记录对应的测试场景。"""
     recorder = TraceRecorder()
     gateway = StaticModelGateway(recorder=recorder)
 
@@ -54,11 +52,7 @@ async def test_trace_llm_call_recorded() -> None:
 
 @pytest.mark.asyncio
 async def test_trace_recorder_fifo_cap() -> None:
-    """验证 trace_recorder_fifo_cap 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证链路记录器对应的测试场景。"""
     recorder = TraceRecorder(max_records=3)
     for i in range(5):
         recorder.record(
@@ -79,11 +73,7 @@ async def test_trace_recorder_fifo_cap() -> None:
 
 @pytest.mark.asyncio
 async def test_trace_recorder_summary_metrics() -> None:
-    """验证 trace_recorder_summary_metrics 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证链路记录器摘要指标对应的测试场景。"""
     recorder = TraceRecorder()
     recorder.record(
         TraceRecord(
@@ -120,11 +110,7 @@ async def test_trace_recorder_summary_metrics() -> None:
 
 @pytest.mark.asyncio
 async def test_dashboard_traces_endpoint() -> None:
-    """验证 dashboard_traces_endpoint 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证看板链路端点对应的测试场景。"""
     recorder = TraceRecorder()
     recorder.record(
         TraceRecord(
@@ -156,15 +142,12 @@ async def test_dashboard_traces_endpoint() -> None:
 
 @pytest.mark.asyncio
 async def test_support_processing_propagates_trace_id_to_recorder() -> None:
-    """验证 support_processing_propagates_trace_id_to_recorder 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证客服处理传播链路ID到记录器对应的测试场景。"""
     container = build_memory_container()
+    support = configure_memory_support(container)
     recorder = container.trace_recorder
     assert recorder is not None
-    service: SupportTicketProcessingService = container.processing_service
+    service: SupportTicketProcessingService = support.processing_service
 
     # seed 一条 tenant-a 的知识文档，让检索命中并真正触达 LLM 调用
     from agentforge.platform.domain.knowledge import KnowledgeChunk, KnowledgeDocument

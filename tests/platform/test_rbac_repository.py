@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_rbac_repository。
+"""RBAC仓储测试模块。
 
 本测试模块验证 test_rbac_repository 覆盖的业务路径、边界条件和回归场景。
 
@@ -7,7 +7,8 @@
 - 所有租户相关数据都必须携带 tenant_id 并保持隔离。
 - 关键执行路径应保留日志、审计或链路追踪信息。
 -
-主要函数：create_async_session_factory、test_memory_rbac_roundtrip_and_tenancy、test_sqlalchemy_rbac_roundtrip_and_tenancy、test_sqlalchemy_role_and_assignment。
+主要函数：create_async_session_factory、test_memory_rbac_roundtrip_and_tenancy、test_sqlalchemy_rbac_ro
+    undtrip_and_tenancy、test_sqlalchemy_role_and_assignment。
 """
 
 from __future__ import annotations
@@ -18,16 +19,14 @@ from sqlalchemy.pool import StaticPool
 from agentforge.platform.domain.rbac import Role, RoleAssignment
 from agentforge.platform.infrastructure.db.base import Base
 from agentforge.platform.infrastructure.memory_rbac_repository import MemoryRbacRepository
-from agentforge.platform.infrastructure.sqlalchemy_rbac_repository import (
-    SQLAlchemyRbacRepository,
-)
+from agentforge.platform.infrastructure.sqlalchemy_rbac_repository import SQLAlchemyRbacRepository
 
 
 def create_async_session_factory():
-    """创建新的业务对象，并返回调用方需要的结果。
+    """创建异步会话工厂。
 
     Returns:
-        None，函数执行后的结果。
+        处理结果。
     """
     engine = create_async_engine(
         "sqlite+aiosqlite://",
@@ -38,15 +37,15 @@ def create_async_session_factory():
 
 
 def _role(role_id: str, tenant_id: str, name: str) -> Role:
-    """执行 _role 对应的逻辑，并返回处理结果。
+    """处理角色。
 
     Args:
-        role_id: str，调用方传入的 role_id 参数。
-        tenant_id: str，调用方传入的 tenant_id 参数。
-        name: str，调用方传入的 name 参数。
+        role_id: 角色 ID。
+        tenant_id: 租户 ID，用于数据隔离。
+        name: 资源或对象名称。
 
     Returns:
-        Role，函数执行后的结果。
+        角色结果。
     """
     return Role(
         role_id=role_id,
@@ -59,11 +58,7 @@ def _role(role_id: str, tenant_id: str, name: str) -> Role:
 
 
 async def test_memory_rbac_roundtrip_and_tenancy() -> None:
-    """验证 memory_rbac_roundtrip_and_tenancy 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证记忆RBAC往返及租户隔离对应的测试场景。"""
     repo = MemoryRbacRepository()
     await repo.save_role(_role("r1", "t1", "support_admin"))
     await repo.save_role(_role("r2", "t2", "support_agent"))
@@ -74,11 +69,7 @@ async def test_memory_rbac_roundtrip_and_tenancy() -> None:
 
 
 async def test_sqlalchemy_rbac_roundtrip_and_tenancy() -> None:
-    """验证 sqlalchemy_rbac_roundtrip_and_tenancy 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证SQLAlchemyRBAC往返及租户隔离对应的测试场景。"""
     engine, session_factory = create_async_session_factory()
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
@@ -99,11 +90,7 @@ async def test_sqlalchemy_rbac_roundtrip_and_tenancy() -> None:
 
 
 async def test_sqlalchemy_role_and_assignment() -> None:
-    """验证 sqlalchemy_role_and_assignment 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证SQLAlchemy角色及分配对应的测试场景。"""
     engine, session_factory = create_async_session_factory()
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)

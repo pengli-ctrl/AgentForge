@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_connector_api。
+"""连接器API测试模块。
 
 本测试模块验证 test_connector_api 覆盖的业务路径、边界条件和回归场景。
 
@@ -7,7 +7,8 @@
 - 所有租户相关数据都必须携带 tenant_id 并保持隔离。
 - 关键执行路径应保留日志、审计或链路追踪信息。
 -
-主要函数：test_list_connectors_empty、test_get_connector_404、test_connector_health_404、test_invoke_connector_not_registered_404。
+主要函数：test_list_connectors_empty、test_get_connector_404、test_connector_health_404、test_invoke_con
+    nector_not_registered_404。
 """
 
 import uuid
@@ -21,10 +22,10 @@ from agentforge.platform.domain.connector import ConnectorSpec
 
 
 def _seed_registry() -> ConnectorRegistry:
-    """执行 _seed_registry 对应的逻辑，并返回处理结果。
+    """初始化注册表。
 
     Returns:
-        ConnectorRegistry，函数执行后的结果。
+        连接器注册表结果。
     """
     registry = ConnectorRegistry()
     adapter = OpenAPIAdapter(
@@ -45,20 +46,16 @@ def _seed_registry() -> ConnectorRegistry:
 
 
 def _make_client() -> TestClient:
-    """执行 _make_client 对应的逻辑，并返回处理结果。
+    """构造客户端。
 
     Returns:
-        TestClient，函数执行后的结果。
+        测试客户端结果。
     """
     return TestClient(create_platform_app())
 
 
 def test_list_connectors_empty() -> None:
-    """验证 list_connectors_empty 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证查询连接器空对应的测试场景。"""
     client = _make_client()
     resp = client.get("/v1/connectors")
     assert resp.status_code == 200
@@ -66,33 +63,21 @@ def test_list_connectors_empty() -> None:
 
 
 def test_get_connector_404() -> None:
-    """验证 get_connector_404 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证获取连接器资源不存在对应的测试场景。"""
     client = _make_client()
     resp = client.get("/v1/connectors/does-not-exist")
     assert resp.status_code == 404
 
 
 def test_connector_health_404() -> None:
-    """验证 connector_health_404 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证连接器健康资源不存在对应的测试场景。"""
     client = _make_client()
     resp = client.get("/v1/connectors/does-not-exist/health")
     assert resp.status_code == 404
 
 
 def test_invoke_connector_not_registered_404() -> None:
-    """验证 invoke_connector_not_registered_404 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证调用连接器不已注册资源不存在对应的测试场景。"""
     client = _make_client()
     resp = client.post(
         "/v1/connectors/nope/invoke?action=ping&tenant_id=t1",

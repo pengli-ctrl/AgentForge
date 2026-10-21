@@ -1,24 +1,4 @@
-"""
-BM25 + FAISS 混合检索器 — 兼顾关键词精确匹配和语义相似度。
-
-双路检索 + RRF（Reciprocal Rank Fusion）融合：
-- BM25 路径：擅长精确关键词匹配（函数名、类名、变量名）
-- FAISS 路径：擅长语义相似度匹配（"如何处理非法字符" → sanitize_input）
-- RRF 融合：无需训练，纯基于排名融合
-
-效果对比：
-| 检索方案                 | Recall@10 | Recall@20 | 幻觉率 |
-|-------------------------|-----------|-----------|--------|
-| 纯 FAISS 向量检索        | 0.65      | 0.72      | 26%    |
-| 纯 BM25 检索             | 0.57      | 0.64      | 31%    |
-| BM25 + FAISS + RRF       | 0.79      | 0.86      | 21%    |
-
-为什么用 RRF 而不是 LTR（Learning to Rank）：
-1. 训练数据不够（只有 50 条 Golden Dataset）
-2. RRF 无需训练，纯基于排名融合
-3. 工程简单，维护成本极低
-4. 效果够用，Recall@10 提升 12 个百分点
-"""
+"""混合模块。"""
 
 from __future__ import annotations
 
@@ -34,21 +14,7 @@ RRF_K = 60
 
 
 class HybridRetriever:
-    """BM25 + FAISS 混合检索器 — 双路检索 + RRF 融合。
-
-    两条检索路径并行执行，通过 RRF 融合排名：
-    - BM25：关键词精确匹配，擅长处理函数名、类名等精确查询
-    - FAISS：向量语义检索，擅长处理自然语言描述的查询
-
-    RRF 融合公式：RRF_score(d) = Σ 1/(k + rank_r(d))
-    其中 k=60 是常数，rank_r(d) 是文档 d 在第 r 路检索中的排名。
-
-    Args:
-        bm25_index: BM25 索引实例。
-        faiss_index: FAISS 索引实例。
-        embed_model: 向量编码模型。
-        top_k: 返回的 Top-K 结果数。
-    """
+    """混合相关组件。"""
 
     def __init__(
         self,
@@ -57,16 +23,13 @@ class HybridRetriever:
         embed_model: Any = None,
         top_k: int = 20,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 HybridRetriever。
 
         Args:
-            bm25_index: Any，调用方传入的 bm25_index 参数。
-            faiss_index: Any，调用方传入的 faiss_index 参数。
-            embed_model: Any，调用方传入的 embed_model 参数。
-            top_k: int，调用方传入的 top_k 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            bm25_index: 索引。
+            faiss_index: 索引。
+            embed_model: 向量化模型。
+            top_k: 返回结果数量上限。
         """
         self.bm25_index = bm25_index
         self.faiss_index = faiss_index
@@ -74,20 +37,14 @@ class HybridRetriever:
         self.top_k = top_k
 
     def search(self, query: str, top_k: int | None = None) -> list[int]:
-        """BM25 + FAISS 混合检索，RRF 融合。
-
-        执行流程：
-        1. BM25 关键词检索，取 Top-2K
-        2. FAISS 向量检索，取 Top-2K
-        3. RRF 融合两路结果排名
-        4. 返回融合后的 Top-K
+        """搜索与查询条件匹配的数据。
 
         Args:
-            query: 查询字符串。
-            top_k: 返回结果数（覆盖默认值）。
+            query: 检索或筛选查询。
+            top_k: 返回结果数量上限。
 
         Returns:
-            融合排序后的文档索引列表。
+            结果列表。
         """
         k = top_k or self.top_k
 
@@ -123,11 +80,11 @@ class HybridRetriever:
         """BM25 关键词检索。
 
         Args:
-            query: 查询字符串。
-            top_n: 返回结果数。
+            query: 检索或筛选查询。
+            top_n: 输入参数。
 
         Returns:
-            {文档索引: 排名} 字典。
+            结构化结果字典。
         """
         if self.bm25_index is None:
             return {}
@@ -137,14 +94,14 @@ class HybridRetriever:
         return {int(idx): rank for rank, idx in enumerate(bm25_top_indices)}
 
     def _faiss_search(self, query: str, top_n: int) -> dict[int, int]:
-        """FAISS 向量检索。
+        """处理搜索。
 
         Args:
-            query: 查询字符串。
-            top_n: 返回结果数。
+            query: 检索或筛选查询。
+            top_n: 输入参数。
 
         Returns:
-            {文档索引: 排名} 字典。
+            结构化结果字典。
         """
         if self.faiss_index is None or self.embed_model is None:
             return {}
@@ -158,19 +115,14 @@ class HybridRetriever:
         bm25_rank: dict[int, int],
         faiss_rank: dict[int, int],
     ) -> dict[int, float]:
-        """RRF（Reciprocal Rank Fusion）排名融合。
-
-        公式：RRF_score(d) = Σ 1/(k + rank_r(d))
-
-        其中 k=60 是 RRF 常数，rank_r(d) 是文档 d 在第 r 路检索中的排名。
-        RRF 无需训练数据，纯基于排名融合，在数据量有限的场景下是最优选择。
+        """处理倒数排名融合。
 
         Args:
-            bm25_rank: BM25 检索结果排名 {文档索引: 排名}。
-            faiss_rank: FAISS 检索结果排名 {文档索引: 排名}。
+            bm25_rank: 排名。
+            faiss_rank: 排名。
 
         Returns:
-            {文档索引: 融合分数} 字典。
+            结构化结果字典。
         """
         fused_scores: dict[int, float] = {}
         all_indices = set(bm25_rank.keys()) | set(faiss_rank.keys())
