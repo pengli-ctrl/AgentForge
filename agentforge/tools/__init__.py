@@ -1,4 +1,4 @@
-"""AgentForge 工具模块 — 工具统一接口和实现。"""
+"""包公共导出。"""
 
 from agentforge.core.base_tool import BaseTool, ToolRegistry, ToolResult
 from agentforge.tools.code_review_tool import CodeReviewTool

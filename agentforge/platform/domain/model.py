@@ -1,13 +1,4 @@
-"""AgentForge 平台领域模型层：model。
-
-本模块定义 model 领域模型，约束业务状态、输入输出结构和跨层数据契约。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：ModelRequest、ModelResponse、DraftResult、ModelProfile。
-"""
+"""模型模块。"""
 
 from __future__ import annotations
 
@@ -17,21 +8,14 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ModelRequest(BaseModel):
-    """ModelRequest。
+    """模型请求领域组件。
 
-    ModelRequest 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - system_prompt: str。
-    - user_prompt: str。
-    - model: str。
-    - temperature: float。
-    - metadata: dict[str, Any]。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        system_prompt: 系统提示词。
+        user_prompt: 用户提示词。
+        model: 模型。
+        temperature: 模型采样温度。
+        metadata: 附加元数据。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -44,25 +28,18 @@ class ModelRequest(BaseModel):
 
 
 class ModelResponse(BaseModel):
-    """ModelResponse。
+    """模型响应领域组件。
 
-    ModelResponse 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - content: str。
-    - model: str。
-    - provider: str。
-    - input_tokens: int。
-    - output_tokens: int。
-    - cost_amount: float。
-    - latency_ms: float。
-    - citations: list[str]。
-    - metadata: dict[str, Any]。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        content: 写入内容。
+        model: 模型。
+        provider: 提供方。
+        input_tokens: 输入。
+        output_tokens: 输出。
+        cost_amount: 成本金额。
+        latency_ms: 延迟，单位为毫秒。
+        citations: 引用。
+        metadata: 附加元数据。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -79,25 +56,18 @@ class ModelResponse(BaseModel):
 
 
 class DraftResult(BaseModel):
-    """DraftResult。
+    """草稿结果相关组件。
 
-    DraftResult 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - reply_text: str。
-    - citations: list[str]。
-    - confidence: float。
-    - requires_approval: bool。
-    - model_name: str。
-    - provider: str。
-    - input_tokens: int。
-    - output_tokens: int。
-    - cost_amount: float。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        reply_text: 回复文本。
+        citations: 引用。
+        confidence: 字段值。
+        requires_approval: 要求审批。
+        model_name: 模型名称。
+        provider: 提供方。
+        input_tokens: 输入。
+        output_tokens: 输出。
+        cost_amount: 成本金额。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -114,24 +84,17 @@ class DraftResult(BaseModel):
 
 
 class ModelProfile(BaseModel):
-    """ModelProfile。
+    """模型配置相关组件。
 
-    ModelProfile 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - name: str。
-    - provider: str。
-    - model_id: str。
-    - capability_score: float。
-    - cost_per_1k_tokens: float。
-    - avg_latency_ms: float。
-    - task_types: list[str]。
-    - is_available: bool。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        name: 名称。
+        provider: 提供方。
+        model_id: 模型ID。
+        capability_score: 能力评分。
+        cost_per_1k_tokens: 成本。
+        avg_latency_ms: 延迟毫秒。
+        task_types: 任务。
+        is_available: 是否可用。
     """
 
     model_config = ConfigDict(extra="forbid")

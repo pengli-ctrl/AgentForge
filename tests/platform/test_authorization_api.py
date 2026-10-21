@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_authorization_api。
+"""API测试模块。
 
 本测试模块验证 test_authorization_api 覆盖的业务路径、边界条件和回归场景。
 
@@ -7,7 +7,8 @@
 - 所有租户相关数据都必须携带 tenant_id 并保持隔离。
 - 关键执行路径应保留日志、审计或链路追踪信息。
 -
-主要函数：client、test_authorize_endpoint_denied_unapproved、test_authorize_endpoint_requires_tenant、test_authorize_endpoint_records_audit、test_writeback_403_unapproved。
+主要函数：client、test_authorize_endpoint_denied_unapproved、test_authorize_endpoint_requires_tenant、te
+    st_authorize_endpoint_records_audit、test_writeback_403_unapproved。
 """
 
 import asyncio
@@ -15,21 +16,23 @@ import asyncio
 import pytest
 from fastapi.testclient import TestClient
 
-from agentforge.platform.api.app import create_platform_app
 from agentforge.platform.domain.rbac import Permission, Role, RoleAssignment
-from agentforge.platform.domain.ticket import RiskLevel, Ticket, TicketPriority, TicketStatus
 from agentforge.platform.infrastructure.memory_rbac_repository import MemoryRbacRepository
+from agentforge.platform.modules.support.domain.ticket import (
+    RiskLevel,
+    Ticket,
+    TicketPriority,
+    TicketStatus,
+)
 from agentforge.platform.runtime import build_memory_container
+from tests.platform.support_fixtures import configure_memory_support, create_app_with_support
 
 
 async def _seed_admin(rbac: MemoryRbacRepository) -> None:
-    """执行 _seed_admin 对应的逻辑，并返回处理结果。
+    """初始化管理。
 
     Args:
-        rbac: MemoryRbacRepository，调用方传入的 rbac 参数。
-
-    Returns:
-        None，函数执行后的结果。
+        rbac: RBAC。
     """
     await rbac.save_role(
         Role(
@@ -48,27 +51,25 @@ async def _seed_admin(rbac: MemoryRbacRepository) -> None:
 
 @pytest.fixture(scope="module")
 def client():
-    """执行 client 对应的逻辑，并返回处理结果。
+    """处理客户端。
 
     Returns:
-        None，函数执行后的结果。
+        处理结果。
     """
     container = build_memory_container()
     asyncio.run(_seed_admin(container.rbac_repository))
-    app = create_platform_app(container)
-    return TestClient(app), container
+    support = configure_memory_support(container)
+    app = create_app_with_support(container, support)
+    return TestClient(app), container, support
 
 
 def test_authorize_endpoint_denied_unapproved(client):
-    """验证 authorize_endpoint_denied_unapproved 对应的业务行为、边界条件和回归场景。
+    """验证授权端点拒绝未批准对应的测试场景。
 
     Args:
-        client: Any，调用方传入的 client 参数。
-
-    Returns:
-        None，函数执行后的结果。
+        client: 客户端实例。
     """
-    tc, _container = client
+    tc, _container, _support = client
     res = tc.post(
         "/v1/authorize",
         json={
@@ -85,29 +86,23 @@ def test_authorize_endpoint_denied_unapproved(client):
 
 
 def test_authorize_endpoint_requires_tenant(client):
-    """验证 authorize_endpoint_requires_tenant 对应的业务行为、边界条件和回归场景。
+    """验证授权端点要求租户对应的测试场景。
 
     Args:
-        client: Any，调用方传入的 client 参数。
-
-    Returns:
-        None，函数执行后的结果。
+        client: 客户端实例。
     """
-    tc, _container = client
+    tc, _container, _support = client
     res = tc.post("/v1/authorize", json={"principal": "alice", "action": "ticket.writeback"})
     assert res.status_code == 422
 
 
 def test_authorize_endpoint_records_audit(client):
-    """验证 authorize_endpoint_records_audit 对应的业务行为、边界条件和回归场景。
+    """验证授权端点记录审计对应的测试场景。
 
     Args:
-        client: Any，调用方传入的 client 参数。
-
-    Returns:
-        None，函数执行后的结果。
+        client: 客户端实例。
     """
-    tc, container = client
+    tc, container, support = client
     tc.post(
         "/v1/authorize",
         json={
@@ -123,15 +118,12 @@ def test_authorize_endpoint_records_audit(client):
 
 
 def test_writeback_403_unapproved(client):
-    """验证 writeback_403_unapproved 对应的业务行为、边界条件和回归场景。
+    """验证写回未批准对应的测试场景。
 
     Args:
-        client: Any，调用方传入的 client 参数。
-
-    Returns:
-        None，函数执行后的结果。
+        client: 客户端实例。
     """
-    tc, container = client
+    tc, container, support = client
     ticket = Ticket(
         ticket_id="tk-unapprove",
         tenant_id="t1",
@@ -144,7 +136,7 @@ def test_writeback_403_unapproved(client):
         risk_level=RiskLevel.HIGH,
         idempotency_key="ik-wb-403",
     )
-    asyncio.run(container.repository.save(ticket))
+    asyncio.run(support.repository.save(ticket))
     res = tc.post(
         "/v1/tickets/tk-unapprove/writeback",
         json={"tenant_id": "t1", "actor": "alice"},

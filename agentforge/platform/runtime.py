@@ -1,36 +1,26 @@
-"""AgentForge 平台代码：runtime。
-
-本模块负责依赖装配和服务容器构建，把仓储、模型网关、审计、配额、策略与工作流客户端组合成可运行的系统。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：ServiceContainer。
--
-主要函数：build_memory_container、build_sqlalchemy_container、configure_container、get_container、boot_runtime。
-"""
+"""运行时模块。"""
 
 from __future__ import annotations
 
 import logging
 import os
+from typing import cast
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from agentforge.platform.api.security import ApiKeyAuthenticator
+from agentforge.platform.application.authorization_service import AuthorizationService
 from agentforge.platform.application.builtin_policies import (
     _async_relation_check,
     builtin_policies,
     seed_rbac,
 )
+from agentforge.platform.application.chunked_upload_service import ChunkedUploadService
 from agentforge.platform.application.classification_evaluation_service import (
     ClassificationEvaluationService,
 )
-from agentforge.platform.application.classifier import RuleBasedTicketClassifier
 from agentforge.platform.application.connector_registry import ConnectorRegistry
 from agentforge.platform.application.dashboard_service import DashboardService
-from agentforge.platform.application.high_risk_authorizer import HighRiskActionAuthorizer
 from agentforge.platform.application.knowledge_service import KnowledgeService
 from agentforge.platform.application.model_router import ModelRouter
 from agentforge.platform.application.openapi_adapter import build_openapi_adapter
@@ -38,48 +28,58 @@ from agentforge.platform.application.prompt_registry import PromptRegistry
 from agentforge.platform.application.quality_gate_service import QualityGateService
 from agentforge.platform.application.quota_service import QuotaAwareModelGateway
 from agentforge.platform.application.regression_runner import RegressionRunner
-from agentforge.platform.application.reply_draft_service import ReplyDraftService
 from agentforge.platform.application.report_service import ReportService
 from agentforge.platform.application.reranker import HybridReranker
-from agentforge.platform.application.retrieval_evaluation_service import (
-    RetrievalEvaluationService,
-)
+from agentforge.platform.application.retrieval_evaluation_service import RetrievalEvaluationService
 from agentforge.platform.application.routing_model_gateway import RoutingModelGateway
-from agentforge.platform.application.support_ticket_processing_service import (
-    SupportTicketProcessingService,
+from agentforge.platform.application.saas_plans import PlanCatalog
+from agentforge.platform.application.tenant_lifecycle_service import TenantLifecycleService
+from agentforge.platform.application.tenant_module_service import (
+    TenantModuleConfigAccessor,
+    TenantModuleService,
 )
-from agentforge.platform.application.support_ticket_service import SupportTicketService
-from agentforge.platform.application.ticket_writeback import TicketWritebackService
+from agentforge.platform.application.usage_metering_service import (
+    UsageMeteringAdapter,
+    UsageMeteringService,
+)
 from agentforge.platform.application.version_registry import ModelVersionRegistry
 from agentforge.platform.domain.model import ModelProfile
 from agentforge.platform.infrastructure.llm.litellm_gateway import LiteLLMModelGateway
 from agentforge.platform.infrastructure.llm.static_gateway import StaticModelGateway
 from agentforge.platform.infrastructure.memory_audit_repository import MemoryAuditRepository
-from agentforge.platform.infrastructure.memory_connector_repository import (
-    MemoryConnectorRepository,
-)
+from agentforge.platform.infrastructure.memory_connector_repository import MemoryConnectorRepository
 from agentforge.platform.infrastructure.memory_cost_repository import MemoryCostRepository
 from agentforge.platform.infrastructure.memory_evaluation_repository import (
     MemoryEvaluationRepository,
 )
 from agentforge.platform.infrastructure.memory_knowledge_repository import MemoryKnowledgeRepository
+from agentforge.platform.infrastructure.memory_object_store import MemoryObjectStore
 from agentforge.platform.infrastructure.memory_outbox_store import MemoryOutboxStore
 from agentforge.platform.infrastructure.memory_rbac_repository import MemoryRbacRepository
 from agentforge.platform.infrastructure.memory_regression_repository import (
     MemoryRegressionRepository,
 )
-from agentforge.platform.infrastructure.memory_reply_connector import MemoryReplyConnector
 from agentforge.platform.infrastructure.memory_report_run_repository import (
     MemoryReportRunRepository,
 )
 from agentforge.platform.infrastructure.memory_scheduled_report_repository import (
     MemoryScheduledReportRepository,
 )
+from agentforge.platform.infrastructure.memory_tenant_account_repository import (
+    MemoryTenantAccountRepository,
+)
+from agentforge.platform.infrastructure.memory_tenant_module_repository import (
+    MemoryTenantModuleRepository,
+)
 from agentforge.platform.infrastructure.memory_tenant_quota_repository import (
     MemoryTenantQuotaRepository,
 )
-from agentforge.platform.infrastructure.memory_ticket_repository import MemoryTicketRepository
+from agentforge.platform.infrastructure.memory_upload_session_repository import (
+    MemoryUploadSessionRepository,
+)
+from agentforge.platform.infrastructure.memory_usage_repository import MemoryUsageRepository
 from agentforge.platform.infrastructure.outbox_store import SQLAlchemyOutboxStore
+from agentforge.platform.infrastructure.persistence import SQLAlchemyPersistence
 from agentforge.platform.infrastructure.sqlalchemy_audit_repository import SQLAlchemyAuditRepository
 from agentforge.platform.infrastructure.sqlalchemy_connector_repository import (
     SQLAlchemyConnectorRepository,
@@ -100,13 +100,35 @@ from agentforge.platform.infrastructure.sqlalchemy_report_run_repository import 
 from agentforge.platform.infrastructure.sqlalchemy_scheduled_report_repository import (
     SQLAlchemyScheduledReportRepository,
 )
+from agentforge.platform.infrastructure.sqlalchemy_tenant_account_repository import (
+    SQLAlchemyTenantAccountRepository,
+)
+from agentforge.platform.infrastructure.sqlalchemy_tenant_module_repository import (
+    SQLAlchemyTenantModuleRepository,
+)
 from agentforge.platform.infrastructure.sqlalchemy_tenant_quota_repository import (
     SQLAlchemyTenantQuotaRepository,
 )
-from agentforge.platform.infrastructure.sqlalchemy_ticket_repository import (
-    SQLAlchemyTicketRepository,
+from agentforge.platform.infrastructure.sqlalchemy_upload_session_repository import (
+    SQLAlchemyUploadSessionRepository,
 )
+from agentforge.platform.infrastructure.sqlalchemy_usage_repository import SQLAlchemyUsageRepository
 from agentforge.platform.observability.trace_recorder import TraceRecorder
+from agentforge.platform.sdk.module import ModuleConfig, ModuleContext
+from agentforge.platform.sdk.ports import (
+    AuthenticatorPort,
+    AuthorizationPort,
+    ChunkedUploadPort,
+    ConnectorCatalogPort,
+    CostPort,
+    EvaluationPort,
+    KnowledgePort,
+    ModuleAccessPort,
+    OcrPort,
+    RbacPort,
+    UsagePort,
+    WorkflowClientPort,
+)
 from agentforge.platform.settings import get_settings
 
 # 常量：DEFAULT_PROFILES。
@@ -133,25 +155,15 @@ DEFAULT_PROFILES = [
 
 
 class ServiceContainer:
-    """ServiceContainer。
-
-    ServiceContainer 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """承载共享内核依赖的进程级容器。"""
 
     def __init__(
         self,
-        repository,
-        classifier,
         knowledge_repository,
         model_gateway,
         cost_repository,
         outbox_store=None,
         workflow_client=None,
-        reply_connector=None,
         audit_repository=None,
         authenticator: ApiKeyAuthenticator | None = None,
         evaluation_repository=None,
@@ -167,74 +179,145 @@ class ServiceContainer:
         run_repository=None,
         default_report_retention_days: int | None = None,
         trace_recorder: TraceRecorder | None = None,
+        classification_evaluation_service: ClassificationEvaluationService | None = None,
+        persistence=None,
+        tenant_module_repository=None,
+        tenant_account_repository=None,
+        usage_repository=None,
+        plan_catalog: PlanCatalog | None = None,
+        ocr=None,
+        object_store=None,
+        upload_session_repository=None,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 ServiceContainer。
 
         Args:
-            repository: Any，调用方传入的 repository 参数。
-            classifier: Any，调用方传入的 classifier 参数。
-            knowledge_repository: Any，调用方传入的 knowledge_repository 参数。
-            model_gateway: Any，调用方传入的 model_gateway 参数。
-            cost_repository: Any，调用方传入的 cost_repository 参数。
-            outbox_store: Any，调用方传入的 outbox_store 参数。
-            workflow_client: Any，调用方传入的 workflow_client 参数。
-            reply_connector: Any，调用方传入的 reply_connector 参数。
-            audit_repository: Any，调用方传入的 audit_repository 参数。
-            authenticator: ApiKeyAuthenticator | None，调用方传入的 authenticator 参数。
-            evaluation_repository: Any，调用方传入的 evaluation_repository 参数。
-            regression_repository: Any，调用方传入的 regression_repository 参数。
-            connector_registry: Any，调用方传入的 connector_registry 参数。
-            connector_repository: Any，调用方传入的 connector_repository 参数。
-            adapter_factory: Any，调用方传入的 adapter_factory 参数。
-            rbac_repository: Any，调用方传入的 rbac_repository 参数。
-            policy_engine: Any，调用方传入的 policy_engine 参数。
-            openfga_client: Any，调用方传入的 openfga_client 参数。
-            tenant_quota_repository: Any，调用方传入的 tenant_quota_repository 参数。
-            scheduled_report_repository: Any，调用方传入的 scheduled_report_repository 参数。
-            run_repository: Any，调用方传入的 run_repository 参数。
-            default_report_retention_days: int | None，调用方传入的 default_report_retention_days 参数。
-            trace_recorder: TraceRecorder | None，调用方传入的 trace_recorder 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            knowledge_repository: 知识仓储。
+            model_gateway: 模型网关。
+            cost_repository: 成本仓储。
+            outbox_store: Outbox存储。
+            workflow_client: 工作流客户端。
+            audit_repository: 审计仓储。
+            authenticator: 认证器实例。
+            evaluation_repository: 评估仓储。
+            regression_repository: 回归仓储。
+            connector_registry: 连接器注册表。
+            connector_repository: 连接器仓储。
+            adapter_factory: 适配器工厂。
+            rbac_repository: RBAC仓储。
+            policy_engine: 策略引擎。
+            openfga_client: 客户端。
+            tenant_quota_repository: 租户配额仓储。
+            scheduled_report_repository: 报告仓储。
+            run_repository: 运行仓储。
+            default_report_retention_days: 默认报告保留。
+            trace_recorder: 链路记录器。
+            classification_evaluation_service: 分类评估服务。
+                classification evaluation service。
+            persistence: 持久化。
+            tenant_module_repository: 租户模块仓储。
+            tenant_account_repository: 租户仓储。
+            usage_repository: 用量仓储。
+            plan_catalog: 套餐目录。
+            ocr: OCR。
+            object_store: 对象存储。
+            upload_session_repository: 上传会话仓储。
         """
-        self.repository = repository
-        self.classifier = classifier
         self.knowledge_repository = knowledge_repository
         self.model_gateway = model_gateway
+        self.persistence = persistence
+        self.ocr = ocr
+        self.object_store = object_store or MemoryObjectStore()
+        if upload_session_repository is None:
+            upload_session_repository = MemoryUploadSessionRepository()
+        self.upload_session_repository = upload_session_repository
+        self.upload_service = ChunkedUploadService(
+            upload_session_repository,
+            self.object_store,
+        )
+        if tenant_module_repository is None:
+            tenant_module_repository = MemoryTenantModuleRepository()
+        self.tenant_module_repository = tenant_module_repository
+        self.tenant_account_repository = (
+            tenant_account_repository or MemoryTenantAccountRepository()
+        )
+        self.usage_repository = usage_repository or MemoryUsageRepository()
+        self.plan_catalog = plan_catalog or PlanCatalog.from_settings(get_settings())
         self.cost_repository = cost_repository
         self.outbox_store = outbox_store
         self.workflow_client = workflow_client
-        self.reply_connector = reply_connector
+        self.tenant_module_service = TenantModuleService(
+            tenant_module_repository,
+            audit_repository,
+            outbox_store,
+            self.tenant_account_repository,
+        )
+        self.tenant_lifecycle_service = TenantLifecycleService(
+            self.tenant_account_repository,
+            self.tenant_module_service,
+            self.plan_catalog,
+            quota_repository=tenant_quota_repository,
+            audit=audit_repository,
+            outbox=outbox_store,
+        )
+        self.usage_metering_service = UsageMeteringService(
+            self.usage_repository,
+            self.tenant_account_repository,
+            self.plan_catalog,
+            audit=audit_repository,
+            outbox=outbox_store,
+        )
+        self.usage_port = UsageMeteringAdapter(self.usage_metering_service)
+        self.upload_service.set_usage_meter(self.usage_port)
+        set_model_usage = getattr(self.model_gateway, "set_usage_meter", None)
+        if callable(set_model_usage):
+            set_model_usage(self.usage_port)
+        if self.workflow_client is not None:
+            set_workflow_usage = getattr(self.workflow_client, "set_usage_meter", None)
+            if callable(set_workflow_usage):
+                set_workflow_usage(self.usage_port)
         self.audit_repository = audit_repository
         self.authenticator = authenticator or ApiKeyAuthenticator(enabled=False)
         self.evaluation_repository = evaluation_repository
+
         if regression_repository is None:
             regression_repository = MemoryRegressionRepository()
         self.regression_repository = regression_repository
+
         if connector_registry is None:
             connector_registry = ConnectorRegistry()
         self.connector_registry = connector_registry
+
         if connector_repository is None:
             connector_repository = MemoryConnectorRepository()
         self.connector_repository = connector_repository
+
         if adapter_factory is None:
             adapter_factory = build_openapi_adapter
         self.adapter_factory = adapter_factory
+
         if rbac_repository is None:
             rbac_repository = MemoryRbacRepository()
         self.rbac_repository = rbac_repository
+
         if openfga_client is None:
             from agentforge.platform.application.openfga_adapter import OpenFGAClient
 
             openfga_client = OpenFGAClient()
         self.openfga_client = openfga_client
+
         if policy_engine is None:
             from agentforge.platform.application.policy_engine import PolicyEngine
 
             policy_engine = PolicyEngine(policies=builtin_policies())
             policy_engine._relation_check = _async_relation_check(openfga_client)
         self.policy_engine = policy_engine
+        self.authorization_service = AuthorizationService(
+            policy_engine,
+            rbac_repository,
+            audit_repository,
+        )
+
         if tenant_quota_repository is None:
             from agentforge.platform.infrastructure.memory_tenant_quota_repository import (
                 MemoryTenantQuotaRepository,
@@ -242,18 +325,22 @@ class ServiceContainer:
 
             tenant_quota_repository = MemoryTenantQuotaRepository()
         self.tenant_quota_repository = tenant_quota_repository
+
         if trace_recorder is None:
             trace_recorder = TraceRecorder()
         self.trace_recorder = trace_recorder
+
         self.dashboard_service = DashboardService(
             cost_repository,
             tenant_quota_repository,
             regression_repository,
         )
         self.dashboard_service.attach_trace_recorder(trace_recorder)
+
         if scheduled_report_repository is None:
             scheduled_report_repository = MemoryScheduledReportRepository()
         self.scheduled_report_repository = scheduled_report_repository
+
         if run_repository is None:
             run_repository = MemoryReportRunRepository()
         self.run_repository = run_repository
@@ -265,23 +352,7 @@ class ServiceContainer:
             run_repository,
             default_retention_days=default_report_retention_days,
         )
-        self.high_risk_authorizer = HighRiskActionAuthorizer(
-            policy_engine,
-            audit_repository,
-            rbac_repository,
-        )
-        self.ticket_writeback_service = TicketWritebackService(
-            connector_registry,
-            audit_repository,
-            high_risk_authorizer=self.high_risk_authorizer,
-        )
-        self.ticket_service = SupportTicketService(
-            repository,
-            classifier,
-            reply_connector,
-            audit_repository,
-            evaluation_repository,
-        )
+
         self.reranker = HybridReranker()
         self.knowledge_service = KnowledgeService(
             knowledge_repository,
@@ -291,7 +362,7 @@ class ServiceContainer:
             knowledge_repository,
             self.reranker,
         )
-        self.classification_evaluation_service = ClassificationEvaluationService(classifier)
+        self.classification_evaluation_service = classification_evaluation_service
         self.quality_gate_service = QualityGateService()
         self.prompt_registry = PromptRegistry()
         self.model_version_registry = ModelVersionRegistry()
@@ -300,15 +371,6 @@ class ServiceContainer:
             self.retrieval_evaluation_service,
             self.classification_evaluation_service,
             self.quality_gate_service,
-        )
-        self.reply_draft_service = ReplyDraftService(model_gateway)
-        self.processing_service = SupportTicketProcessingService(
-            self.ticket_service,
-            repository,
-            self.knowledge_service,
-            self.reply_draft_service,
-            cost_repository,
-            audit_repository,
         )
 
 
@@ -321,16 +383,16 @@ def _wrap_gateway(
     tenant_quota_repository=None,
     trace_recorder: TraceRecorder | None = None,
 ) -> QuotaAwareModelGateway:
-    """执行 _wrap_gateway 对应的逻辑，并返回处理结果。
+    """包装网关。
 
     Args:
-        inner: Any，调用方传入的 inner 参数。
-        cost_repository: Any，调用方传入的 cost_repository 参数。
-        tenant_quota_repository: Any，调用方传入的 tenant_quota_repository 参数。
-        trace_recorder: TraceRecorder | None，调用方传入的 trace_recorder 参数。
+        inner: 输入参数。
+        cost_repository: 成本仓储。
+        tenant_quota_repository: 租户配额仓储。
+        trace_recorder: 链路记录器。
 
     Returns:
-        QuotaAwareModelGateway，函数执行后的结果。
+        配额模型网关结果。
     """
     router = ModelRouter(DEFAULT_PROFILES)
     routed = RoutingModelGateway(router, inner)
@@ -344,10 +406,10 @@ def _wrap_gateway(
 
 
 def _default_report_retention() -> int | None:
-    """执行 _default_report_retention 对应的逻辑，并返回处理结果。
+    """处理默认报告保留。
 
     Returns:
-        int | None，函数执行后的结果。
+        整数无结果。
     """
     raw = os.environ.get("AGENTFORGE_REPORT_DEFAULT_RETENTION_DAYS")
     if raw is None:
@@ -361,20 +423,28 @@ def _default_report_retention() -> int | None:
 def build_memory_container(
     model_gateway=None,
     authenticator: ApiKeyAuthenticator | None = None,
+    workflow_client=None,
+    classification_evaluation_service: ClassificationEvaluationService | None = None,
+    ocr=None,
+    object_store=None,
 ) -> ServiceContainer:
-    """构建目标对象，并返回调用方需要的结果。
+    """构建只包含共享内核能力的内存容器。
 
     Args:
-        model_gateway: Any，调用方传入的 model_gateway 参数。
-        authenticator: ApiKeyAuthenticator | None，调用方传入的 authenticator 参数。
+        model_gateway: 模型网关。
+        authenticator: 认证器实例。
+        workflow_client: 工作流客户端。
+        classification_evaluation_service: 分类评估服务。
+            classification evaluation service。
+        ocr: OCR。
+        object_store: 对象存储。
 
     Returns:
-        ServiceContainer，函数执行后的结果。
+        服务容器结果。
     """
     cost_repository = MemoryCostRepository()
     audit_repository = MemoryAuditRepository()
     evaluation_repository = MemoryEvaluationRepository()
-    reply_connector = MemoryReplyConnector()
     tenant_quota_repository = MemoryTenantQuotaRepository()
     scheduled_report_repository = MemoryScheduledReportRepository()
     run_repository = MemoryReportRunRepository()
@@ -382,26 +452,31 @@ def build_memory_container(
     trace_recorder = TraceRecorder()
     inner = model_gateway or StaticModelGateway(recorder=trace_recorder)
     return ServiceContainer(
-        MemoryTicketRepository(),
-        RuleBasedTicketClassifier(),
-        MemoryKnowledgeRepository(),
-        _wrap_gateway(
+        knowledge_repository=MemoryKnowledgeRepository(),
+        model_gateway=_wrap_gateway(
             inner,
             cost_repository,
             tenant_quota_repository,
             trace_recorder=trace_recorder,
         ),
-        cost_repository,
-        reply_connector=reply_connector,
+        cost_repository=cost_repository,
+        outbox_store=outbox_store,
+        workflow_client=workflow_client,
         audit_repository=audit_repository,
         authenticator=authenticator,
         evaluation_repository=evaluation_repository,
         tenant_quota_repository=tenant_quota_repository,
         scheduled_report_repository=scheduled_report_repository,
         run_repository=run_repository,
-        outbox_store=outbox_store,
+        tenant_account_repository=MemoryTenantAccountRepository(),
+        usage_repository=MemoryUsageRepository(),
+        plan_catalog=PlanCatalog.from_settings(get_settings()),
         default_report_retention_days=_default_report_retention(),
         trace_recorder=trace_recorder,
+        classification_evaluation_service=classification_evaluation_service,
+        ocr=ocr,
+        object_store=object_store,
+        upload_session_repository=MemoryUploadSessionRepository(),
     )
 
 
@@ -409,20 +484,25 @@ def build_sqlalchemy_container(
     session_factory: async_sessionmaker[AsyncSession],
     model_gateway=None,
     workflow_client=None,
-    reply_connector=None,
     authenticator: ApiKeyAuthenticator | None = None,
+    classification_evaluation_service: ClassificationEvaluationService | None = None,
+    ocr=None,
+    object_store=None,
 ) -> ServiceContainer:
-    """构建目标对象，并返回调用方需要的结果。
+    """构建SQLAlchemy容器。
 
     Args:
-        session_factory: async_sessionmaker[AsyncSession]，调用方传入的 session_factory 参数。
-        model_gateway: Any，调用方传入的 model_gateway 参数。
-        workflow_client: Any，调用方传入的 workflow_client 参数。
-        reply_connector: Any，调用方传入的 reply_connector 参数。
-        authenticator: ApiKeyAuthenticator | None，调用方传入的 authenticator 参数。
+        session_factory: 数据库会话工厂。
+        model_gateway: 模型网关。
+        workflow_client: 工作流客户端。
+        authenticator: 认证器实例。
+        classification_evaluation_service: 分类评估服务。
+            classification evaluation service。
+        ocr: OCR。
+        object_store: 对象存储。
 
     Returns:
-        ServiceContainer，函数执行后的结果。
+        服务容器结果。
     """
     cost_repository = SQLAlchemyCostRepository(session_factory)
     audit_repository = SQLAlchemyAuditRepository(session_factory)
@@ -434,50 +514,97 @@ def build_sqlalchemy_container(
     trace_recorder = TraceRecorder()
     inner = model_gateway or LiteLLMModelGateway(recorder=trace_recorder)
     return ServiceContainer(
-        SQLAlchemyTicketRepository(session_factory),
-        RuleBasedTicketClassifier(),
-        SQLAlchemyKnowledgeRepository(session_factory),
-        _wrap_gateway(
+        knowledge_repository=SQLAlchemyKnowledgeRepository(session_factory),
+        model_gateway=_wrap_gateway(
             inner,
             cost_repository,
             tenant_quota_repository,
             trace_recorder=trace_recorder,
         ),
-        cost_repository,
-        SQLAlchemyOutboxStore(session_factory),
-        workflow_client,
-        reply_connector,
-        audit_repository,
-        authenticator,
-        evaluation_repository,
-        regression_repository,
+        cost_repository=cost_repository,
+        outbox_store=SQLAlchemyOutboxStore(session_factory),
+        workflow_client=workflow_client,
+        audit_repository=audit_repository,
+        authenticator=authenticator,
+        evaluation_repository=evaluation_repository,
+        regression_repository=regression_repository,
         connector_repository=SQLAlchemyConnectorRepository(session_factory),
         tenant_quota_repository=tenant_quota_repository,
         scheduled_report_repository=scheduled_report_repository,
         run_repository=run_repository,
         default_report_retention_days=_default_report_retention(),
         trace_recorder=trace_recorder,
+        classification_evaluation_service=classification_evaluation_service,
+        persistence=SQLAlchemyPersistence(session_factory),
+        tenant_module_repository=SQLAlchemyTenantModuleRepository(session_factory),
+        tenant_account_repository=SQLAlchemyTenantAccountRepository(session_factory),
+        usage_repository=SQLAlchemyUsageRepository(session_factory),
+        plan_catalog=PlanCatalog.from_settings(get_settings()),
+        ocr=ocr,
+        object_store=object_store,
+        upload_session_repository=SQLAlchemyUploadSessionRepository(session_factory),
+    )
+
+
+def build_module_context(
+    container: ServiceContainer,
+    *,
+    module_name: str = "",
+    config: ModuleConfig | None = None,
+) -> ModuleContext:
+    """从平台容器构建模块可用的共享端口上下文。
+
+    Args:
+        container: 服务容器。
+        module_name: 模块名称。
+        config: 组件配置。
+
+    Returns:
+        模块上下文结果。
+    """
+    return ModuleContext(
+        audit=container.audit_repository,
+        authorization=cast(AuthorizationPort, container.authorization_service),
+        outbox=container.outbox_store,
+        connectors=cast(ConnectorCatalogPort, container.connector_registry),
+        knowledge=cast(KnowledgePort, container.knowledge_service),
+        models=container.model_gateway,
+        policy=container.policy_engine,
+        cost=cast(CostPort, container.cost_repository),
+        evaluation=cast(EvaluationPort | None, container.evaluation_repository),
+        identity=cast(RbacPort, container.rbac_repository),
+        module_access=cast(ModuleAccessPort, container.tenant_module_service),
+        workflow=cast(WorkflowClientPort | None, container.workflow_client),
+        persistence=container.persistence,
+        ocr=cast(OcrPort | None, container.ocr),
+        object_store=container.object_store,
+        uploads=cast(ChunkedUploadPort, container.upload_service),
+        config=config or ModuleConfig(),
+        tenant_config=(
+            TenantModuleConfigAccessor(container.tenant_module_service, module_name)
+            if module_name
+            else None
+        ),
+        authenticator=cast(AuthenticatorPort, container.authenticator),
+        usage=cast(UsagePort, container.usage_port),
     )
 
 
 def configure_container(container: ServiceContainer) -> None:
-    """执行 configure_container 对应的逻辑，并返回处理结果。
+    """配置容器。
 
     Args:
-        container: ServiceContainer，调用方传入的 container 参数。
-
-    Returns:
-        None，函数执行后的结果。
+        container: 服务容器。
     """
     global _default_container
     _default_container = container
 
 
 def get_container() -> ServiceContainer:
-    """读取并返回指定数据，并返回调用方需要的结果。
+    """获取容器。
 
     Returns:
-        ServiceContainer，函数执行后的结果。
+        服务容器结果。
     """
     global _default_container
     if _default_container is None:
@@ -489,13 +616,10 @@ logger = logging.getLogger(__name__)
 
 
 async def boot_runtime(container: ServiceContainer) -> None:
-    """执行 boot_runtime 对应的逻辑，并返回处理结果。
+    """处理运行时。
 
     Args:
-        container: ServiceContainer，调用方传入的 container 参数。
-
-    Returns:
-        None，函数执行后的结果。
+        container: 服务容器。
     """
     try:
         await seed_rbac(container.rbac_repository)

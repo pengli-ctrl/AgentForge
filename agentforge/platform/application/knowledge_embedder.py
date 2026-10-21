@@ -1,14 +1,4 @@
-"""AgentForge 平台应用服务层：knowledge_embedder。
-
-本模块负责 knowledge_embedder 相关的平台能力，是 平台应用服务层 的组成部分。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：Embedder、HashEmbedder。
-- 主要函数：cosine_similarity。
-"""
+"""知识向量化器模块。"""
 
 from __future__ import annotations
 
@@ -28,39 +18,29 @@ EMBEDDING_VERSION = 1
 
 
 class Embedder(Protocol):
-    """Embedder。
-
-    Embedder 定义依赖倒置接口，隔离应用层与具体基础设施实现。
-
-    主要成员：
-    - 方法 embed()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """向量化器相关组件。"""
 
     def embed(self, text: str) -> list[float]:
-        """执行 embed 对应的逻辑，并返回处理结果。
+        """向量化器。
 
         Args:
-            text: str，调用方传入的 text 参数。
+            text: 待处理文本。
 
         Returns:
-            list[float]，函数执行后的结果。
+            结果列表。
         """
         ...
 
 
 def cosine_similarity(left: list[float], right: list[float]) -> float:
-    """执行 cosine_similarity 对应的逻辑，并返回处理结果。
+    """计算两个向量的余弦相似度。
 
     Args:
-        left: list[float]，调用方传入的 left 参数。
-        right: list[float]，调用方传入的 right 参数。
+        left: 输入参数。
+        right: 输入参数。
 
     Returns:
-        float，函数执行后的结果。
+        数值结果。
     """
     if not left or not right or len(left) != len(right):
         return 0.0
@@ -77,42 +57,29 @@ def cosine_similarity(left: list[float], right: list[float]) -> float:
 
 
 class HashEmbedder:
-    """HashEmbedder。
-
-    HashEmbedder 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - 方法 embed()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """哈希向量化器相关组件。"""
 
     def __init__(self, dim: int = EMBEDDING_DIM) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 HashEmbedder。
 
         Args:
-            dim: int，调用方传入的 dim 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            dim: 输入参数。
 
         Raises:
-            ValueError: 当输入、状态或外部依赖不满足要求时抛出。
+            ValueError: 输入值或业务状态不合法时抛出。
         """
         if dim <= 0:
             raise ValueError("dim must be positive")
         self._dim = dim
 
     def embed(self, text: str) -> list[float]:
-        """执行 embed 对应的逻辑，并返回处理结果。
+        """向量化哈希向量化器。
 
         Args:
-            text: str，调用方传入的 text 参数。
+            text: 待处理文本。
 
         Returns:
-            list[float]，函数执行后的结果。
+            结果列表。
         """
         vector = [0.0] * self._dim
         normalized = (text or "").lower()
@@ -121,7 +88,7 @@ class HashEmbedder:
                 continue
             for start in range(len(normalized) - gram_size + 1):
                 gram = normalized[start : start + gram_size]
-                digest = hashlib.md5(gram.encode("utf-8")).digest()
+                digest = hashlib.md5(gram.encode("utf-8"), usedforsecurity=False).digest()
                 bucket = int.from_bytes(digest[:4], "big") % self._dim
                 vector[bucket] += 1.0
         norm = math.sqrt(sum(value * value for value in vector))

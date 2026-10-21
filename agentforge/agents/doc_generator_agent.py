@@ -1,9 +1,4 @@
-"""
-文档生成 Agent — 基于代码变更和审查结果生成变更文档。
-
-V3 架构中的文档生成 Agent，是最独立的 Agent — 只接收输入、产出文档，
-不和其他 Agent 交互。在 V2→V3 灰度迁移中，它是第一个被切到事件驱动模式的 Agent。
-"""
+"""文档生成器智能体模块。"""
 
 from __future__ import annotations
 
@@ -17,27 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class DocGeneratorAgent(Agent):
-    """文档生成 Agent — 基于代码变更生成变更文档。
-
-    职责：
-    - 基于代码审查结果和测试报告生成变更文档
-    - 生成 API 变更说明
-    - 生成 changelog 条目
-    - 标注 breaking changes
-
-    上下文隔离：
-    - 只提取 context_snapshot 中的 code_review_result 和 test_result
-    - 不接收原始代码内容
-    - 是最独立的 Agent，不和其他 Agent 形成反馈环
-
-    迁移说明：
-    在 V2→V3 灰度迁移中，DocGenerator 是第一个被切到事件驱动模式的 Agent，
-    因为它只接收输入、产出文档，不和其他 Agent 交互，迁移风险最低。
-
-    Args:
-        llm_gateway: LLM 网关实例。
-        tool_registry: 工具注册表（可选）。
-    """
+    """文档生成智能体，根据代码和上下文生成项目文档。"""
 
     REQUIRED_CONTEXT_KEYS = ["code_review_result", "test_result"]
 
@@ -46,14 +21,11 @@ class DocGeneratorAgent(Agent):
         llm_gateway: Any,
         tool_registry: ToolRegistry | None = None,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 DocGeneratorAgent。
 
         Args:
-            llm_gateway: Any，调用方传入的 llm_gateway 参数。
-            tool_registry: ToolRegistry | None，调用方传入的 tool_registry 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            llm_gateway: LLM 网关实例。
+            tool_registry: 工具注册表。
         """
         super().__init__(
             llm_gateway=llm_gateway,
@@ -76,13 +48,11 @@ class DocGeneratorAgent(Agent):
     def _extract_context(self, context_snapshot: dict[str, Any]) -> dict[str, Any]:
         """从上下文快照中提取文档生成需要的上下文。
 
-        只提取审查结果和测试结果摘要，不接收原始代码内容。
-
         Args:
-            context_snapshot: 完整的上下文快照。
+            context_snapshot: 上下文快照。
 
         Returns:
-            包含审查结果和测试结果的上下文子集。
+            结构化结果字典。
         """
         return {k: context_snapshot[k] for k in self.REQUIRED_CONTEXT_KEYS if k in context_snapshot}
 
@@ -92,17 +62,15 @@ class DocGeneratorAgent(Agent):
         relevant_context: dict[str, Any],
         tool_results: list,
     ) -> dict[str, Any]:
-        """构造下游 Agent 需要的上下文快照。
-
-        文档生成通常是工作流的最后一步，下游只需要文档内容。
+        """构建下游上下文。
 
         Args:
             original_snapshot: 原始上下文快照。
-            relevant_context: 当前 Agent 提取的上下文。
-            tool_results: 工具执行结果。
+            relevant_context: 筛选后的相关上下文。
+            tool_results: 工具执行结果列表。
 
         Returns:
-            传递给下游 Agent 的上下文快照。
+            结构化结果字典。
         """
         downstream = {
             "doc_result": {
@@ -115,10 +83,10 @@ class DocGeneratorAgent(Agent):
         """构造初始消息列表。
 
         Args:
-            task: 任务描述。
+            task: 任务对象。
 
         Returns:
-            消息列表。
+            结果列表。
         """
         return [
             {"role": "system", "content": "You are a documentation generator."},

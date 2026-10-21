@@ -1,13 +1,4 @@
-"""AgentForge 编排执行层：planner。
-
-本模块负责 planner 相关能力，是 编排执行层 的组成部分。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
-- 关键路径应保留日志、指标或链路追踪信息。
-- 主要类：PlanResult、PlannerConfig、PlannerAgent。
-"""
+"""规划器模块。"""
 
 import json
 import logging
@@ -16,7 +7,6 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 PLANNER_SYSTEM_PROMPT = """\
 You are a task decomposition engine. Given a user task and a list of available
@@ -68,98 +58,71 @@ Rules:
 
 @dataclass
 class PlanResult:
-    """PlanResult。
+    """套餐结果领域组件。
 
-    PlanResult 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - success: bool。
-    - dag_spec: Optional[dict]。
-    - rationale: str。
-    - error: Optional[str]。
-    - fallback_single_agent: str。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    Attributes:
+        success: 是否成功。
+        dag_spec: DAG规格。
+        rationale: 字段值。
+        error: 错误信息。
+        fallback_single_agent: 单个智能体。
     """
 
     success: bool
-    dag_spec: Optional[dict] = None  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    dag_spec: Optional[dict] = None
     rationale: str = ""
     error: Optional[str] = None
-    fallback_single_agent: str = ""  # Agent 注册与查询。
+    fallback_single_agent: str = ""
 
 
 @dataclass
 class PlannerConfig:
-    """PlannerConfig。
+    """规划器配置模型。
 
-    PlannerConfig 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - max_nodes: int。
-    - max_replan_attempts: int。
-    - model_name: str。
-    - timeout_seconds: float。
-    - few_shot_examples: list[dict]。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    Attributes:
+        max_nodes: 最大。
+        max_replan_attempts: 最大重新规划。
+        model_name: 模型名称。
+        timeout_seconds: 超时。
+        few_shot_examples: 字段值。
     """
 
-    max_nodes: int = 50  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-    max_replan_attempts: int = 2  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-    model_name: str = "Qwen3-Pro"  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-    timeout_seconds: float = 15.0  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    max_nodes: int = 50
+    max_replan_attempts: int = 2
+    model_name: str = "Qwen3-Pro"
+    timeout_seconds: float = 15.0
     few_shot_examples: list[dict] = field(default_factory=list)
 
 
 class PlannerAgent:
-    """PlannerAgent。
-
-    PlannerAgent 是核心运行时组件，负责状态管理、调度和跨模块协作。
-
-    主要成员：
-    - 方法 plan()。
-    - 方法 replan()。
-    - 方法 build_dag()。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-    """
+    """规划器智能体相关组件。"""
 
     def __init__(
         self,
-        llm_gateway,  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-        agent_registry,  # Agent 注册与查询。
+        llm_gateway,
+        agent_registry,
         config: Optional[PlannerConfig] = None,
     ):
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 PlannerAgent。
 
         Args:
-            llm_gateway: Any，调用方传入的 llm_gateway 参数。
-            agent_registry: Any，调用方传入的 agent_registry 参数。
-            config: Optional[PlannerConfig]，调用方传入的 config 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            llm_gateway: LLM 网关实例。
+            agent_registry: 智能体注册表。
+            config: 组件配置。
         """
         self._llm = llm_gateway
         self._registry = agent_registry
         self._config = config or PlannerConfig()
 
     async def plan(self, task_description: str, context: Optional[dict] = None) -> PlanResult:
-        """执行 plan 对应的逻辑，并返回处理结果。
+        """执行套餐。
 
         Args:
-            task_description: str，调用方传入的 task_description 参数。
-            context: Optional[dict]，调用方传入的 context 参数。
+            task_description: 任务。
+            context: 执行上下文。
 
         Returns:
-            PlanResult，函数执行后的结果。
+            计划结果结果。
         """
         agent_descriptions = self._get_agent_descriptions()
         system_prompt = PLANNER_SYSTEM_PROMPT.format(
@@ -181,7 +144,7 @@ class PlannerAgent:
                         {"role": "user", "content": user_prompt},
                     ],
                     model=self._config.model_name,
-                    temperature=0.1,  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+                    temperature=0.1,
                     max_tokens=2000,
                 ),
                 timeout=self._config.timeout_seconds,
@@ -192,7 +155,6 @@ class PlannerAgent:
                 logger.warning("Planner: LLM returned unparseable JSON, falling back")
                 return self._fallback_plan(task_description)
 
-            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             validation_error = self._validate_plan(dag_spec)
             if validation_error:
                 logger.warning("Planner: invalid plan — %s, falling back", validation_error)
@@ -223,16 +185,16 @@ class PlannerAgent:
         failed_nodes: list[str],
         error_detail: str,
     ) -> PlanResult:
-        """执行 replan 对应的逻辑，并返回处理结果。
+        """根据最新状态重新生成执行计划。
 
         Args:
-            original_task: str，调用方传入的 original_task 参数。
-            failed_dag_spec: dict，调用方传入的 failed_dag_spec 参数。
-            failed_nodes: list[str]，调用方传入的 failed_nodes 参数。
-            error_detail: str，调用方传入的 error_detail 参数。
+            original_task: 任务。
+            failed_dag_spec: 失败DAG规格。
+            failed_nodes: 失败。
+            error_detail: 错误详情。
 
         Returns:
-            PlanResult，函数执行后的结果。
+            计划结果结果。
         """
         agent_descriptions = self._get_agent_descriptions()
         system_prompt = REPLAN_SYSTEM_PROMPT.format(
@@ -282,13 +244,13 @@ class PlannerAgent:
             return PlanResult(success=False, error=str(e)[:500])
 
     def build_dag(self, dag_spec: dict) -> Any:
-        """构建目标对象，并返回调用方需要的结果。
+        """构建DAG。
 
         Args:
-            dag_spec: dict，调用方传入的 dag_spec 参数。
+            dag_spec: DAG规格。
 
         Returns:
-            Any，函数执行后的结果。
+            处理结果对象。
         """
         from agentforge.orchestration.dag_engine import DAGGraph, DAGNode
 
@@ -306,18 +268,15 @@ class PlannerAgent:
         for edge_spec in dag_spec.get("edges", []):
             graph.add_edge(edge_spec["from"], edge_spec["to"])
 
-        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         self._auto_wire_inputs(graph)
 
         return graph
 
-    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-
     def _get_agent_descriptions(self) -> str:
-        """执行 _get_agent_descriptions 对应的逻辑，并返回处理结果。
+        """获取智能体描述。
 
         Returns:
-            str，函数执行后的结果。
+            字符串结果。
         """
         registered = self._registry.list_agents()
         lines = []
@@ -328,13 +287,13 @@ class PlannerAgent:
         return "\n".join(lines) if lines else "- (no agents registered)"
 
     def _parse_response(self, response: Any) -> Optional[dict]:
-        """执行 _parse_response 对应的逻辑，并返回处理结果。
+        """解析响应。
 
         Args:
-            response: Any，调用方传入的 response 参数。
+            response: 响应。
 
         Returns:
-            Optional[dict]，函数执行后的结果。
+            处理结果对象。
         """
         text = ""
         if hasattr(response, "content"):
@@ -347,11 +306,9 @@ class PlannerAgent:
         if not text:
             return None
 
-        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         text = text.strip()
         if text.startswith("```"):
             lines = text.split("\n")
-            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             lines = [line for line in lines[1:] if line.strip() != "```"]
             text = "\n".join(lines)
 
@@ -365,13 +322,13 @@ class PlannerAgent:
             return None
 
     def _validate_plan(self, dag_spec: dict) -> Optional[str]:
-        """执行 _validate_plan 对应的逻辑，并返回处理结果。
+        """校验套餐。
 
         Args:
-            dag_spec: dict，调用方传入的 dag_spec 参数。
+            dag_spec: DAG规格。
 
         Returns:
-            Optional[str]，函数执行后的结果。
+            处理结果对象。
         """
         nodes = dag_spec.get("nodes", [])
         edges = dag_spec.get("edges", [])
@@ -405,7 +362,6 @@ class PlannerAgent:
             if dst not in node_ids:
                 return f"Edge references unknown target: {dst}"
 
-        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         in_degree = {nid: 0 for nid in node_ids}
         adjacency: dict[str, list[str]] = {nid: [] for nid in node_ids}
         for edge in edges:
@@ -430,15 +386,11 @@ class PlannerAgent:
         return None
 
     def _auto_wire_inputs(self, graph: Any) -> None:
-        """执行 _auto_wire_inputs 对应的逻辑，并返回处理结果。
+        """自动连接任务节点所需的输入。
 
         Args:
-            graph: Any，调用方传入的 graph 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            graph: 输入参数。
         """
-        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         incoming: dict[str, list[str]] = {nid: [] for nid in graph.nodes}
         for src, dst in graph.edges:
             incoming[dst].append(src)
@@ -446,15 +398,13 @@ class PlannerAgent:
         for node_id, sources in incoming.items():
             node = graph.nodes[node_id]
             if node.input_mapping:
-                continue  # 就绪状态。
+                continue
             if not sources:
-                # 说明：该步骤用于实现上述逻辑并保证行为稳定。
                 node.input_mapping = {"query": "$input.user_query"}
             elif len(sources) == 1:
                 src_key = graph.nodes[sources[0]].output_key or sources[0]
                 node.input_mapping = {"query": f"$ctx.{src_key}"}
             else:
-                # 说明：该步骤用于实现上述逻辑并保证行为稳定。
                 mapping = {"query": f"$ctx.{graph.nodes[sources[0]].output_key or sources[0]}"}
                 for i, src in enumerate(sources[1:], 1):
                     src_key = graph.nodes[src].output_key or src
@@ -462,13 +412,13 @@ class PlannerAgent:
                 node.input_mapping = mapping
 
     def _fallback_plan(self, task_description: str) -> PlanResult:
-        """执行 _fallback_plan 对应的逻辑，并返回处理结果。
+        """在规划失败时构造回退计划。
 
         Args:
-            task_description: str，调用方传入的 task_description 参数。
+            task_description: 任务。
 
         Returns:
-            PlanResult，函数执行后的结果。
+            计划结果结果。
         """
         agent_name = self._guess_single_agent(task_description)
         return PlanResult(
@@ -478,13 +428,13 @@ class PlannerAgent:
         )
 
     def _guess_single_agent(self, task_description: str) -> str:
-        """执行 _guess_single_agent 对应的逻辑，并返回处理结果。
+        """为简单任务推断合适的单个智能体。
 
         Args:
-            task_description: str，调用方传入的 task_description 参数。
+            task_description: 任务。
 
         Returns:
-            str，函数执行后的结果。
+            字符串结果。
         """
         task_lower = task_description.lower()
 
@@ -501,10 +451,8 @@ class PlannerAgent:
                 if agent_name in self._registry.list_agents():
                     return agent_name
 
-        # Agent 注册与查询。
         if "code-review" in self._registry.list_agents():
             return "code-review"
 
-        # Agent 注册与查询。
         agents = self._registry.list_agents()
         return agents[0] if agents else "unknown"

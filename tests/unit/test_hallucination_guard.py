@@ -18,11 +18,7 @@ class TestHallucinationFlag:
     """HallucinationFlag 数据类测试。"""
 
     def test_flag_fields(self) -> None:
-        """验证 flag_fields 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证字段对应的测试场景。"""
         flag = HallucinationFlag(
             type="fake_reference",
             detail="chunk not found",
@@ -37,22 +33,14 @@ class TestVerificationResult:
     """VerificationResult 数据类测试。"""
 
     def test_passed_result(self) -> None:
-        """验证 passed_result 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证通过结果对应的测试场景。"""
         result = VerificationResult(passed=True)
         assert result.passed is True
         assert result.hallucination_count == 0
         assert result.flags == []
 
     def test_failed_result(self) -> None:
-        """验证 failed_result 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证失败结果对应的测试场景。"""
         result = VerificationResult(
             passed=False,
             hallucination_count=2,
@@ -67,14 +55,10 @@ class TestVerificationResult:
 
 
 class TestVerifyGeneration:
-    """verify_generation 方法测试。"""
+    """验证测试校验生成行为的测试集合。"""
 
     def test_valid_output_passes(self) -> None:
-        """验证 valid_output_passes 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证有效输出通过对应的测试场景。"""
         guard = HallucinationGuard()
         context_chunks = {"chunk-1": "def add(a, b): return a + b"}
         output = json.dumps(
@@ -93,11 +77,7 @@ class TestVerifyGeneration:
         assert result.hallucination_count == 0
 
     def test_fake_reference_detected(self) -> None:
-        """验证 fake_reference_detected 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证模拟参考检测到对应的测试场景。"""
         guard = HallucinationGuard()
         context_chunks = {"chunk-1": "def add(a, b): return a + b"}
         output = json.dumps(
@@ -117,11 +97,7 @@ class TestVerifyGeneration:
         assert any(f.type == "fake_reference" for f in result.flags)
 
     def test_fabricated_evidence_detected(self) -> None:
-        """验证 fabricated_evidence_detected 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证证据检测到对应的测试场景。"""
         guard = HallucinationGuard()
         context_chunks = {"chunk-1": "def add(a, b): return a + b"}
         output = json.dumps(
@@ -140,11 +116,7 @@ class TestVerifyGeneration:
         assert any(f.type == "fabricated_evidence" for f in result.flags)
 
     def test_phantom_reference_detected(self) -> None:
-        """验证 phantom_reference_detected 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证参考检测到对应的测试场景。"""
         guard = HallucinationGuard()
         context_chunks = {"chunk-1": "def add(a, b): return a + b"}
         output = json.dumps(
@@ -163,11 +135,7 @@ class TestVerifyGeneration:
         assert any(f.type == "phantom_reference" for f in result.flags)
 
     def test_invalid_json_returns_error(self) -> None:
-        """验证 invalid_json_returns_error 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证无效JSON返回错误对应的测试场景。"""
         guard = HallucinationGuard()
         result = guard.verify_generation("not valid json {{{", {})
         assert result.passed is False
@@ -175,11 +143,7 @@ class TestVerifyGeneration:
         assert result.flags[0].type == "json_parse_error"
 
     def test_empty_review_items_passes(self) -> None:
-        """验证 empty_review_items_passes 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证空审核条目通过对应的测试场景。"""
         guard = HallucinationGuard()
         output = json.dumps({"review_items": []})
         result = guard.verify_generation(output, {})
@@ -187,11 +151,7 @@ class TestVerifyGeneration:
         assert result.hallucination_count == 0
 
     def test_multiple_flags_accumulate(self) -> None:
-        """验证 multiple_flags_accumulate 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证多个标记对应的测试场景。"""
         guard = HallucinationGuard()
         context_chunks = {"chunk-1": "def add(a, b): return a + b"}
         output = json.dumps(
@@ -218,11 +178,7 @@ class TestCleanedResult:
     """清理结果测试。"""
 
     def test_flagged_items_marked(self) -> None:
-        """验证 flagged_items_marked 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证条目标记对应的测试场景。"""
         guard = HallucinationGuard()
         context_chunks = {"chunk-1": "content"}
         output = json.dumps(
@@ -242,11 +198,7 @@ class TestCleanedResult:
         assert cleaned["review_items"][0].get("hallucination_suspected") is True
 
     def test_clean_items_not_marked(self) -> None:
-        """验证 clean_items_not_marked 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证条目不标记对应的测试场景。"""
         guard = HallucinationGuard()
         context_chunks = {"chunk-1": "def foo(): pass"}
         output = json.dumps(

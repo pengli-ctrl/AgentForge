@@ -1,13 +1,4 @@
-"""AgentForge 模型网关层：semantic_cache。
-
-本模块负责 semantic_cache 相关能力，是 模型网关层 的组成部分。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
-- 关键路径应保留日志、指标或链路追踪信息。
-- 主要类：CacheEntry、SemanticCache。
-"""
+"""缓存模块。"""
 
 import asyncio
 import logging
@@ -22,71 +13,46 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class CacheEntry:
-    """CacheEntry。
+    """缓存条目相关组件。
 
-    CacheEntry 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - key: str。
-    - embedding: list[float]。
-    - result: dict。
-    - hit_count: int。
-    - created_at: float。
-    - last_accessed: float。
-    - 方法 age_hours()。
-    - 方法 idle_minutes()。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    Attributes:
+        key: 键。
+        embedding: 字段值。
+        result: 处理结果。
+        hit_count: 数量。
+        created_at: 创建时间。
+        last_accessed: 字段值。
     """
 
-    key: str  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-    embedding: list[float]  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    key: str
+    embedding: list[float]
     result: dict  # 缓存处理。
-    hit_count: int = 0  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    hit_count: int = 0
     created_at: float = field(default_factory=time.time)
     last_accessed: float = field(default_factory=time.time)
 
     @property
     def age_hours(self) -> float:
-        """执行 age_hours 对应的逻辑，并返回处理结果。
+        """计算存在小时数。
 
         Returns:
-            float，函数执行后的结果。
+            数值结果。
         """
         return (time.time() - self.created_at) / 3600
 
     @property
     def idle_minutes(self) -> float:
-        """执行 idle_minutes 对应的逻辑，并返回处理结果。
+        """计算空闲分钟数。
 
         Returns:
-            float，函数执行后的结果。
+            数值结果。
         """
         return (time.time() - self.last_accessed) / 60
 
 
 class SemanticCache:
-    """SemanticCache。
+    """缓存实现。"""
 
-    SemanticCache 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - DEFAULT_THRESHOLD: 0.92。
-    - DEFAULT_MAX_SIZE: 10000。
-    - DEFAULT_TTL_HOURS: 24。
-    - 方法 get()。
-    - 方法 put()。
-    - 方法 stats()。
-    - 方法 clear()。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-    """
-
-    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
     DEFAULT_THRESHOLD = 0.92
     DEFAULT_MAX_SIZE = 10000
     DEFAULT_TTL_HOURS = 24
@@ -97,43 +63,36 @@ class SemanticCache:
         max_size: int = DEFAULT_MAX_SIZE,
         ttl_hours: float = DEFAULT_TTL_HOURS,
     ):
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 SemanticCache。
 
         Args:
-            threshold: float，调用方传入的 threshold 参数。
-            max_size: int，调用方传入的 max_size 参数。
-            ttl_hours: float，调用方传入的 ttl_hours 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            threshold: 阈值。
+            max_size: 最大大小。
+            ttl_hours: 输入参数。
         """
         self._threshold = threshold
         self._max_size = max_size
         self._ttl_hours = ttl_hours
 
-        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         self._store: OrderedDict[str, CacheEntry] = OrderedDict()
         self._lock = asyncio.Lock()
 
-        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         self._total_lookups = 0
         self._total_hits = 0
         self._total_evictions = 0
 
     async def get(self, query_embedding: list[float]) -> Optional[CacheEntry]:
-        """执行 get 对应的核心操作，并保持调用契约稳定。
+        """获取缓存。
 
         Args:
-            query_embedding: list[float]，调用方传入的 query_embedding 参数。
+            query_embedding: 查询。
 
         Returns:
-            Optional[CacheEntry]，函数执行后的结果。
+            处理结果对象。
         """
         async with self._lock:
             self._total_lookups += 1
 
-            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             expired_keys = [
                 key for key, entry in self._store.items() if entry.age_hours > self._ttl_hours
             ]
@@ -155,7 +114,6 @@ class SemanticCache:
                 # 缓存处理。
                 best_entry.hit_count += 1
                 best_entry.last_accessed = time.time()
-                # 说明：该步骤用于实现上述逻辑并保证行为稳定。
                 self._store.move_to_end(best_entry.key)
                 self._total_hits += 1
 
@@ -180,24 +138,18 @@ class SemanticCache:
         embedding: list[float],
         result: dict,
     ) -> None:
-        """执行 put 对应的逻辑，并返回处理结果。
+        """写入缓存或对象存储数据。
 
         Args:
-            key_text: str，调用方传入的 key_text 参数。
-            embedding: list[float]，调用方传入的 embedding 参数。
-            result: dict，调用方传入的 result 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            key_text: 键文本。
+            embedding: 输入参数。
+            result: 处理结果。
         """
         async with self._lock:
-            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             if len(self._store) >= self._max_size:
                 await self._evict()
 
-            key = key_text[:200]  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+            key = key_text[:200]
             if key in self._store:
                 del self._store[key]
 
@@ -209,15 +161,10 @@ class SemanticCache:
             self._store[key] = entry
 
     async def _evict(self) -> None:
-        """执行 _evict 对应的逻辑，并返回处理结果。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """淘汰缓存。"""
         now = time.time()
         ttl_seconds = self._ttl_hours * 3600
 
-        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         expired_keys = [
             key for key, entry in self._store.items() if (now - entry.created_at) > ttl_seconds
         ]
@@ -225,9 +172,7 @@ class SemanticCache:
             del self._store[key]
         self._total_evictions += len(expired_keys)
 
-        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         if len(self._store) >= self._max_size:
-            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             evict_count = max(1, self._max_size // 10)
             for _ in range(evict_count):
                 if self._store:
@@ -236,14 +181,14 @@ class SemanticCache:
 
     @staticmethod
     def _cosine_similarity(v1: list[float], v2: list[float]) -> float:
-        """执行 _cosine_similarity 对应的逻辑，并返回处理结果。
+        """计算两个向量的余弦相似度。
 
         Args:
-            v1: list[float]，调用方传入的 v1 参数。
-            v2: list[float]，调用方传入的 v2 参数。
+            v1: 输入参数。
+            v2: 输入参数。
 
         Returns:
-            float，函数执行后的结果。
+            数值结果。
         """
         if len(v1) != len(v2) or not v1:
             return 0.0
@@ -263,10 +208,10 @@ class SemanticCache:
         return dot_product / (math.sqrt(norm1) * math.sqrt(norm2))
 
     def stats(self) -> dict:
-        """执行 stats 对应的逻辑，并返回处理结果。
+        """获取当前统计数据。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         hit_rate = self._total_hits / self._total_lookups if self._total_lookups > 0 else 0.0
         return {
@@ -282,11 +227,7 @@ class SemanticCache:
         }
 
     async def clear(self) -> None:
-        """执行 clear 对应的逻辑，并返回处理结果。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """清空缓存。"""
         async with self._lock:
             self._store.clear()
             self._total_lookups = 0

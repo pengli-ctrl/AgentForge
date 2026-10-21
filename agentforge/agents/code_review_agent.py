@@ -1,12 +1,4 @@
-"""
-代码审查 Agent — 分析代码质量、检测安全漏洞、生成审查报告。
-
-V3 架构中的核心 Agent，通过事件总线接收代码审查任务，
-利用 LLM + 工具调用完成代码分析，输出结构化审查结果。
-
-上下文隔离：只从 context_snapshot 中提取代码内容和审查配置，
-不接收测试日志、文档等其他 Agent 的数据。
-"""
+"""代码审查智能体模块。"""
 
 from __future__ import annotations
 
@@ -21,23 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class CodeReviewAgent(Agent):
-    """代码审查 Agent — 分析代码质量并生成审查报告。
-
-    职责：
-    - 分析代码的圈复杂度、函数长度、重复代码
-    - 检测安全漏洞（SQL 注入、XSS、硬编码密钥）
-    - 检查编码规范（命名、注释、import 顺序）
-    - 生成结构化审查报告
-
-    上下文隔离：
-    - 只提取 context_snapshot 中的 code_content 和 review_config
-    - 不接收测试日志、文档生成结果等其他 Agent 的数据
-    - 输出事件只携带审查结果摘要和 severity 级别
-
-    Args:
-        llm_gateway: LLM 网关实例。
-        tool_registry: 工具注册表（可选，不传则使用默认工具集）。
-    """
+    """代码审查智能体，分析代码质量并输出结构化审查意见。"""
 
     # 该 Agent 需要从 context_snapshot 中提取的上下文键
     REQUIRED_CONTEXT_KEYS = ["code_content", "review_config"]
@@ -47,14 +23,11 @@ class CodeReviewAgent(Agent):
         llm_gateway: Any,
         tool_registry: ToolRegistry | None = None,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 CodeReviewAgent。
 
         Args:
-            llm_gateway: Any，调用方传入的 llm_gateway 参数。
-            tool_registry: ToolRegistry | None，调用方传入的 tool_registry 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            llm_gateway: LLM 网关实例。
+            tool_registry: 工具注册表。
         """
         registry = tool_registry or ToolRegistry()
         registry.register(CodeReviewTool())
@@ -81,14 +54,11 @@ class CodeReviewAgent(Agent):
     def _extract_context(self, context_snapshot: dict[str, Any]) -> dict[str, Any]:
         """从上下文快照中提取代码审查需要的上下文。
 
-        只提取 code_content 和 review_config，不接收全量数据。
-        这是 V3 状态隔离的核心 — 解决 V2 中 context 无限膨胀的问题。
-
         Args:
-            context_snapshot: 完整的上下文快照。
+            context_snapshot: 上下文快照。
 
         Returns:
-            仅包含代码内容和审查配置的上下文子集。
+            结构化结果字典。
         """
         return {k: context_snapshot[k] for k in self.REQUIRED_CONTEXT_KEYS if k in context_snapshot}
 
@@ -98,18 +68,15 @@ class CodeReviewAgent(Agent):
         relevant_context: dict[str, Any],
         tool_results: list,
     ) -> dict[str, Any]:
-        """构造下游 Agent 需要的上下文快照。
-
-        只传递审查结果摘要和 severity 级别，
-        不传递原始代码内容（下游不需要）。
+        """构建下游上下文。
 
         Args:
             original_snapshot: 原始上下文快照。
-            relevant_context: 当前 Agent 提取的上下文。
-            tool_results: 工具执行结果。
+            relevant_context: 筛选后的相关上下文。
+            tool_results: 工具执行结果列表。
 
         Returns:
-            传递给下游 Agent 的上下文快照。
+            结构化结果字典。
         """
         downstream = {
             "code_review_result": {
@@ -123,10 +90,10 @@ class CodeReviewAgent(Agent):
         """构造初始消息列表。
 
         Args:
-            task: 任务描述。
+            task: 任务对象。
 
         Returns:
-            消息列表。
+            结果列表。
         """
         return [
             {"role": "system", "content": "You are a professional code reviewer."},

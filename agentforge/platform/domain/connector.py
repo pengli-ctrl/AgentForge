@@ -1,15 +1,4 @@
-"""AgentForge 平台领域模型层：connector。
-
-本模块定义 connector 领域模型，约束业务状态、输入输出结构和跨层数据契约。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
--
-主要类：ConnectorKind、ConnectorRiskLevel、CredentialReference、ConnectorContext、ConnectorSpec、ConnectorHealth、ConnectorInvocationResult、WebhookDelivery。
-- 主要函数：spec_to_public_dict。
-"""
+"""连接器模块。"""
 
 from __future__ import annotations
 
@@ -21,19 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ConnectorKind(str, Enum):
-    """ConnectorKind。
-
-    ConnectorKind 是状态或类型枚举，用于约束系统内部取值，避免使用散落的字符串常量。
-
-    主要成员：
-    - WEBHOOK: 'webhook'。
-    - OPENAPI: 'openapi'。
-    - HTTP: 'http'。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """连接器种类枚举。"""
 
     WEBHOOK = "webhook"
     OPENAPI = "openapi"
@@ -41,19 +18,7 @@ class ConnectorKind(str, Enum):
 
 
 class ConnectorRiskLevel(str, Enum):
-    """ConnectorRiskLevel。
-
-    ConnectorRiskLevel 是状态或类型枚举，用于约束系统内部取值，避免使用散落的字符串常量。
-
-    主要成员：
-    - LOW: 'low'。
-    - MEDIUM: 'medium'。
-    - HIGH: 'high'。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """风险级别枚举。"""
 
     LOW = "low"
     MEDIUM = "medium"
@@ -61,19 +26,12 @@ class ConnectorRiskLevel(str, Enum):
 
 
 class CredentialReference(BaseModel):
-    """CredentialReference。
+    """凭据参考相关组件。
 
-    CredentialReference 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - ref: str。
-    - vault: str。
-    - hint: str | None。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        ref: 引用。
+        vault: 密钥库。
+        hint: 字段值。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -84,21 +42,14 @@ class CredentialReference(BaseModel):
 
 
 class ConnectorContext(BaseModel):
-    """ConnectorContext。
+    """上下文领域组件。
 
-    ConnectorContext 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - tenant_id: str。
-    - task_id: str。
-    - idempotency_key: str。
-    - trace_id: str。
-    - actor: str。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        tenant_id: 租户 ID，用于数据隔离。
+        task_id: 任务ID。
+        idempotency_key: 幂等键，用于避免重复处理。
+        trace_id: 链路ID。
+        actor: 参与者。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -111,28 +62,21 @@ class ConnectorContext(BaseModel):
 
 
 class ConnectorSpec(BaseModel):
-    """ConnectorSpec。
+    """规格相关组件。
 
-    ConnectorSpec 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - connector_id: str。
-    - tenant_id: str。
-    - name: str。
-    - kind: ConnectorKind。
-    - version: str。
-    - risk_level: ConnectorRiskLevel。
-    - endpoint: str | None。
-    - allowed_actions: list[str]。
-    - credential: CredentialReference | None。
-    - config: dict[str, Any]。
-    - enabled: bool。
-    - created_at: datetime。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        connector_id: 连接器ID。
+        tenant_id: 租户 ID，用于数据隔离。
+        name: 名称。
+        kind: 资源种类。
+        version: 版本号。
+        risk_level: 风险级别。
+        endpoint: 端点。
+        allowed_actions: 允许操作。
+        credential: 凭据。
+        config: 组件配置。
+        enabled: 是否启用。
+        created_at: 创建时间。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -152,19 +96,12 @@ class ConnectorSpec(BaseModel):
 
 
 class ConnectorHealth(BaseModel):
-    """ConnectorHealth。
+    """健康相关组件。
 
-    ConnectorHealth 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - connector_id: str。
-    - healthy: bool。
-    - detail: str。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        connector_id: 连接器ID。
+        healthy: 字段值。
+        detail: 详情。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -175,22 +112,15 @@ class ConnectorHealth(BaseModel):
 
 
 class ConnectorInvocationResult(BaseModel):
-    """ConnectorInvocationResult。
+    """结果相关组件。
 
-    ConnectorInvocationResult 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - connector_id: str。
-    - action: str。
-    - ok: bool。
-    - data: dict[str, Any]。
-    - error: str | None。
-    - idempotent_replay: bool。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        connector_id: 连接器ID。
+        action: 操作。
+        ok: 字段值。
+        data: 数据内容。
+        error: 错误信息。
+        idempotent_replay: 幂等。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -204,26 +134,18 @@ class ConnectorInvocationResult(BaseModel):
 
 
 class WebhookDelivery(BaseModel):
-    """WebhookDelivery。
+    """Webhook相关组件。
 
-    WebhookDelivery 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - tenant_id: str。
-    - source: str。
-    - event_type: str。
-    - event_id: str。
-    - conversation_id: str。
-    - customer_id: str。
-    - text: str。
-    - payload: dict[str, Any]。
-    - received_at: datetime。
-    - 方法 to_ticket_event()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        tenant_id: 租户 ID，用于数据隔离。
+        source: 调用或事件来源。
+        event_type: 事件。
+        event_id: 事件 ID。
+        conversation_id: 会话ID。
+        customer_id: 客户ID。
+        text: 文本。
+        payload: 事件、工作流或请求载荷。
+        received_at: 于。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -239,10 +161,10 @@ class WebhookDelivery(BaseModel):
     received_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_ticket_event(self) -> dict[str, Any]:
-        """执行 to_ticket_event 对应的逻辑，并返回处理结果。
+        """将 Connector 执行结果转换为工单事件载荷。
 
         Returns:
-            dict[str, Any]，函数执行后的结果。
+            结构化结果字典。
         """
         return {
             "tenant_id": self.tenant_id,
@@ -272,30 +194,29 @@ _SENSITIVE_KEY_TOKENS = (
 
 
 def _is_sensitive_key(key: str) -> bool:
-    """执行 _is_sensitive_key 对应的逻辑，并返回处理结果。
+    """判断键是否成立。
 
     Args:
-        key: str，调用方传入的 key 参数。
+        key: 缓存或配置键。
 
     Returns:
-        bool，函数执行后的结果。
+        操作是否成功。
     """
     lower = key.lower()
     return any(tok in lower for tok in _SENSITIVE_KEY_TOKENS)
 
 
 def _redact(value: Any, key: str = "") -> Any:
-    """执行 _redact 对应的逻辑，并返回处理结果。
+    """脱敏数据。
 
     Args:
-        value: Any，调用方传入的 value 参数。
-        key: str，调用方传入的 key 参数。
+        value: 待处理值。
+        key: 缓存或配置键。
 
     Returns:
-        Any，函数执行后的结果。
+        处理结果对象。
     """
     if _is_sensitive_key(key):
-        # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
         return "***" if value else value
     if isinstance(value, dict):
         return {str(k): _redact(v, str(k)) for k, v in value.items()}
@@ -305,13 +226,13 @@ def _redact(value: Any, key: str = "") -> Any:
 
 
 def spec_to_public_dict(spec: ConnectorSpec) -> dict[str, Any]:
-    """执行 spec_to_public_dict 对应的逻辑，并返回处理结果。
+    """处理规格到公共字典。
 
     Args:
-        spec: ConnectorSpec，调用方传入的 spec 参数。
+        spec: 资源规格定义。
 
     Returns:
-        dict[str, Any]，函数执行后的结果。
+        结构化结果字典。
     """
     data = spec.model_dump(mode="json")
     data["config"] = _redact(spec.config or {})

@@ -1,12 +1,4 @@
-"""任务管理 REST 接口 — 任务提交、状态查询、结果获取、任务取消。
-
-API 端点：
-    POST   /api/v1/tasks          — 提交新任务
-    GET    /api/v1/tasks          — 查询任务列表
-    GET    /api/v1/tasks/{id}     — 查询任务详情
-    GET    /api/v1/tasks/{id}/result — 获取任务结果
-    POST   /api/v1/tasks/{id}/cancel — 取消任务
-"""
+"""任务模块。"""
 
 from __future__ import annotations
 
@@ -25,15 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class TaskRoutes:
-    """任务管理路由处理器。
-
-    封装任务相关的 HTTP 请求处理逻辑，与 FastAPI 路由层解耦。
-    便于测试时直接调用处理方法，不依赖 HTTP 层。
-
-    Args:
-        task_store: 任务存储实例。
-        workflow_engine: 工作流引擎实例（可选，用于异步执行任务）。
-    """
+    """任务管理路由处理器。"""
 
     # 单页允许返回的最大条数，避免超大 limit 拖垮查询。
     MAX_LIMIT = 1000
@@ -43,14 +27,11 @@ class TaskRoutes:
         task_store: TaskStore,
         workflow_engine: Any = None,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 TaskRoutes。
 
         Args:
-            task_store: TaskStore，调用方传入的 task_store 参数。
-            workflow_engine: Any，调用方传入的 workflow_engine 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            task_store: 任务存储。
+            workflow_engine: 工作流引擎。
         """
         self.task_store = task_store
         self.workflow_engine = workflow_engine
@@ -59,13 +40,13 @@ class TaskRoutes:
         """提交新任务。
 
         Args:
-            body: 请求体，包含 workflow_name、input_data、priority。
+            body: 请求体数据。
 
         Returns:
-            创建的任务信息。
+            结构化结果字典。
 
         Raises:
-            APIError: 请求参数缺失时抛出 VALIDATION_ERROR。
+            VALIDATION_ERROR: 操作无法完成时抛出。
         """
         workflow_name = body.get("workflow_name", "")
         if not workflow_name:
@@ -108,10 +89,10 @@ class TaskRoutes:
             task_id: 任务 ID。
 
         Returns:
-            任务信息。
+            结构化结果字典。
 
         Raises:
-            APIError: 任务不存在时抛出 NOT_FOUND。
+            NOT_FOUND: 操作无法完成时抛出。
         """
         task = await self.task_store.get(task_id)
         if task is None:
@@ -125,10 +106,10 @@ class TaskRoutes:
             task_id: 任务 ID。
 
         Returns:
-            任务结果。
+            结构化结果字典。
 
         Raises:
-            APIError: 任务不存在时抛出 NOT_FOUND。
+            NOT_FOUND: 操作无法完成时抛出。
         """
         task = await self.task_store.get(task_id)
         if task is None:
@@ -148,10 +129,11 @@ class TaskRoutes:
             task_id: 任务 ID。
 
         Returns:
-            更新后的任务信息。
+            结构化结果字典。
 
         Raises:
-            APIError: 任务不存在时抛出 NOT_FOUND。
+            NOT_FOUND: 操作无法完成时抛出。
+            INVALID_STATE_TRANSITION: 操作无法完成时抛出。
         """
         task = await self.task_store.get(task_id)
         if task is None:
@@ -172,16 +154,15 @@ class TaskRoutes:
         """查询任务列表。
 
         Args:
-            status: 按状态过滤。
-            limit: 返回数量上限（负值归零，超过 ``MAX_LIMIT`` 时截断）。
-            offset: 分页偏移量（负值归零）。
+            status: 目标状态。
+            limit: 返回记录的最大数量。
+            offset: 分页偏移量。
 
         Returns:
-            ``tasks`` 当前页任务列表、``returned`` 本页实际返回条数、
-            以及规范化后的 ``limit``/``offset`` 分页参数。
-            说明：当前数据源不提供独立的总行数统计，因此返回 ``returned``
-            （本页实际条数）而非 ``total``，避免把"本页行数"误当作"总数"
-            的分页语义错误。
+            结构化结果字典。
+
+        Raises:
+            VALIDATION_ERROR: 操作无法完成时抛出。
         """
         # 边界校验：拒绝负值并对 limit 设上限，避免 LIMIT -1 / 超大 limit 问题。
         limit = max(0, min(int(limit), self.MAX_LIMIT))
@@ -207,7 +188,7 @@ class TaskRoutes:
         """异步执行任务（内部方法）。
 
         Args:
-            task: 要执行的任务。
+            task: 任务对象。
         """
         try:
             await self.task_store.update_status(task.task_id, TaskStatus.RUNNING)

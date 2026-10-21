@@ -1,13 +1,4 @@
-"""AgentForge 编排执行层：timeout。
-
-本模块负责 timeout 相关能力，是 编排执行层 的组成部分。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
-- 关键路径应保留日志、指标或链路追踪信息。
-- 主要类：TimeoutConfig、TimeoutManager。
-"""
+"""超时模块。"""
 
 import asyncio
 import logging
@@ -19,34 +10,23 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class TimeoutConfig:
-    """TimeoutConfig。
+    """超时配置模型。
 
-    TimeoutConfig 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - llm_timeout: float。
-    - agent_timeout: float。
-    - dag_timeout: float。
-    - 方法 validate()。
-    - 方法 ratios()。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    Attributes:
+        llm_timeout: LLM超时。
+        agent_timeout: 智能体超时。
+        dag_timeout: DAG超时。
     """
 
-    llm_timeout: float = 10.0  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-    agent_timeout: float = 30.0  # Agent 注册与查询。
-    dag_timeout: float = 300.0  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    llm_timeout: float = 10.0
+    agent_timeout: float = 30.0
+    dag_timeout: float = 300.0
 
     def validate(self) -> None:
-        """执行 validate 对应的逻辑，并返回处理结果。
-
-        Returns:
-            None，函数执行后的结果。
+        """校验超时。
 
         Raises:
-            ValueError: 当输入、状态或外部依赖不满足要求时抛出。
+            ValueError: 输入值或业务状态不合法时抛出。
         """
         if not (self.llm_timeout < self.agent_timeout < self.dag_timeout):
             raise ValueError(
@@ -55,10 +35,10 @@ class TimeoutConfig:
             )
 
     def ratios(self) -> dict[str, float]:
-        """执行 ratios 对应的逻辑，并返回处理结果。
+        """计算各层超时的时间比例。
 
         Returns:
-            dict[str, float]，函数执行后的结果。
+            结构化结果字典。
         """
         return {
             "agent_to_llm": round(self.agent_timeout / self.llm_timeout, 1),
@@ -68,43 +48,29 @@ class TimeoutConfig:
 
 
 class TimeoutManager:
-    """TimeoutManager。
-
-    TimeoutManager 是核心运行时组件，负责状态管理、调度和跨模块协作。
-
-    主要成员：
-    - 方法 execute_with_llm_timeout()。
-    - 方法 execute_with_agent_timeout()。
-    - 方法 execute_with_dag_timeout()。
-    - 方法 config()。
-    - 方法 timeout_stats()。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-    """
+    """超时领域组件。"""
 
     def __init__(self, config: TimeoutConfig | None = None):
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 TimeoutManager。
 
         Args:
-            config: TimeoutConfig | None，调用方传入的 config 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            config: 组件配置。
         """
         self._config = config or TimeoutConfig()
         self._config.validate()
         self._timeout_count = {"llm": 0, "agent": 0, "dag": 0}
 
     async def execute_with_llm_timeout(self, coro: Coroutine) -> Any:
-        """执行 execute_with_llm_timeout 对应的逻辑，并返回处理结果。
+        """执行使用LLM超时。
 
         Args:
-            coro: Coroutine，调用方传入的 coro 参数。
+            coro: 输入参数。
 
         Returns:
-            Any，函数执行后的结果。
+            处理结果对象。
+
+        Raises:
+            Exception: 操作无法完成时抛出。
         """
         try:
             return await asyncio.wait_for(coro, timeout=self._config.llm_timeout)
@@ -114,13 +80,16 @@ class TimeoutManager:
             raise
 
     async def execute_with_agent_timeout(self, coro: Coroutine) -> Any:
-        """执行 execute_with_agent_timeout 对应的逻辑，并返回处理结果。
+        """执行及智能体超时。
 
         Args:
-            coro: Coroutine，调用方传入的 coro 参数。
+            coro: 输入参数。
 
         Returns:
-            Any，函数执行后的结果。
+            处理结果对象。
+
+        Raises:
+            Exception: 操作无法完成时抛出。
         """
         try:
             return await asyncio.wait_for(coro, timeout=self._config.agent_timeout)
@@ -130,13 +99,16 @@ class TimeoutManager:
             raise
 
     async def execute_with_dag_timeout(self, coro: Coroutine) -> Any:
-        """执行 execute_with_dag_timeout 对应的逻辑，并返回处理结果。
+        """执行使用DAG超时。
 
         Args:
-            coro: Coroutine，调用方传入的 coro 参数。
+            coro: 输入参数。
 
         Returns:
-            Any，函数执行后的结果。
+            处理结果对象。
+
+        Raises:
+            Exception: 操作无法完成时抛出。
         """
         try:
             return await asyncio.wait_for(coro, timeout=self._config.dag_timeout)
@@ -151,18 +123,18 @@ class TimeoutManager:
 
     @property
     def config(self) -> TimeoutConfig:
-        """执行 config 对应的逻辑，并返回处理结果。
+        """执行配置。
 
         Returns:
-            TimeoutConfig，函数执行后的结果。
+            超时配置结果。
         """
         return self._config
 
     @property
     def timeout_stats(self) -> dict[str, int]:
-        """执行 timeout_stats 对应的逻辑，并返回处理结果。
+        """返回超时统计。
 
         Returns:
-            dict[str, int]，函数执行后的结果。
+            结构化结果字典。
         """
         return dict(self._timeout_count)

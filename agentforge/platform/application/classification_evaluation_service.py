@@ -1,17 +1,8 @@
-"""AgentForge 平台应用服务层：classification_evaluation_service。
-
-本模块实现 classification_evaluation_service 应用服务，编排多个领域对象和基础设施组件完成业务流程。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：ClassificationEvaluationService。
-"""
+"""分类评估服务模块。"""
 
 from __future__ import annotations
 
-from agentforge.platform.application.classifier import StructuredClassifier
+from agentforge.platform.domain.classification import StructuredClassifier
 from agentforge.platform.domain.quality import (
     ClassificationEvaluation,
     ClassificationGoldenItem,
@@ -20,13 +11,13 @@ from agentforge.platform.domain.quality import (
 
 
 def _average(values: list[float]) -> float:
-    """执行 _average 对应的逻辑，并返回处理结果。
+    """计算指标平均值。
 
     Args:
-        values: list[float]，调用方传入的 values 参数。
+        values: 字段值集合。
 
     Returns:
-        float，函数执行后的结果。
+        数值结果。
     """
     if not values:
         return 0.0
@@ -34,37 +25,24 @@ def _average(values: list[float]) -> float:
 
 
 class ClassificationEvaluationService:
-    """ClassificationEvaluationService。
-
-    ClassificationEvaluationService 编排业务流程，协调仓储、模型、策略和外部连接器完成用例。
-
-    主要成员：
-    - 方法 evaluate()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """分类评估应用服务，编排领域用例及其副作用。"""
 
     def __init__(self, classifier: StructuredClassifier) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 ClassificationEvaluationService。
 
         Args:
-            classifier: StructuredClassifier，调用方传入的 classifier 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            classifier: 分类器。
         """
         self._classifier = classifier
 
     async def evaluate(self, samples: list[ClassificationGoldenItem]) -> ClassificationReport:
-        """执行 evaluate 对应的逻辑，并返回处理结果。
+        """评估输入数据并生成结果。
 
         Args:
-            samples: list[ClassificationGoldenItem]，调用方传入的 samples 参数。
+            samples: 样本。
 
         Returns:
-            ClassificationReport，函数执行后的结果。
+            分类报告结果。
         """
         evaluations: list[ClassificationEvaluation] = []
         for item in samples:

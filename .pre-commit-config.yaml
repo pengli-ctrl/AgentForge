@@ -31,4 +31,3 @@ repos:
       - id: mypy
         additional_dependencies: []
         args: [--ignore-missing-imports]
-        continue_on_error: true

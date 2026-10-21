@@ -1,4 +1,4 @@
-"""存储层数据模型 — Task 和 Trace 的数据结构定义。"""
+"""包公共导出。"""
 
 from agentforge.storage.models.task import Task, TaskPriority, TaskStatus
 from agentforge.storage.models.trace import TraceEvent, TraceSpan

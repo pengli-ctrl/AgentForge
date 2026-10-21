@@ -1,13 +1,4 @@
-"""AgentForge 平台基础设施层：hybrid_scores。
-
-本模块负责 hybrid_scores 相关的平台能力，是 平台基础设施层 的组成部分。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要函数：fuse_scores、merge_retrieved_chunks。
-"""
+"""混合评分模块。"""
 
 from __future__ import annotations
 
@@ -30,23 +21,27 @@ def fuse_scores(
 ) -> dict[str, float]:
     """加权融合关键词分数与向量分数（稠密度量，非 RRF 排名融合）。
 
-    两路分数先各自归一化到 [0, 1]，再按权重线性合并：
-        fused = fts_weight * norm_kw + vector_weight * norm_vec
+    Args:
+        keyword_scores: 关键词评分。
+        vector_scores: 评分。
+        fts_weight: 输入参数。
+        vector_weight: 输入参数。
 
-    未出现在某一路的项，该路贡献 0。这样关键词命中和向量相似度可合并排序。
+    Returns:
+        结构化结果字典。
     """
     all_keys = set(keyword_scores) | set(vector_scores)
     if not all_keys:
         return {}
 
     def _normalize(scores: dict[str, float]) -> dict[str, float]:
-        """执行 _normalize 对应的逻辑，并返回处理结果。
+        """规范化数据。
 
         Args:
-            scores: dict[str, float]，调用方传入的 scores 参数。
+            scores: 评分。
 
         Returns:
-            dict[str, float]，函数执行后的结果。
+            结构化结果字典。
         """
         if not scores:
             return {}
@@ -69,15 +64,15 @@ def merge_retrieved_chunks(
     fused_scores: dict[str, float],
     mode: str,
 ) -> list[RetrievedChunk]:
-    """执行 merge_retrieved_chunks 对应的逻辑，并返回处理结果。
+    """合并已检索分片。
 
     Args:
-        chunks_by_id: dict[str, RetrievedChunk]，调用方传入的 chunks_by_id 参数。
-        fused_scores: dict[str, float]，调用方传入的 fused_scores 参数。
-        mode: str，调用方传入的 mode 参数。
+        chunks_by_id: 分片由 ID。
+        fused_scores: 评分。
+        mode: 运行模式。
 
     Returns:
-        list[RetrievedChunk]，函数执行后的结果。
+        结果列表。
     """
     results: list[RetrievedChunk] = []
     for chunk_id, score in fused_scores.items():
@@ -96,6 +91,7 @@ def merge_retrieved_chunks(
                 mode=mode,
                 fts_score=chunk.fts_score,
                 vector_score=chunk.vector_score,
+                metadata=dict(chunk.metadata),
             )
         )
     results.sort(key=lambda item: item.score, reverse=True)

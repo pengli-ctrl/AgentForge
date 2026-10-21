@@ -1,19 +1,4 @@
-"""FastAPI 应用入口 — 注册路由和中间件。
-
-创建 FastAPI 应用实例，注册所有路由和中间件。
-支持通过环境变量配置认证、限流等参数。
-
-启动方式：
-    uvicorn agentforge.api.app:app --host 0.0.0.0 --port 8000
-
-环境变量：
-    AGENTFORGE_API_KEYS: 逗号分隔的 API Key 列表
-    AGENTFORGE_DEBUG: 是否启用 DEBUG 模式（true/false）
-    AGENTFORGE_RATE_LIMIT_CAPACITY: 限流桶容量
-    AGENTFORGE_RATE_LIMIT_RATE: 限流速率（请求/秒）
-    AGENTFORGE_ALLOW_NO_AUTH: 显式关闭认证（仅当未配置 API Key 且非 DEBUG 时需要，
-                              生产环境请勿开启）
-"""
+"""应用模块。"""
 
 from __future__ import annotations
 
@@ -25,6 +10,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from agentforge import __version__
 from agentforge.api.middleware.auth import AuthMiddleware
 from agentforge.api.middleware.error_handler import APIError, ErrorHandlerMiddleware
 from agentforge.api.middleware.rate_limit import RateLimitMiddleware
@@ -46,19 +32,19 @@ def create_app(
     rate_limit_capacity: float = 100.0,
     rate_limit_rate: float = 10.0,
 ) -> Any:
-    """创建 FastAPI 应用实例。
+    """创建应用。
 
     Args:
-        task_store: 任务存储实例（不传则创建内存存储）。
-        agent_registry: Agent 注册表（不传则创建空注册表）。
-        workflow_engine: 工作流引擎实例（可选）。
-        api_keys: 合法的 API Key 集合。
-        debug: 是否启用 DEBUG 模式。
-        rate_limit_capacity: 限流桶容量。
-        rate_limit_rate: 限流速率。
+        task_store: 任务存储。
+        agent_registry: 智能体注册表。
+        workflow_engine: 工作流引擎。
+        api_keys: API键。
+        debug: 调试。
+        rate_limit_capacity: 速率限制。
+        rate_limit_rate: 速率限制速率。
 
     Returns:
-        FastAPI 应用实例。
+        处理结果对象。
     """
     # 初始化中间件
     env_api_keys = os.environ.get("AGENTFORGE_API_KEYS", "")
@@ -126,7 +112,7 @@ def create_app(
     app = FastAPI(
         title="AgentForge API",
         description="事件驱动的多 Agent 编排框架 REST API",
-        version="3.0.0",
+        version=__version__,
         docs_url="/docs",
         redoc_url="/redoc",
     )
@@ -140,8 +126,12 @@ def create_app(
     async def error_handler_middleware(request: Request, call_next):
         """全局异常标准化中间件。
 
-        包裹后续的认证/限流中间件及路由处理，把未在路由层捕获的异常
-        统一转换为标准化 JSON 错误响应。
+        Args:
+            request: 当前 HTTP 请求。
+            call_next: 调用下一个。
+
+        Returns:
+            处理结果。
         """
         try:
             return await call_next(request)
@@ -159,7 +149,15 @@ def create_app(
 
     @app.middleware("http")
     async def auth_and_rate_limit(request: Request, call_next):
-        """认证 + 限流中间件。"""
+        """认证 + 限流中间件。
+
+        Args:
+            request: 当前 HTTP 请求。
+            call_next: 调用下一个。
+
+        Returns:
+            处理结果。
+        """
         # 认证
         headers = dict(request.headers)
         if not auth_middleware.authenticate(headers, request.url.path):
@@ -193,14 +191,25 @@ def create_app(
 
     @app.get("/health")
     async def health_check() -> dict[str, str]:
-        """健康检查端点。"""
+        """健康检查端点。
+
+        Returns:
+            结构化结果字典。
+        """
         return {"status": "healthy", "version": "3.0.0"}
 
     # --- 任务管理路由 ---
 
     @app.post("/api/v1/tasks")
     async def create_task(request: Request) -> JSONResponse:
-        """提交新任务。"""
+        """提交新任务。
+
+        Args:
+            request: 当前 HTTP 请求。
+
+        Returns:
+            处理结果对象。
+        """
         try:
             try:
                 body = await request.json()
@@ -233,7 +242,16 @@ def create_app(
     async def list_tasks(
         status: str | None = None, limit: int = 50, offset: int = 0
     ) -> JSONResponse:
-        """查询任务列表。"""
+        """查询任务列表。
+
+        Args:
+            status: 目标状态。
+            limit: 返回记录的最大数量。
+            offset: 分页偏移量。
+
+        Returns:
+            处理结果对象。
+        """
         try:
             result = await task_routes.list_tasks(status, limit, offset)
             return JSONResponse(content=result)
@@ -251,7 +269,14 @@ def create_app(
 
     @app.get("/api/v1/tasks/{task_id}")
     async def get_task(task_id: str) -> JSONResponse:
-        """查询任务详情。"""
+        """查询任务详情。
+
+        Args:
+            task_id: 任务 ID。
+
+        Returns:
+            处理结果对象。
+        """
         try:
             result = await task_routes.get_task(task_id)
             return JSONResponse(content=result)
@@ -269,7 +294,14 @@ def create_app(
 
     @app.get("/api/v1/tasks/{task_id}/result")
     async def get_task_result(task_id: str) -> JSONResponse:
-        """获取任务结果。"""
+        """获取任务结果。
+
+        Args:
+            task_id: 任务 ID。
+
+        Returns:
+            处理结果对象。
+        """
         try:
             result = await task_routes.get_task_result(task_id)
             return JSONResponse(content=result)
@@ -287,7 +319,14 @@ def create_app(
 
     @app.post("/api/v1/tasks/{task_id}/cancel")
     async def cancel_task(task_id: str) -> JSONResponse:
-        """取消任务。"""
+        """取消任务。
+
+        Args:
+            task_id: 任务 ID。
+
+        Returns:
+            处理结果对象。
+        """
         try:
             result = await task_routes.cancel_task(task_id)
             return JSONResponse(content=result)
@@ -307,19 +346,34 @@ def create_app(
 
     @app.get("/api/v1/agents")
     async def list_agents() -> JSONResponse:
-        """查询 Agent 列表。"""
+        """处理 GET /api/v1/agents 请求，查询智能体。
+
+        Returns:
+            处理结果对象。
+        """
         result = await agent_routes.list_agents()
         return JSONResponse(content=result)
 
     @app.get("/api/v1/agents/health")
     async def agents_health() -> JSONResponse:
-        """Agent 健康检查。"""
+        """检查智能体健康状态。
+
+        Returns:
+            处理结果对象。
+        """
         result = await agent_routes.health_check()
         return JSONResponse(content=result)
 
     @app.get("/api/v1/agents/{name}")
     async def get_agent(name: str) -> JSONResponse:
-        """查询单个 Agent 详情。"""
+        """处理 GET /api/v1/agents/{name} 请求，获取智能体。
+
+        Args:
+            name: 资源或对象名称。
+
+        Returns:
+            处理结果对象。
+        """
         try:
             result = await agent_routes.get_agent(name)
             return JSONResponse(content=result)
@@ -333,7 +387,11 @@ def create_app(
 
     @app.get("/metrics")
     async def get_metrics():
-        """Prometheus 指标端点。"""
+        """获取指标。
+
+        Returns:
+            处理结果。
+        """
         from fastapi.responses import PlainTextResponse
 
         result = await metrics_routes.get_metrics()

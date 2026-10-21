@@ -1,8 +1,4 @@
-"""文件读写工具 — 提供文件读取和写入功能。
-
-Agent 通过工具注册表调用此工具读写文件，
-用于读取待审查的代码文件和写入生成的文档。
-"""
+"""文件工具模块。"""
 
 from __future__ import annotations
 
@@ -19,20 +15,8 @@ logger = logging.getLogger(__name__)
 class FileIOTool(BaseTool):
     """文件读写工具 — 提供安全的文件读写功能。
 
-    功能：
-    - 读取文件内容
-    - 写入文件内容
-    - 列出目录下的文件
-    - 检查文件是否存在
-
-    安全设计：
-    - 路径限制在指定根目录内（防止路径穿越攻击）
-    - 文件大小限制（防止读取超大文件）
-    - 文件类型白名单（可选）
-
-    Args:
-        root_dir: 允许操作的根目录。
-        max_file_size: 最大文件大小（字节）。
+    Attributes:
+        ALLOWED_EXTENSIONS: 允许。
     """
 
     # 允许的文件扩展名（空集合表示不限制）
@@ -61,28 +45,29 @@ class FileIOTool(BaseTool):
         root_dir: str = ".",
         max_file_size: int = 10 * 1024 * 1024,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 FileIOTool。
 
         Args:
-            root_dir: str，调用方传入的 root_dir 参数。
-            max_file_size: int，调用方传入的 max_file_size 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            root_dir: 根。
+            max_file_size: 最大文件大小。
         """
         self.root_dir = os.path.abspath(root_dir)
         self.max_file_size = max_file_size
 
     @property
     def name(self) -> str:
-        """工具唯一标识。"""
+        """工具唯一标识。
+
+        Returns:
+            字符串结果。
+        """
         return "file_io"
 
     def schema(self) -> dict:
-        """执行 schema 对应的逻辑，并返回处理结果。
+        """返回工具参数的结构定义。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         return {
             "type": "function",
@@ -112,15 +97,13 @@ class FileIOTool(BaseTool):
         }
 
     async def execute(self, **kwargs: Any) -> ToolResult:
-        """执行文件操作。
+        """执行核心处理逻辑并返回结果。
 
         Args:
-            operation: 操作类型（read/write/list/exists）。
-            file_path: 文件路径。
-            content: 写入内容（write 操作时需要）。
+            kwargs: 关键字参数。
 
         Returns:
-            文件操作结果。
+            工具结果结果。
         """
         operation = kwargs.get("operation", "")
         file_path = kwargs.get("file_path", "")
@@ -146,16 +129,11 @@ class FileIOTool(BaseTool):
     def _validate_path(self, file_path: str) -> bool:
         """验证文件路径是否安全（在根目录内）。
 
-        使用 ``Path.resolve().relative_to(root)`` 做路径边界判断，而非字符串
-        前缀 ``startswith``。前缀匹配存在经典绕过：当 ``root_dir=".../user"``
-        时，``.../user_evil/a.py`` 也以该前缀开头而通过。基于文件系统组件
-        的边界判断能真正防止路径穿越。
-
         Args:
             file_path: 文件路径。
 
         Returns:
-            路径是否安全。
+            操作是否成功。
         """
         root = Path(self.root_dir).resolve()
 
@@ -177,7 +155,7 @@ class FileIOTool(BaseTool):
             file_path: 文件路径。
 
         Returns:
-            文件内容。
+            工具结果结果。
         """
         if not self._validate_path(file_path):
             return ToolResult(success=False, output="", error="Path outside allowed root directory")
@@ -209,7 +187,7 @@ class FileIOTool(BaseTool):
             content: 写入内容。
 
         Returns:
-            写入结果。
+            工具结果结果。
         """
         if not self._validate_path(file_path):
             return ToolResult(success=False, output="", error="Path outside allowed root directory")
@@ -231,10 +209,10 @@ class FileIOTool(BaseTool):
         """列出目录内容。
 
         Args:
-            dir_path: 目录路径。
+            dir_path: 路径。
 
         Returns:
-            文件列表。
+            工具结果结果。
         """
         if not self._validate_path(dir_path):
             return ToolResult(success=False, output="", error="Path outside allowed root directory")
@@ -260,7 +238,7 @@ class FileIOTool(BaseTool):
             file_path: 文件路径。
 
         Returns:
-            存在性检查结果。
+            工具结果结果。
         """
         if not self._validate_path(file_path):
             return ToolResult(success=False, output="", error="Path outside allowed root directory")

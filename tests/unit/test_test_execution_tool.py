@@ -1,4 +1,4 @@
-"""TestExecutionTool 单元测试 — subprocess 执行 + 输出解析。
+"""测试执行工具测试模块。
 
 测试要点：
 - 成功执行（Mock subprocess 返回 passed=5, failed=0）
@@ -18,9 +18,7 @@ import pytest
 
 from agentforge.tools.test_execution_tool import TestExecutionTool
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 辅助函数 — mock asyncio.create_subprocess_exec
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 def _make_mock_process(
@@ -28,15 +26,15 @@ def _make_mock_process(
     stderr: bytes = b"",
     returncode: int = 0,
 ):
-    """创建 mock 的 asyncio 子进程对象。
+    """构造模拟处理。
 
     Args:
-        stdout: 标准输出内容。
-        stderr: 标准错误内容。
-        returncode: 退出码。
+        stdout: 输入参数。
+        stderr: 输入参数。
+        returncode: 输入参数。
 
     Returns:
-        MagicMock 模拟的 Process 对象。
+        处理结果。
     """
     process = MagicMock()
     process.communicate = AsyncMock(return_value=(stdout, stderr))
@@ -44,29 +42,19 @@ def _make_mock_process(
     return process
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 基础测试
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestTestExecutionToolBasic:
     """TestExecutionTool 基础属性测试。"""
 
     def test_name(self) -> None:
-        """验证 name 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证名称对应的测试场景。"""
         tool = TestExecutionTool()
         assert tool.name == "test_execution"
 
     def test_schema(self) -> None:
-        """验证 schema 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证结构对应的测试场景。"""
         tool = TestExecutionTool()
         schema = tool.schema()
         assert schema["type"] == "function"
@@ -79,27 +67,17 @@ class TestTestExecutionToolBasic:
         assert "test_path" in required
 
     def test_init_defaults(self) -> None:
-        """验证 init_defaults 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证初始化默认项对应的测试场景。"""
         tool = TestExecutionTool()
         assert tool.timeout == 300
 
     def test_init_custom_timeout(self) -> None:
-        """验证 init_custom_timeout 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证初始化自定义超时对应的测试场景。"""
         tool = TestExecutionTool(timeout=60)
         assert tool.timeout == 60
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 成功执行测试
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestTestExecutionSuccess:
@@ -107,7 +85,7 @@ class TestTestExecutionSuccess:
 
     @pytest.mark.asyncio
     async def test_all_tests_pass(self) -> None:
-        """所有测试通过时应返回 success=True。"""
+        """验证全部测试通过对应的测试场景。"""
         stdout = b"===== 5 passed in 2.5s =====\n"
         mock_process = _make_mock_process(stdout=stdout, returncode=0)
 
@@ -180,9 +158,7 @@ class TestTestExecutionSuccess:
         assert result.metadata["total"] == 0
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 测试失败场景
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestTestExecutionFailure:
@@ -190,7 +166,7 @@ class TestTestExecutionFailure:
 
     @pytest.mark.asyncio
     async def test_some_tests_fail(self) -> None:
-        """部分测试失败时应返回 success=False。"""
+        """验证测试失败对应的测试场景。"""
         stdout = b"===== 3 passed, 2 failed in 3.0s =====\n"
         stderr = b"FAILED test_a - AssertionError\nFAILED test_b - KeyError\n"
         mock_process = _make_mock_process(stdout=stdout, stderr=stderr, returncode=1)
@@ -224,7 +200,7 @@ class TestTestExecutionFailure:
 
     @pytest.mark.asyncio
     async def test_all_tests_fail(self) -> None:
-        """所有测试失败时应返回 success=False。"""
+        """验证全部测试失败对应的测试场景。"""
         stdout = b"===== 3 failed in 2.0s =====\n"
         mock_process = _make_mock_process(stdout=stdout, returncode=1)
 
@@ -240,9 +216,7 @@ class TestTestExecutionFailure:
         assert result.metadata["failed"] == 3
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 超时处理
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestTestExecutionTimeout:
@@ -250,7 +224,7 @@ class TestTestExecutionTimeout:
 
     @pytest.mark.asyncio
     async def test_timeout_returns_failure(self) -> None:
-        """超时应返回 success=False。"""
+        """验证超时返回失败对应的测试场景。"""
         mock_process = MagicMock()
         mock_process.communicate = MagicMock()
         mock_process.kill = MagicMock()
@@ -298,9 +272,7 @@ class TestTestExecutionTimeout:
         assert result.metadata["coverage"] is None
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 自定义命令
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestTestExecutionCustomCommand:
@@ -353,30 +325,28 @@ class TestTestExecutionCustomCommand:
         assert "--tb=short" in args
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 输出解析
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestTestExecutionOutputParsing:
     """输出解析测试。"""
 
     def test_parse_passed_only(self) -> None:
-        """解析只有 passed 的输出。"""
+        """验证解析通过对应的测试场景。"""
         result = TestExecutionTool._parse_output("10 passed in 5.0s")
         assert result["passed"] == 10
         assert result["failed"] == 0
         assert result["total"] == 10
 
     def test_parse_passed_and_failed(self) -> None:
-        """解析 passed 和 failed 共存的输出。"""
+        """验证解析通过及失败对应的测试场景。"""
         result = TestExecutionTool._parse_output("3 passed, 2 failed in 3.0s")
         assert result["passed"] == 3
         assert result["failed"] == 2
         assert result["total"] == 5
 
     def test_parse_failed_only(self) -> None:
-        """解析只有 failed 的输出。"""
+        """验证解析失败对应的测试场景。"""
         result = TestExecutionTool._parse_output("5 failed in 2.0s")
         assert result["passed"] == 0
         assert result["failed"] == 5
@@ -403,7 +373,7 @@ class TestTestExecutionOutputParsing:
         assert result["coverage"] == 87.5
 
     def test_parse_no_coverage(self) -> None:
-        """无覆盖率信息时 coverage 应为 None。"""
+        """验证解析无覆盖率对应的测试场景。"""
         result = TestExecutionTool._parse_output("2 passed in 1.0s")
         assert result["coverage"] is None
 
@@ -416,9 +386,7 @@ class TestTestExecutionOutputParsing:
         assert result["coverage"] is None
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 综合测试
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestTestExecutionComprehensive:
@@ -426,7 +394,7 @@ class TestTestExecutionComprehensive:
 
     @pytest.mark.asyncio
     async def test_metadata_contains_all_fields(self) -> None:
-        """metadata 应包含所有必要字段。"""
+        """验证元数据包含全部字段对应的测试场景。"""
         stdout = b"5 passed in 2.0s\n"
         mock_process = _make_mock_process(stdout=stdout, returncode=0)
 
@@ -446,7 +414,7 @@ class TestTestExecutionComprehensive:
 
     @pytest.mark.asyncio
     async def test_stderr_in_metadata_on_failure(self) -> None:
-        """执行失败且无明确失败数时 stderr 应在 metadata 中。"""
+        """验证在元数据时失败对应的测试场景。"""
         stdout = b"ERROR: file not found\n"
         stderr = b"collection error\n"
         mock_process = _make_mock_process(stdout=stdout, stderr=stderr, returncode=2)

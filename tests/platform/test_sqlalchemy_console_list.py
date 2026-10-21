@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_sqlalchemy_console_list。
+"""SQLAlchemy控制台查询测试模块。
 
 本测试模块验证 test_sqlalchemy_console_list 覆盖的业务路径、边界条件和回归场景。
 
@@ -7,30 +7,32 @@
 - 所有租户相关数据都必须携带 tenant_id 并保持隔离。
 - 关键执行路径应保留日志、审计或链路追踪信息。
 -
-主要函数：make_session_factory、test_sqlalchemy_ticket_list_filters_and_paginates、test_sqlalchemy_cost_list_tenants。
+主要函数：make_session_factory、test_sqlalchemy_ticket_list_filters_and_paginates、test_sqlalchemy_cost
+    _list_tenants。
 """
+
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from agentforge.platform.domain.cost import CostRecord
-from agentforge.platform.domain.ticket import TicketStatus
 from agentforge.platform.infrastructure.db.base import Base
-from agentforge.platform.infrastructure.sqlalchemy_cost_repository import (
-    SQLAlchemyCostRepository,
-)
-from agentforge.platform.infrastructure.sqlalchemy_ticket_repository import (
+from agentforge.platform.infrastructure.sqlalchemy_cost_repository import SQLAlchemyCostRepository
+from agentforge.platform.modules.support.domain.ticket import TicketStatus
+from agentforge.platform.modules.support.infrastructure.sqlalchemy_repository import (
     SQLAlchemyTicketRepository,
 )
 from agentforge.platform.runtime import build_sqlalchemy_container
+from tests.platform.support_fixtures import configure_sqlalchemy_support
 
 
 async def make_session_factory():
-    """执行 make_session_factory 对应的逻辑，并返回处理结果。
+    """构造会话工厂。
 
     Returns:
-        None，函数执行后的结果。
+        处理结果。
     """
     engine = create_async_engine(
         "sqlite+aiosqlite://",
@@ -45,14 +47,11 @@ async def make_session_factory():
 
 @pytest.mark.asyncio
 async def test_sqlalchemy_ticket_list_filters_and_paginates() -> None:
-    """验证 sqlalchemy_ticket_list_filters_and_paginates 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证SQLAlchemy工单查询筛选条件及对应的测试场景。"""
     engine, session_factory = await make_session_factory()
     repo = SQLAlchemyTicketRepository(session_factory)
     container = build_sqlalchemy_container(session_factory)
+    support = configure_sqlalchemy_support(container, session_factory)
 
     event = {
         "tenant_id": "tenant-1",
@@ -60,9 +59,9 @@ async def test_sqlalchemy_ticket_list_filters_and_paginates() -> None:
         "message_id": "msg-l",
         "text": "I want a refund please",
     }
-    await container.ticket_service.create_from_event(event)
+    await support.ticket_service.create_from_event(event)
     # 验证审批边界，确保高风险动作必须经过审批。
-    await container.ticket_service.create_from_event(
+    await support.ticket_service.create_from_event(
         {
             "tenant_id": "tenant-1",
             "source": "feishu",
@@ -77,9 +76,23 @@ async def test_sqlalchemy_ticket_list_filters_and_paginates() -> None:
 
     approved, _ = await repo.list("tenant-1", status="waiting_approval", limit=100)
     pending, _ = await repo.list("tenant-1", status="waiting_review", limit=100)
+    queued, _ = await repo.list(
+        "tenant-1",
+        queue=str(all_[0].metadata.get("queue") or all_[0].assigned_team),
+        limit=100,
+    )
     # 验证审批边界，确保高风险动作必须经过审批。
     assert all(t.status == TicketStatus.WAITING_APPROVAL for t in approved)
     assert pending or True
+    assert queued
+
+    first = all_[0]
+    first.metadata["sla"]["due_at"] = (
+        datetime.now(timezone.utc) - timedelta(minutes=5)
+    ).isoformat()
+    await repo.save(first)
+    overdue, _ = await repo.list("tenant-1", overdue=True, limit=100)
+    assert [ticket.ticket_id for ticket in overdue] == [first.ticket_id]
 
     # 验证分页行为，确保游标和数量限制正确。
     page_small, next_cursor = await repo.list("tenant-1", limit=1)
@@ -90,11 +103,7 @@ async def test_sqlalchemy_ticket_list_filters_and_paginates() -> None:
 
 @pytest.mark.asyncio
 async def test_sqlalchemy_cost_list_tenants() -> None:
-    """验证 sqlalchemy_cost_list_tenants 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证SQLAlchemy成本查询租户对应的测试场景。"""
     engine, session_factory = await make_session_factory()
     repo = SQLAlchemyCostRepository(session_factory)
     for tid in ("t1", "t2", "t1"):

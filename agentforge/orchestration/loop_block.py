@@ -1,13 +1,4 @@
-"""AgentForge 编排执行层：loop_block。
-
-本模块负责 loop_block 相关能力，是 编排执行层 的组成部分。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
-- 关键路径应保留日志、指标或链路追踪信息。
-- 主要类：LoopResult、LoopBlock。
-"""
+"""循环块模块。"""
 
 import asyncio
 import logging
@@ -17,68 +8,46 @@ from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
-DEFAULT_SUB_DAG_MAX_NODES = 20  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+DEFAULT_SUB_DAG_MAX_NODES = 20
 DEFAULT_SUB_DAG_TIMEOUT = 60.0  # 超时状态。
-DEFAULT_SUB_DAG_MAX_PARALLEL = 3  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+DEFAULT_SUB_DAG_MAX_PARALLEL = 3
 
 
 @dataclass
 class LoopResult:
-    """LoopResult。
+    """循环结果相关组件。
 
-    LoopResult 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - success: bool。
-    - iterations_completed: int。
-    - max_iterations: int。
-    - final_output: dict。
-    - exit_reason: str。
-    - iteration_results: list[dict]。
-    - total_cost: float。
-    - total_latency_ms: float。
-    - converged: bool。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    Attributes:
+        success: 是否成功。
+        iterations_completed: 迭代次数已完成。
+        max_iterations: 最大迭代次数。
+        final_output: 最终输出。
+        exit_reason: 原因。
+        iteration_results: 结果。
+        total_cost: 总计成本。
+        total_latency_ms: 总计。
+        converged: 字段值。
     """
 
     success: bool
     iterations_completed: int
     max_iterations: int
     final_output: dict = field(default_factory=dict)
-    exit_reason: str = ""  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    exit_reason: str = ""
     iteration_results: list[dict] = field(default_factory=list)
     total_cost: float = 0.0
     total_latency_ms: float = 0.0
-    converged: bool = False  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    converged: bool = False
 
 
 class LoopBlock:
-    """LoopBlock。
+    """循环块相关组件。"""
 
-    LoopBlock 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - ABSOLUTE_MAX_ITERATIONS: 5。
-    - 方法 execute()。
-    - 方法 name()。
-    - 方法 max_iterations()。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-    """
-
-    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
     ABSOLUTE_MAX_ITERATIONS = 5
 
     def __init__(
         self,
-        sub_dag,  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+        sub_dag,
         max_iterations: int = 5,
         exit_condition: Optional[Callable] = None,
         name: str = "loop_block",
@@ -86,19 +55,16 @@ class LoopBlock:
         sub_dag_max_nodes: int = DEFAULT_SUB_DAG_MAX_NODES,
         sub_dag_max_parallel: int = DEFAULT_SUB_DAG_MAX_PARALLEL,
     ):
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 LoopBlock。
 
         Args:
-            sub_dag: Any，调用方传入的 sub_dag 参数。
-            max_iterations: int，调用方传入的 max_iterations 参数。
-            exit_condition: Optional[Callable]，调用方传入的 exit_condition 参数。
-            name: str，调用方传入的 name 参数。
-            sub_dag_timeout: float，调用方传入的 sub_dag_timeout 参数。
-            sub_dag_max_nodes: int，调用方传入的 sub_dag_max_nodes 参数。
-            sub_dag_max_parallel: int，调用方传入的 sub_dag_max_parallel 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            sub_dag: DAG。
+            max_iterations: 最大迭代次数。
+            exit_condition: 输入参数。
+            name: 资源或对象名称。
+            sub_dag_timeout: DAG超时。
+            sub_dag_max_nodes: DAG最大。
+            sub_dag_max_parallel: DAG最大。
         """
         if max_iterations > self.ABSOLUTE_MAX_ITERATIONS:
             logger.warning(
@@ -117,19 +83,19 @@ class LoopBlock:
 
     async def execute(
         self,
-        context,  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+        context,
         agent_registry=None,
         tracer=None,
     ) -> LoopResult:
-        """执行 execute 对应的逻辑，并返回处理结果。
+        """执行循环子图直到满足退出条件或达到最大轮次。
 
         Args:
-            context: Any，调用方传入的 context 参数。
-            agent_registry: Any，调用方传入的 agent_registry 参数。
-            tracer: Any，调用方传入的 tracer 参数。
+            context: 执行上下文。
+            agent_registry: 智能体注册表。
+            tracer: 追踪器。
 
         Returns:
-            LoopResult，函数执行后的结果。
+            循环结果结果。
         """
         start_time = time.monotonic()
         iteration_results = []
@@ -140,19 +106,13 @@ class LoopBlock:
 
         for iteration in range(1, self._max_iterations + 1):
 
-            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-            # Agent 注册与查询。
             await context.write("__loop_iteration__", iteration)
             await context.write("__loop_name__", self._name)
             await context.write("__loop_max__", self._max_iterations)
 
             try:
-                # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-                # 说明：该步骤用于实现上述逻辑并保证行为稳定。
                 from agentforge.orchestration.dag_engine import DAGEngine
 
-                # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-                # 说明：该步骤用于实现上述逻辑并保证行为稳定。
                 # 超时状态。
                 sub_engine = DAGEngine(
                     max_nodes=self._sub_dag_max_nodes,
@@ -207,12 +167,10 @@ class LoopBlock:
                         "error": str(e)[:200],
                     }
                 )
-                # 说明：该步骤用于实现上述逻辑并保证行为稳定。
                 if iteration == self._max_iterations:
                     exit_reason = "error"
                 continue
 
-            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             try:
                 should_exit = self._exit_condition(final_output, iteration)
             except Exception as e:
@@ -221,7 +179,7 @@ class LoopBlock:
                     self._name,
                     str(e)[:200],
                 )
-                should_exit = True  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+                should_exit = True
 
             if should_exit:
                 converged = True
@@ -233,7 +191,6 @@ class LoopBlock:
                 )
                 break
         else:
-            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             if not exit_reason:
                 exit_reason = "max_iterations"
                 logger.warning(
@@ -259,18 +216,18 @@ class LoopBlock:
 
     @property
     def name(self) -> str:
-        """执行 name 对应的逻辑，并返回处理结果。
+        """返回对象名称。
 
         Returns:
-            str，函数执行后的结果。
+            字符串结果。
         """
         return self._name
 
     @property
     def max_iterations(self) -> int:
-        """执行 max_iterations 对应的逻辑，并返回处理结果。
+        """返回最大迭代次数。
 
         Returns:
-            int，函数执行后的结果。
+            整数结果。
         """
         return self._max_iterations

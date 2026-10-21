@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_support_ticket_service。
+"""客服工单服务测试模块。
 
 本测试模块验证 test_support_ticket_service 覆盖的业务路径、边界条件和回归场景。
 
@@ -7,7 +7,9 @@
 - 所有租户相关数据都必须携带 tenant_id 并保持隔离。
 - 关键执行路径应保留日志、审计或链路追踪信息。
 -
-主要函数：test_low_risk_event_creates_ticket_waiting_review、test_duplicate_event_returns_existing_ticket、test_webhook_returns_high_risk_ticket、test_approval_api_moves_ticket_to_ready_to_publish、test_reply_api_publishes_approved_ticket、test_reply_api_requires_non_empty_text。
+主要函数：test_low_risk_event_creates_ticket_waiting_review、test_duplicate_event_returns_existing_tic
+    ket、test_webhook_returns_high_risk_ticket、test_approval_api_moves_ticket_to_ready_to_publish
+    、test_reply_api_publishes_approved_ticket、test_reply_api_requires_non_empty_text。
 """
 
 import asyncio
@@ -16,56 +18,78 @@ import pytest
 from fastapi.testclient import TestClient
 
 from agentforge.platform.api.app import create_platform_app
-from agentforge.platform.domain.ticket import TicketStatus
+from agentforge.platform.modules.support.domain.ticket import TicketStatus
 from agentforge.platform.runtime import build_memory_container
+from tests.platform.support_fixtures import configure_memory_support, create_app_with_support
 
 
 @pytest.mark.asyncio
 async def test_low_risk_event_creates_ticket_waiting_review() -> None:
-    """验证 low_risk_event_creates_ticket_waiting_review 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证低风险事件创建工单等待审核对应的测试场景。"""
     container = build_memory_container()
+    support = configure_memory_support(container)
     event = {
         "tenant_id": "tenant-1",
         "source": "feishu",
         "message_id": "msg-1",
         "text": "How do I use this product?",
     }
-    ticket = await container.ticket_service.create_from_event(event)
+    ticket = await support.ticket_service.create_from_event(event)
     assert ticket.status == TicketStatus.WAITING_REVIEW
     assert ticket.assigned_team == "support"
-    assert len(container.repository.outbox) == 1
+    assert len(support.repository.outbox) == 1
 
 
 @pytest.mark.asyncio
 async def test_duplicate_event_returns_existing_ticket() -> None:
-    """验证 duplicate_event_returns_existing_ticket 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证重复事件返回现有工单对应的测试场景。"""
     container = build_memory_container()
+    support = configure_memory_support(container)
     event = {
         "tenant_id": "tenant-1",
         "source": "feishu",
         "message_id": "msg-2",
         "text": "The product is unavailable",
     }
-    first = await container.ticket_service.create_from_event(event)
-    second = await container.ticket_service.create_from_event(event)
+    first = await support.ticket_service.create_from_event(event)
+    second = await support.ticket_service.create_from_event(event)
     assert first.ticket_id == second.ticket_id
-    assert len(container.repository.outbox) == 1
+    assert len(support.repository.outbox) == 1
+
+
+@pytest.mark.asyncio
+async def test_resolution_before_occurrence_creates_cancelled_tombstone() -> None:
+    """验证解析之前创建对应的测试场景。"""
+    container = build_memory_container()
+    support = configure_memory_support(container)
+    resolution = {
+        "tenant_id": "tenant-1",
+        "source": "expense-invoice-gate",
+        "alert_id": "alert-late",
+        "alert_type": "stale_invoice_gate_block",
+        "resolution": "condition_cleared",
+        "resolved_at": "2026-10-21T00:00:00+00:00",
+        "text": "invoice gate alert resolved",
+    }
+
+    ticket = await support.ticket_service.resolve_invoice_gate_alert(resolution)
+    occurrence = await support.ticket_service.create_from_event(
+        {
+            "tenant_id": "tenant-1",
+            "source": "expense-invoice-gate",
+            "message_id": "alert-late",
+            "text": "invoice gate alert occurred",
+        }
+    )
+
+    assert ticket.status == TicketStatus.CANCELLED
+    assert ticket.metadata["resolution"]["reason"] == "condition_cleared"
+    assert occurrence.ticket_id == ticket.ticket_id
+    assert occurrence.status == TicketStatus.CANCELLED
 
 
 def test_webhook_returns_high_risk_ticket() -> None:
-    """验证 webhook_returns_high_risk_ticket 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证Webhook返回高风险工单对应的测试场景。"""
     client = TestClient(create_platform_app(build_memory_container()))
     response = client.post(
         "/v1/events/im",
@@ -83,11 +107,7 @@ def test_webhook_returns_high_risk_ticket() -> None:
 
 
 def test_approval_api_moves_ticket_to_ready_to_publish() -> None:
-    """验证 approval_api_moves_ticket_to_ready_to_publish 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证审批API移动工单到到发布对应的测试场景。"""
     client = TestClient(create_platform_app(build_memory_container()))
     created = client.post(
         "/v1/events/im",
@@ -107,14 +127,11 @@ def test_approval_api_moves_ticket_to_ready_to_publish() -> None:
 
 
 def test_reply_api_publishes_approved_ticket() -> None:
-    """验证 reply_api_publishes_approved_ticket 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证回复API发布已批准工单对应的测试场景。"""
     container = build_memory_container()
+    support = configure_memory_support(container)
     outcome = asyncio.run(
-        container.processing_service.process_event(
+        support.processing_service.process_event(
             {
                 "tenant_id": "tenant-1",
                 "source": "feishu",
@@ -125,14 +142,14 @@ def test_reply_api_publishes_approved_ticket() -> None:
         )
     )
     asyncio.run(
-        container.ticket_service.apply_approval(
+        support.ticket_service.apply_approval(
             tenant_id="tenant-1",
             ticket_id=outcome.ticket_id,
             decision="approve",
             decided_by="supervisor-1",
         )
     )
-    client = TestClient(create_platform_app(container))
+    client = TestClient(create_app_with_support(container, support))
     response = client.post(
         f"/v1/tickets/{outcome.ticket_id}/reply",
         json={
@@ -142,15 +159,11 @@ def test_reply_api_publishes_approved_ticket() -> None:
     )
     assert response.status_code == 200
     assert response.json()["status"] == "published"
-    assert container.reply_connector.messages[0]["target"] == "chat-1"
+    assert support.reply_connector.messages[0]["target"] == "chat-1"
 
 
 def test_reply_api_requires_non_empty_text() -> None:
-    """验证 reply_api_requires_non_empty_text 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证回复API要求非空文本对应的测试场景。"""
     client = TestClient(create_platform_app(build_memory_container()))
 
     response = client.post(

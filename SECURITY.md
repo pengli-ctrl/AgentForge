@@ -2,74 +2,90 @@
 
 ## Supported Versions
 
-AgentForge is an open-source project. Security fixes are applied to the latest
-major release only.
+AgentForge 3.x is the supported release line.
 
-| Version | Supported          |
-|---------|--------------------|
-| 3.x     | :white_check_mark: |
-| 2.x     | :x: (EOL)          |
-| 1.x     | :x: (EOL)          |
+| Version | Supported |
+|---|---|
+| 3.x | Yes |
+| 2.x | No (EOL) |
+| 1.x | No (EOL) |
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in AgentForge, please report it
-responsibly:
+Do not open a public issue for a suspected vulnerability.
 
-1. **Do NOT open a public GitHub issue.**
-2. Send an email to **pl2847253@gmail.com** with:
-   - A description of the vulnerability
-   - Steps to reproduce (proof of concept if possible)
-   - Potential impact assessment
-   - Suggested fix (if any)
-3. You will receive an acknowledgment within **48 hours**.
-4. A fix or mitigation will be provided within **7 days** for critical issues,
-   or **30 days** for non-critical issues.
+Send a private report to **pl2847253@gmail.com** with:
 
-## Response Timeline
+- affected version and deployment mode;
+- description and potential impact;
+- reproduction steps or proof of concept;
+- relevant logs with secrets and PII removed;
+- suggested mitigation, if known.
 
-| Severity | Acknowledgment | Fix Target  |
-|----------|---------------|-------------|
-| Critical | 48 hours      | 7 days      |
-| High     | 48 hours      | 14 days     |
-| Medium   | 72 hours      | 30 days     |
-| Low      | 72 hours      | Next release |
+Acknowledgement target: 48 hours. Critical fixes target: 7 days. High-severity fixes target: 14 days. Other issues are handled according to severity and release risk.
 
-## Security Best Practices
+## Security Model
 
-### API Key Management
+### Authentication and authorization
 
-- **Never commit API keys** to version control. Use environment variables or
-  a secrets manager.
-- Rotate API keys periodically (recommended: every 90 days).
-- Use different API keys for development and production environments.
-- API keys are compared using constant-time comparison to prevent timing attacks.
+- API authentication is fail-closed by default.
+- Production startup fails when no admin or tenant API key is configured.
+- API keys are bound to tenants and compared using constant-time comparison.
+- Admin and tenant keys have separate privileges.
+- RBAC, declarative policy, tenant/module access, and high-risk approval checks apply at API and application boundaries.
+- OIDC provides a provider extension point and tenant/permission checks; production IdP integration must be configured per customer.
 
-### Network Isolation
+### Tenant isolation
 
-- Deploy AgentForge behind a reverse proxy (Nginx, Traefik) with TLS termination.
-- Restrict database (MySQL) and cache (Redis) access to the AgentForge
-  application network only — do not expose these ports publicly.
-- Use Docker network isolation (as configured in `docker-compose.yml`) to
-  separate services.
-- Enable firewall rules to limit inbound traffic to the API port (8000) only.
+- Tenant and module data access must explicitly include `tenant_id`.
+- Module API boundaries reject suspended and cancelled tenants.
+- Cross-tenant list/get operations return empty, 404, or 403 as appropriate.
+- Audit, Outbox, quota, cost, caches, and events are tenant-scoped.
 
-### LLM Gateway Security
+### Secrets
 
-- vLLM endpoints should be on a private network, not exposed to the internet.
-- Use API key authentication for the vLLM service.
-- Set appropriate rate limits to prevent abuse.
+- Never commit API keys, database passwords, webhook secrets, Vault tokens, or KMS credentials.
+- Module configuration must use `secret_refs`, not plaintext secrets.
+- Supported schemes are `env://`, `vault://`, `kms://`, and `secret://`.
+- `SecretValue.reveal()` is the explicit access boundary; string representations redact content.
+- The Helm chart references an existing Kubernetes Secret and does not store secrets in values.
+- Rotate credentials periodically and after any suspected exposure.
 
-### Tool Sandbox
+### Data protection
 
-- Code execution tools run in Docker containers with resource limits.
-- Do not mount host directories with sensitive data into tool sandboxes.
-- Use read-only mounts where possible.
+- Audit export redacts bearer tokens, email addresses, phone numbers, and identity-card numbers by default.
+- Audit retention purge and PII erasure are tenant-scoped and audited.
+- Attachment download URLs are bounded to 1-3600 seconds.
+- Production data stores should use encryption at rest, TLS in transit, and least-privilege credentials.
+- Backups must be encrypted, access-controlled, tested for restore, and retained according to policy.
 
-### Data Protection
+### Network and connector security
 
-- Task input data may contain source code — ensure MySQL is encrypted at rest.
-- Redis snapshots contain context data — enable Redis AUTH and TLS if
-  transmitting over untrusted networks.
-- Trace data may contain payload summaries — review what is logged before
-  enabling debug-level tracing in production.
+- Deploy behind TLS termination and restrict administrative endpoints to trusted networks.
+- Do not expose PostgreSQL, Temporal, MinIO, Valkey, or Kafka ports publicly.
+- Use network policies and firewall rules between application and infrastructure networks.
+- Webhook endpoints use HMAC and/or provider signature verification.
+- Connector credentials must come from a secret manager and use least-privilege accounts.
+- Apply WAF, DLP, IP allow-lists, and egress controls where required by the deployment environment.
+
+### Container and Kubernetes security
+
+- Private deployment containers run as non-root.
+- Use a read-only root filesystem, disable privilege escalation, and drop Linux capabilities.
+- Use Kubernetes Secrets or an external secret manager, not ConfigMaps, for credentials.
+- Run the migration Job before rolling out API and workers.
+- Enforce Pod Security, resource quotas, network policies, TLS, and image admission controls.
+- Scan images for vulnerabilities and produce an SBOM before production release.
+
+## Deployment Boundary
+
+AgentForge is a commercial baseline, not a production-certified platform. The controls above describe implemented defaults and extension points. See [Security Design](docs/security/SECURITY_DESIGN.md) for the detailed control model and explicit boundaries.
+
+Before using the project in a real customer environment, the delivery team must separately complete and verify:
+
+- real IdP discovery, JWKS validation, and group claim mapping;
+- Vault/KMS custody, rotation, and disaster recovery;
+- WAF/DLP, network policy, and egress controls;
+- high availability and capacity validation for external middleware;
+- Kubernetes installation, upgrade, rollback, backup, and restore drills;
+- image and dependency vulnerability scanning.

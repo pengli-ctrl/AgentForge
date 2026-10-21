@@ -18,61 +18,45 @@ class MockBM25Index:
     """Mock BM25 索引。"""
 
     def __init__(self, scores: np.ndarray) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化模拟索引。
 
         Args:
-            scores: np.ndarray，调用方传入的 scores 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            scores: 评分。
         """
         self._scores = scores
 
     def get_scores(self, query: str) -> np.ndarray:
-        """读取并返回指定数据，并返回调用方需要的结果。
+        """获取评分。
 
         Args:
-            query: str，调用方传入的 query 参数。
+            query: 检索或筛选查询。
 
         Returns:
-            np.ndarray，函数执行后的结果。
+            处理结果对象。
         """
         return self._scores
 
 
 class MockFAISSIndex:
-    """MockFAISSIndex。
-
-    MockFAISSIndex 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - 方法 search()。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-    """
+    """用于测试的模拟。"""
 
     def __init__(self, indices: np.ndarray) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化模拟。
 
         Args:
-            indices: np.ndarray，调用方传入的 indices 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            indices: 输入参数。
         """
         self._indices = indices
 
     def search(self, embeddings: np.ndarray, k: int) -> tuple:
-        """执行 search 对应的核心操作，并保持调用契约稳定。
+        """搜索与查询条件匹配的数据。
 
         Args:
-            embeddings: np.ndarray，调用方传入的 embeddings 参数。
-            k: int，调用方传入的 k 参数。
+            embeddings: 向量。
+            k: 返回结果数量上限。
 
         Returns:
-            tuple，函数执行后的结果。
+            结果元组。
         """
         return np.array([[0.0] * k]), self._indices[:k].reshape(1, -1)
 
@@ -81,13 +65,13 @@ class MockEmbedModel:
     """Mock 向量编码模型。"""
 
     def encode(self, texts: list[str]) -> np.ndarray:
-        """执行 encode 对应的逻辑，并返回处理结果。
+        """编码模拟向量化模型。
 
         Args:
-            texts: list[str]，调用方传入的 texts 参数。
+            texts: 输入参数。
 
         Returns:
-            np.ndarray，函数执行后的结果。
+            处理结果对象。
         """
         return np.array([[0.1] * 128])
 
@@ -103,11 +87,6 @@ class TestRRFFusion:
         faiss_rank = {1: 0, 3: 1, 0: 2}  # doc 1 排第1, doc 3 排第2, doc 0 排第3
 
         fused = retriever._rrf_fuse(bm25_rank, faiss_rank)
-
-        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
         expected_0 = 1.0 / (RRF_K + 0) + 1.0 / (RRF_K + 2)
         expected_1 = 1.0 / (RRF_K + 1) + 1.0 / (RRF_K + 0)
@@ -232,7 +211,7 @@ class TestHybridRetrieverSearch:
         assert results[0] == 3  # doc 3 分数最高
 
     def test_search_top_k_limit(self) -> None:
-        """搜索结果不超过 top_k。"""
+        """验证搜索K限制对应的测试场景。"""
         bm25 = MockBM25Index(np.array([0.1, 0.5, 0.3, 0.8, 0.2, 0.9, 0.4]))
 
         retriever = HybridRetriever(

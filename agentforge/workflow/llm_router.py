@@ -1,25 +1,4 @@
-"""
-LLM 路由器 — 用 LLM 替代 YAML 中的 if-else 路由决策。
-
-博客 05「渐进式引入策略」的第一步：在 YAML 硬编码路由的基础上，
-引入 LLM 做更灵活的路由决策。
-
-设计原则（博客强调）：
-1. LLM 只负责"选哪个 Agent" — 下游节点的执行逻辑仍是确定性代码
-2. LLM 返回 JSON 格式的路由决策，用确定性代码解析和执行
-3. 如果 LLM 返回了不存在的 Agent 名称，降级为 default 路由
-4. 路由决策可追溯 — 每次决策都记录 reason 字段
-
-典型场景：
-- CodeReview Agent 输出 "critical" → YAML 路由到 SecurityScan
-- 但如果输出是 "complexity high, no security issue" → YAML 不知道怎么路由
-- LLM Router 可以理解这种自然语言输出，选择最合适的下一个 Agent
-
-引入路径（渐进式）：
-1. 先在 default 分支用 LLM Router（最安全，只处理 YAML 处理不了的情况）
-2. 验证效果后逐步替换更多条件分支
-3. 最终大部分路由由 LLM 决策，YAML 只保留兜底逻辑
-"""
+"""LLM路由模块。"""
 
 from __future__ import annotations
 
@@ -66,48 +45,35 @@ class RouteDecision:
     """路由决策结果。
 
     Attributes:
-        agent_name: 被选中的 Agent 名称。
-        reason: LLM 给出的路由理由。
+        agent_name: 智能体名称。
+        reason: 变更原因。
     """
 
     agent_name: str
     reason: str
 
     def to_dict(self) -> dict[str, str]:
-        """转换为字典格式。"""
+        """转换为字典格式。
+
+        Returns:
+            结构化结果字典。
+        """
         return {"agent_name": self.agent_name, "reason": self.reason}
 
 
 class LLMRouter:
-    """LLM 驱动的工作流路由器。
-
-    用 LLM 替代 YAML 中的 if-else 条件路由。LLM 理解 Agent 输出的语义，
-    选择最合适的下一个 Agent。
-
-    设计原则：
-    - LLM 只做"选哪个 Agent"的决策，不做执行
-    - 下游节点执行逻辑仍是确定性代码（不依赖 LLM）
-    - LLM 返回 JSON，用确定性代码解析
-    - 如果 LLM 选了不存在的 Agent，降级为 default_agent
-
-    Args:
-        llm_gateway: LLM 网关实例。
-        default_agent: LLM 路由失败时的兜底 Agent 名称。
-    """
+    """LLM 驱动的工作流路由器。"""
 
     def __init__(
         self,
         llm_gateway: LLMGateway,
         default_agent: str = "code-review",
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 LLMRouter。
 
         Args:
-            llm_gateway: LLMGateway，调用方传入的 llm_gateway 参数。
-            default_agent: str，调用方传入的 default_agent 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            llm_gateway: LLM 网关实例。
+            default_agent: 默认智能体。
         """
         self.llm_gateway = llm_gateway
         self.default_agent = default_agent
@@ -118,22 +84,15 @@ class LLMRouter:
         agent_outputs: dict[str, Any],
         available_agents: list[str],
     ) -> dict[str, str]:
-        """用 LLM 决定下一个执行哪个 Agent。
-
-        流程：
-        1. 构造 prompt：包含当前任务、已完成 Agent 输出、可选 Agent
-        2. 调用 LLM 获取路由决策 JSON
-        3. 解析 JSON，提取 agent_name 和 reason
-        4. 验证 agent_name 是否在 available_agents 中
-        5. 如果无效，降级为 default_agent
+        """选择并返回模型路由。
 
         Args:
-            task: 当前任务描述。
-            agent_outputs: 已完成 Agent 的输出字典 {agent_name: output}。
-            available_agents: 可选的下一个 Agent 名称列表。
+            task: 任务对象。
+            agent_outputs: 智能体。
+            available_agents: 可用智能体。
 
         Returns:
-            路由决策字典 ``{"agent_name": "...", "reason": "..."}``。
+            结构化结果字典。
         """
         if not available_agents:
             logger.warning("No available agents for routing, using default")
@@ -186,15 +145,15 @@ class LLMRouter:
         agent_outputs: dict[str, Any],
         available_agents: list[str],
     ) -> str:
-        """构造路由 prompt。
+        """构建提示词。
 
         Args:
-            task: 当前任务描述。
-            agent_outputs: 已完成 Agent 的输出。
-            available_agents: 可选 Agent 列表。
+            task: 任务对象。
+            agent_outputs: 智能体。
+            available_agents: 可用智能体。
 
         Returns:
-            格式化后的 prompt 字符串。
+            字符串结果。
         """
         # 格式化已完成 Agent 的输出
         if agent_outputs:
@@ -227,19 +186,14 @@ class LLMRouter:
         llm_output: str,
         available_agents: list[str],
     ) -> RouteDecision:
-        """解析 LLM 返回的路由决策 JSON。
-
-        期望格式：
-            {"agent_name": "security-scan", "reason": "..."}
-
-        解析失败或 agent_name 无效时降级为 default_agent。
+        """解析路由。
 
         Args:
-            llm_output: LLM 返回的文本。
-            available_agents: 合法的 Agent 名称列表。
+            llm_output: LLM输出。
+            available_agents: 可用智能体。
 
         Returns:
-            RouteDecision 对象。
+            路由决策结果。
         """
         json_str = self._extract_json(llm_output)
 
@@ -285,15 +239,13 @@ class LLMRouter:
         return RouteDecision(agent_name=agent_name, reason=reason)
 
     def _extract_json(self, text: str) -> str | None:
-        """从 LLM 输出中提取 JSON 字符串。
-
-        处理 LLM 可能添加的 markdown 代码块标记。
+        """提取JSON。
 
         Args:
-            text: LLM 输出文本。
+            text: 待处理文本。
 
         Returns:
-            提取的 JSON 字符串，失败返回 None。
+            无结果。
         """
         text = text.strip()
 

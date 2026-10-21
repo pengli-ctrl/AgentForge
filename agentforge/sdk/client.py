@@ -1,13 +1,4 @@
-"""AgentForge SDK 层：client。
-
-本模块负责 client 相关能力，是 SDK 层 的组成部分。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
-- 关键路径应保留日志、指标或链路追踪信息。
-- 主要类：AgentForgeClient。
-"""
+"""客户端模块。"""
 
 from __future__ import annotations
 
@@ -18,25 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class AgentForgeClient:
-    """AgentForgeClient。
-
-    AgentForgeClient 封装外部系统或基础设施协议，向上提供稳定、可测试的接口。
-
-    主要成员：
-    - 方法 submit_task()。
-    - 方法 get_task_status()。
-    - 方法 get_task_result()。
-    - 方法 cancel_task()。
-    - 方法 list_tasks()。
-    - 方法 list_agents()。
-    - 方法 get_metrics()。
-    - 方法 health_check()。
-    - 方法 close()。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-    """
+    """智能体相关组件。"""
 
     def __init__(
         self,
@@ -44,15 +17,12 @@ class AgentForgeClient:
         api_key: str = "",
         timeout: float = 30.0,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 AgentForgeClient。
 
         Args:
-            base_url: str，调用方传入的 base_url 参数。
-            api_key: str，调用方传入的 api_key 参数。
-            timeout: float，调用方传入的 timeout 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            base_url: 服务基础 URL。
+            api_key: API键。
+            timeout: 操作超时时间。
         """
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -60,7 +30,14 @@ class AgentForgeClient:
         self._client: Any = None
 
     async def _get_client(self) -> Any:
-        """获取 HTTP 客户端实例（懒加载）。"""
+        """获取客户端。
+
+        Returns:
+            处理结果对象。
+
+        Raises:
+            ImportError: 操作无法完成时抛出。
+        """
         if self._client is None:
             try:
                 import httpx
@@ -89,11 +66,11 @@ class AgentForgeClient:
 
         Args:
             workflow_name: 工作流名称。
-            input_data: 任务输入数据。
-            priority: 任务优先级。
+            input_data: 输入数据。
+            priority: 优先级。
 
         Returns:
-            创建的任务信息。
+            结构化结果字典。
         """
         client = await self._get_client()
         response = await client.post(
@@ -114,7 +91,7 @@ class AgentForgeClient:
             task_id: 任务 ID。
 
         Returns:
-            任务信息（含状态）。
+            结构化结果字典。
         """
         client = await self._get_client()
         response = await client.get(f"/api/v1/tasks/{task_id}")
@@ -128,7 +105,7 @@ class AgentForgeClient:
             task_id: 任务 ID。
 
         Returns:
-            任务结果。
+            结构化结果字典。
         """
         client = await self._get_client()
         response = await client.get(f"/api/v1/tasks/{task_id}/result")
@@ -142,7 +119,7 @@ class AgentForgeClient:
             task_id: 任务 ID。
 
         Returns:
-            取消后的任务信息。
+            结构化结果字典。
         """
         client = await self._get_client()
         response = await client.post(f"/api/v1/tasks/{task_id}/cancel")
@@ -158,12 +135,12 @@ class AgentForgeClient:
         """查询任务列表。
 
         Args:
-            status: 按状态过滤。
-            limit: 返回数量上限。
+            status: 目标状态。
+            limit: 返回记录的最大数量。
             offset: 分页偏移量。
 
         Returns:
-            任务列表和分页信息。
+            结构化结果字典。
         """
         client = await self._get_client()
         params: dict[str, Any] = {"limit": limit, "offset": offset}
@@ -175,10 +152,10 @@ class AgentForgeClient:
         return response.json()
 
     async def list_agents(self) -> dict[str, Any]:
-        """查询已注册的 Agent 列表。
+        """查询智能体。
 
         Returns:
-            Agent 列表信息。
+            结构化结果字典。
         """
         client = await self._get_client()
         response = await client.get("/api/v1/agents")
@@ -186,10 +163,10 @@ class AgentForgeClient:
         return response.json()
 
     async def get_metrics(self) -> str:
-        """获取 Prometheus 指标数据。
+        """读取指标。
 
         Returns:
-            Prometheus 格式的指标文本。
+            字符串结果。
         """
         client = await self._get_client()
         response = await client.get("/metrics")
@@ -200,7 +177,7 @@ class AgentForgeClient:
         """服务健康检查。
 
         Returns:
-            健康状态信息。
+            结构化结果字典。
         """
         client = await self._get_client()
         response = await client.get("/health")
@@ -208,7 +185,7 @@ class AgentForgeClient:
         return response.json()
 
     async def close(self) -> None:
-        """关闭 HTTP 客户端连接。"""
+        """关闭智能体。"""
         if self._client:
             await self._client.close()
             self._client = None

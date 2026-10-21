@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_regression。
+"""回归测试模块。
 
 本测试模块验证 test_regression 覆盖的业务路径、边界条件和回归场景。
 
@@ -7,7 +7,9 @@
 - 所有租户相关数据都必须携带 tenant_id 并保持隔离。
 - 关键执行路径应保留日志、审计或链路追踪信息。
 -
-主要函数：test_regression_reports_persisted_and_pass_gate、test_regression_tenant_isolation、test_regression_empty_dataset_report、test_sqlalchemy_regression_repository_roundtrip、test_regression_api_seeds_and_runs。
+主要函数：test_regression_reports_persisted_and_pass_gate、test_regression_tenant_isolation、test_regre
+    ssion_empty_dataset_report、test_sqlalchemy_regression_repository_roundtrip、test_regression_a
+    pi_seeds_and_runs。
 """
 
 import uuid
@@ -19,12 +21,9 @@ from sqlalchemy.pool import StaticPool
 from agentforge.platform.application.classification_evaluation_service import (
     ClassificationEvaluationService,
 )
-from agentforge.platform.application.classifier import RuleBasedTicketClassifier
 from agentforge.platform.application.quality_gate_service import QualityGateService
 from agentforge.platform.application.regression_runner import RegressionRunner
-from agentforge.platform.application.retrieval_evaluation_service import (
-    RetrievalEvaluationService,
-)
+from agentforge.platform.application.retrieval_evaluation_service import RetrievalEvaluationService
 from agentforge.platform.domain.quality import ReleaseCandidate
 from agentforge.platform.domain.regression import GoldenItem
 from agentforge.platform.infrastructure.db.base import Base
@@ -35,16 +34,17 @@ from agentforge.platform.infrastructure.memory_regression_repository import (
 from agentforge.platform.infrastructure.sqlalchemy_regression_repository import (
     SQLAlchemyRegressionRepository,
 )
+from agentforge.platform.modules.support.application.classifier import RuleBasedTicketClassifier
 
 
 def _candidate(tenant_id: str = "t1") -> ReleaseCandidate:
-    """执行 _candidate 对应的逻辑，并返回处理结果。
+    """处理候选结果。
 
     Args:
-        tenant_id: str，调用方传入的 tenant_id 参数。
+        tenant_id: 租户 ID，用于数据隔离。
 
     Returns:
-        ReleaseCandidate，函数执行后的结果。
+        释放候选结果结果。
     """
     return ReleaseCandidate(
         candidate_id=f"cand-{uuid.uuid4().hex[:8]}",
@@ -58,13 +58,13 @@ def _candidate(tenant_id: str = "t1") -> ReleaseCandidate:
 
 
 def _build_runner(knowledge_repo):
-    """执行 _build_runner 对应的逻辑，并返回处理结果。
+    """构建对象。
 
     Args:
-        knowledge_repo: Any，调用方传入的 knowledge_repo 参数。
+        knowledge_repo: 知识仓储。
 
     Returns:
-        None，函数执行后的结果。
+        处理结果。
     """
     from agentforge.platform.application.reranker import HybridReranker
 
@@ -81,14 +81,14 @@ def _build_runner(knowledge_repo):
 
 
 async def _seed_knowledge(repo: MemoryKnowledgeRepository, tenant_id: str = "t1") -> list[str]:
-    """执行 _seed_knowledge 对应的逻辑，并返回处理结果。
+    """初始化知识。
 
     Args:
-        repo: MemoryKnowledgeRepository，调用方传入的 repo 参数。
-        tenant_id: str，调用方传入的 tenant_id 参数。
+        repo: 仓储。
+        tenant_id: 租户 ID，用于数据隔离。
 
     Returns:
-        list[str]，函数执行后的结果。
+        结果列表。
     """
     from agentforge.platform.domain.knowledge import KnowledgeChunk, KnowledgeDocument
 
@@ -112,13 +112,13 @@ async def _seed_knowledge(repo: MemoryKnowledgeRepository, tenant_id: str = "t1"
 
 
 def _golden_items(tenant_id: str = "t1") -> list[GoldenItem]:
-    """执行 _golden_items 对应的逻辑，并返回处理结果。
+    """处理基准条目。
 
     Args:
-        tenant_id: str，调用方传入的 tenant_id 参数。
+        tenant_id: 租户 ID，用于数据隔离。
 
     Returns:
-        list[GoldenItem]，函数执行后的结果。
+        结果列表。
     """
     return [
         GoldenItem(
@@ -147,13 +147,13 @@ def _golden_items(tenant_id: str = "t1") -> list[GoldenItem]:
 async def _run_end_to_end(
     tenant_id: str = "t1",
 ) -> tuple[RegressionRunner, MemoryRegressionRepository]:
-    """执行 _run_end_to_end 对应的逻辑，并返回处理结果。
+    """运行结束到结束。
 
     Args:
-        tenant_id: str，调用方传入的 tenant_id 参数。
+        tenant_id: 租户 ID，用于数据隔离。
 
     Returns:
-        tuple[RegressionRunner, MemoryRegressionRepository]，函数执行后的结果。
+        结果元组。
     """
     repo = MemoryKnowledgeRepository()
     await _seed_knowledge(repo, tenant_id)
@@ -165,11 +165,7 @@ async def _run_end_to_end(
 
 @pytest.mark.asyncio
 async def test_regression_reports_persisted_and_pass_gate() -> None:
-    """验证 regression_reports_persisted_and_pass_gate 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证回归报告已持久化及通过门禁对应的测试场景。"""
     runner, _reg_repo = await _run_end_to_end()
     report = await runner.run(tenant_id="t1", candidate=_candidate("t1"), k=2)
     assert report.verdict in {"pass", "hold", "block"}
@@ -184,11 +180,7 @@ async def test_regression_reports_persisted_and_pass_gate() -> None:
 
 @pytest.mark.asyncio
 async def test_regression_tenant_isolation() -> None:
-    """验证 regression_tenant_isolation 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证回归租户隔离对应的测试场景。"""
     repo = MemoryKnowledgeRepository()
     await _seed_knowledge(repo, "ta")
     runner, reg_repo = _build_runner(repo)
@@ -204,11 +196,7 @@ async def test_regression_tenant_isolation() -> None:
 
 @pytest.mark.asyncio
 async def test_regression_empty_dataset_report() -> None:
-    """验证 regression_empty_dataset_report 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证回归空数据集报告对应的测试场景。"""
     repo = MemoryKnowledgeRepository()
     runner, _reg_repo = _build_runner(repo)
     report = await runner.run("empty", _candidate("empty"), k=2)
@@ -217,11 +205,7 @@ async def test_regression_empty_dataset_report() -> None:
 
 @pytest.mark.asyncio
 async def test_sqlalchemy_regression_repository_roundtrip() -> None:
-    """验证 sqlalchemy_regression_repository_roundtrip 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证SQLAlchemy回归仓储往返对应的测试场景。"""
     engine = create_async_engine(
         "sqlite+aiosqlite://",
         connect_args={"check_same_thread": False},
@@ -275,11 +259,7 @@ async def test_sqlalchemy_regression_repository_roundtrip() -> None:
 
 @pytest.mark.asyncio
 async def test_regression_api_seeds_and_runs() -> None:
-    """验证 regression_api_seeds_and_runs 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证回归API及运行记录对应的测试场景。"""
     from fastapi.testclient import TestClient
 
     from agentforge.platform.api.app import create_platform_app

@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_reply_connector。
+"""回复连接器测试模块。
 
 本测试模块验证 test_reply_connector 覆盖的业务路径、边界条件和回归场景。
 
@@ -7,35 +7,34 @@
 - 所有租户相关数据都必须携带 tenant_id 并保持隔离。
 - 关键执行路径应保留日志、审计或链路追踪信息。
 -
-主要函数：test_feishu_reply_connector_sends_text_and_caches_token、test_feishu_reply_connector_propagates_request_failure、test_feishu_reply_connector_rejects_api_error。
+主要函数：test_feishu_reply_connector_sends_text_and_caches_token、test_feishu_reply_connector_propaga
+    tes_request_failure、test_feishu_reply_connector_rejects_api_error。
 """
 
 import json
 
 import pytest
 
-from agentforge.platform.infrastructure.feishu_reply_connector import FeishuReplyConnector
+from agentforge.platform.modules.support.infrastructure.feishu_reply_connector import (
+    FeishuReplyConnector,
+)
 
 
 @pytest.mark.asyncio
 async def test_feishu_reply_connector_sends_text_and_caches_token() -> None:
-    """验证 feishu_reply_connector_sends_text_and_caches_token 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证飞书回复连接器发送文本及令牌对应的测试场景。"""
     calls: list[tuple[str, str, dict]] = []
 
     async def fake_request(method: str, url: str, **kwargs) -> dict:
-        """执行 fake_request 对应的逻辑，并返回处理结果。
+        """处理模拟请求。
 
         Args:
-            method: str，调用方传入的 method 参数。
-            url: str，调用方传入的 url 参数。
-            **kwargs: Any，调用方传入的 **kwargs 参数。
+            method: HTTP 或业务方法名。
+            url: 目标 URL。
+            kwargs: 关键字参数。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         calls.append((method, url, kwargs))
         if url == FeishuReplyConnector.TOKEN_URL:
@@ -63,28 +62,21 @@ async def test_feishu_reply_connector_sends_text_and_caches_token() -> None:
 
 @pytest.mark.asyncio
 async def test_feishu_reply_connector_propagates_request_failure() -> None:
-    """验证 feishu_reply_connector_propagates_request_failure 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-
-    Raises:
-        RuntimeError: 当输入、状态或外部依赖不满足要求时抛出。
-    """
+    """验证飞书回复连接器传播请求失败对应的测试场景。"""
 
     async def failing_request(method: str, url: str, **kwargs) -> dict:
-        """执行 failing_request 对应的逻辑，并返回处理结果。
+        """处理失败请求。
 
         Args:
-            method: str，调用方传入的 method 参数。
-            url: str，调用方传入的 url 参数。
-            **kwargs: Any，调用方传入的 **kwargs 参数。
-
-        Returns:
-            dict，函数执行后的结果。
+            method: HTTP 或业务方法名。
+            url: 目标 URL。
+            kwargs: 关键字参数。
 
         Raises:
-            RuntimeError: 当输入、状态或外部依赖不满足要求时抛出。
+            RuntimeError: 运行时依赖或状态不满足要求时抛出。
+
+        Returns:
+            结构化结果字典。
         """
         raise RuntimeError("feishu unavailable")
 
@@ -96,22 +88,18 @@ async def test_feishu_reply_connector_propagates_request_failure() -> None:
 
 @pytest.mark.asyncio
 async def test_feishu_reply_connector_rejects_api_error() -> None:
-    """验证 feishu_reply_connector_rejects_api_error 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证飞书回复连接器拒绝API错误对应的测试场景。"""
 
     async def fake_request(method: str, url: str, **kwargs) -> dict:
-        """执行 fake_request 对应的逻辑，并返回处理结果。
+        """处理模拟请求。
 
         Args:
-            method: str，调用方传入的 method 参数。
-            url: str，调用方传入的 url 参数。
-            **kwargs: Any，调用方传入的 **kwargs 参数。
+            method: HTTP 或业务方法名。
+            url: 目标 URL。
+            kwargs: 关键字参数。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         if url == FeishuReplyConnector.TOKEN_URL:
             return {"code": 0, "tenant_access_token": "token-1", "expire": 7200}

@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_audit_and_cost_api。
+"""审计及成本API测试模块。
 
 本测试模块验证 test_audit_and_cost_api 覆盖的业务路径、边界条件和回归场景。
 
@@ -7,7 +7,8 @@
 - 所有租户相关数据都必须携带 tenant_id 并保持隔离。
 - 关键执行路径应保留日志、审计或链路追踪信息。
 -
-主要函数：create_completed_ticket、test_audit_and_cost_summary_cover_completed_ticket、test_sqlalchemy_audit_repository_round_trip。
+主要函数：create_completed_ticket、test_audit_and_cost_summary_cover_completed_ticket、test_sqlalchemy_
+    audit_repository_round_trip。
 """
 
 import asyncio
@@ -17,35 +18,36 @@ from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from agentforge.platform.api.app import create_platform_app
 from agentforge.platform.domain.audit import AuditEvent
 from agentforge.platform.infrastructure.db.base import Base
 from agentforge.platform.infrastructure.sqlalchemy_audit_repository import SQLAlchemyAuditRepository
 from agentforge.platform.runtime import build_memory_container
+from tests.platform.support_fixtures import configure_memory_support, create_app_with_support
 
 
-def create_completed_ticket(container):
-    """创建新的业务对象，并返回调用方需要的结果。
+def create_completed_ticket(container, support):
+    """创建已完成工单。
 
     Args:
-        container: Any，调用方传入的 container 参数。
+        container: 服务容器。
+        support: 客服。
 
     Returns:
-        None，函数执行后的结果。
+        处理结果。
     """
 
     async def setup():
-        """执行 setup 对应的逻辑，并返回处理结果。
+        """装配测试环境。
 
         Returns:
-            None，函数执行后的结果。
+            处理结果。
         """
         await container.knowledge_service.ingest_document(
             tenant_id="tenant-1",
             title="Product usage",
             content="How to use this product: open the dashboard and follow the setup guide.",
         )
-        ticket = await container.processing_service.process_event(
+        ticket = await support.processing_service.process_event(
             {
                 "tenant_id": "tenant-1",
                 "source": "feishu",
@@ -54,26 +56,23 @@ def create_completed_ticket(container):
                 "reply_target": "chat-1",
             }
         )
-        await container.ticket_service.review_draft(
+        await support.ticket_service.review_draft(
             tenant_id="tenant-1",
             ticket_id=ticket.ticket_id,
             action="accept",
             reviewer_id="agent-1",
         )
-        return await container.ticket_service.publish_reply("tenant-1", ticket.ticket_id)
+        return await support.ticket_service.publish_reply("tenant-1", ticket.ticket_id)
 
     return asyncio.run(setup())
 
 
 def test_audit_and_cost_summary_cover_completed_ticket() -> None:
-    """验证 audit_and_cost_summary_cover_completed_ticket 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证审计及成本摘要已完成工单对应的测试场景。"""
     container = build_memory_container()
-    ticket = create_completed_ticket(container)
-    client = TestClient(create_platform_app(container))
+    support = configure_memory_support(container)
+    ticket = create_completed_ticket(container, support)
+    client = TestClient(create_app_with_support(container, support))
 
     audit_response = client.get(
         "/v1/audit",
@@ -100,11 +99,7 @@ def test_audit_and_cost_summary_cover_completed_ticket() -> None:
 
 @pytest.mark.asyncio
 async def test_sqlalchemy_audit_repository_round_trip() -> None:
-    """验证 sqlalchemy_audit_repository_round_trip 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证SQLAlchemy审计仓储轮次往返对应的测试场景。"""
     engine = create_async_engine(
         "sqlite+aiosqlite://",
         poolclass=StaticPool,

@@ -1,0 +1,77 @@
+image:
+  repository: agentforge
+  tag: "3.1.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+existingSecret: agentforge-secrets
+
+serviceAccount:
+  create: true
+  name: ""
+
+config:
+  AGENTFORGE_ENV: production
+  AGENTFORGE_AUTH_ENABLED: "true"
+  AGENTFORGE_TEMPORAL_ADDRESS: temporal:7233
+  AGENTFORGE_TEMPORAL_NAMESPACE: default
+  AGENTFORGE_VALKEY_URL: redis://valkey:6379/0
+  AGENTFORGE_DATABASE_URL: postgresql+asyncpg://agentforge:agentforge@postgres:5432/agentforge
+  AGENTFORGE_OBJECT_STORE_ENDPOINT: http://minio:9000
+  AGENTFORGE_OBJECT_STORE_BUCKET: agentforge
+  AGENTFORGE_OBJECT_STORE_REGION: us-east-1
+  AGENTFORGE_OBJECT_STORE_USE_SSL: "false"
+  AGENTFORGE_OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+
+api:
+  enabled: true
+  replicas: 2
+  port: 8000
+  resources:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {cpu: "1", memory: 1Gi}
+
+worker:
+  enabled: true
+  replicas: 1
+  resources:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {cpu: "1", memory: 1Gi}
+
+outboxWorker:
+  enabled: true
+  replicas: 1
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: 500m, memory: 512Mi}
+
+migration:
+  enabled: true
+  backoffLimit: 3
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: agentforge.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]

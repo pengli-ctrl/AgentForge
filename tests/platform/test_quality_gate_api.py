@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_quality_gate_api。
+"""质量门禁API测试模块。
 
 本测试模块验证 test_quality_gate_api 覆盖的业务路径、边界条件和回归场景。
 
@@ -7,25 +7,33 @@
 - 所有租户相关数据都必须携带 tenant_id 并保持隔离。
 - 关键执行路径应保留日志、审计或链路追踪信息。
 -
-主要函数：test_registration_api_prompt_and_model、test_quality_gate_api_pass、test_quality_gate_api_block_on_recall、test_quality_gate_api_requires_candidate。
+主要函数：test_registration_api_prompt_and_model、test_quality_gate_api_pass、test_quality_gate_api_blo
+    ck_on_recall、test_quality_gate_api_requires_candidate。
 """
 
 from fastapi.testclient import TestClient
 
 from agentforge.platform.api.app import create_platform_app
 from agentforge.platform.api.security import ApiKeyAuthenticator
+from agentforge.platform.application.classification_evaluation_service import (
+    ClassificationEvaluationService,
+)
 from agentforge.platform.domain.quality import ModelVersion, PromptTemplate
+from agentforge.platform.modules.support.application.classifier import RuleBasedTicketClassifier
 from agentforge.platform.runtime import build_memory_container
 
 
 def _app() -> TestClient:
-    """执行 _app 对应的逻辑，并返回处理结果。
+    """处理应用。
 
     Returns:
-        TestClient，函数执行后的结果。
+        测试客户端结果。
     """
     container = build_memory_container(
         authenticator=ApiKeyAuthenticator(enabled=False),
+        classification_evaluation_service=ClassificationEvaluationService(
+            RuleBasedTicketClassifier()
+        ),
     )
     # 预置 prompt 与模型版本，便于门禁接口复用
     container.prompt_registry.register(
@@ -46,11 +54,7 @@ def _app() -> TestClient:
 
 
 def test_registration_api_prompt_and_model() -> None:
-    """验证 registration_api_prompt_and_model 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证注册API提示词及模型对应的测试场景。"""
     client = _app()
     resp = client.post(
         "/v1/evaluations/classification?tenant_id=t1",
@@ -80,11 +84,7 @@ def test_registration_api_prompt_and_model() -> None:
 
 
 def test_quality_gate_api_pass() -> None:
-    """验证 quality_gate_api_pass 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证质量门禁API通过对应的测试场景。"""
     client = _app()
     body = {
         "candidate": {
@@ -114,11 +114,7 @@ def test_quality_gate_api_pass() -> None:
 
 
 def test_quality_gate_api_block_on_recall() -> None:
-    """验证 quality_gate_api_block_on_recall 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证质量门禁API块时召回对应的测试场景。"""
     client = _app()
     body = {
         "candidate": {
@@ -148,11 +144,7 @@ def test_quality_gate_api_block_on_recall() -> None:
 
 
 def test_quality_gate_api_requires_candidate() -> None:
-    """验证 quality_gate_api_requires_candidate 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证质量门禁API要求候选结果对应的测试场景。"""
     client = _app()
     resp = client.post("/v1/release/gate", json={})
     assert resp.status_code == 400

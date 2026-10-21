@@ -1,6 +1,7 @@
 # AgentForge Makefile — 常用命令
 
-.PHONY: install dev-install test test-unit test-integration lint format type-check run run-dev \
+.PHONY: install dev-install test test-unit test-integration test-infra lint format type-check run run-dev \
+	release-check release-private migration-drill \
 	docker-build docker-up docker-down platform-up platform-down platform-lite-up platform-lite-down \
 	clean help
 
@@ -34,6 +35,9 @@ test-unit: ## 运行单元测试
 
 test-integration: ## 运行集成测试
 	python -m pytest tests/integration/ -v --tb=short
+
+test-infra: ## 运行真实基础设施测试（需要 Docker）
+	bash scripts/run_infra_tests.sh
 
 lint: ## 代码风格检查
 	flake8 --max-line-length=100 --extend-ignore=E203,W503 agentforge/ tests/
@@ -81,6 +85,16 @@ platform-lite-up: ## 仅启动平台层基础设施（postgres/valkey/temporal/m
 
 platform-lite-down: ## 停止平台层基础设施
 	docker-compose -f deploy/platform/docker-compose.lite.yml down
+
+release-check: ## 校验发布元数据、迁移头和本地安全扫描
+	python scripts/verify_release.py
+	python scripts/security_scan.py
+
+release-private: ## 构建确定性私有化交付包
+	python scripts/build_private_release.py
+
+migration-drill: ## 执行数据库迁移升级/降级/升级演练
+	python scripts/migration_drill.py
 
 clean: ## 清理缓存文件
 	find . -type d -name "__pycache__" -exec rm -rf {} +

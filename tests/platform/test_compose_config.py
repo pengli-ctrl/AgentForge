@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_compose_config。
+"""配置测试模块。
 
 本测试模块验证 test_compose_config 覆盖的业务路径、边界条件和回归场景。
 
@@ -15,11 +15,7 @@ import yaml
 
 
 def test_platform_compose_contains_api_worker_and_migration() -> None:
-    """验证 platform_compose_contains_api_worker_and_migration 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证平台包含API工作进程及迁移对应的测试场景。"""
     path = Path("deploy/platform/docker-compose.platform.yml")
     config = yaml.safe_load(path.read_text(encoding="utf-8"))
     services = config["services"]

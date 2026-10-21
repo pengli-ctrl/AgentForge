@@ -1,13 +1,4 @@
-"""AgentForge 平台代码：worker。
-
-本模块负责 worker 相关的平台能力，是 平台代码 的组成部分。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要函数：run_worker。
-"""
+"""工作进程模块。"""
 
 from __future__ import annotations
 
@@ -16,39 +7,67 @@ import asyncio
 from temporalio.client import Client
 from temporalio.worker import Worker
 
+from agentforge.platform.core import ModuleRegistry
 from agentforge.platform.infrastructure.db.base import create_session_factory
-from agentforge.platform.observability.tracing import configure_tracing
-from agentforge.platform.runtime import build_sqlalchemy_container, configure_container
-from agentforge.platform.settings import get_settings
-from agentforge.platform.workflows.support_ticket import (
-    SupportTicketWorkflow,
-    apply_approval_activity,
-    intake_ticket_activity,
+from agentforge.platform.module_catalog import (
+    ModuleAssemblyContext,
+    build_builtin_modules,
+    build_module_config,
+    build_support_notification_gateway,
 )
-
-# 常量：TASK_QUEUE。
-TASK_QUEUE = "support-copilot"
+from agentforge.platform.observability.tracing import configure_tracing
+from agentforge.platform.runtime import (
+    build_module_context,
+    build_sqlalchemy_container,
+    configure_container,
+)
+from agentforge.platform.settings import get_settings
 
 
 async def run_worker() -> None:
-    """执行完整流程，并返回调用方需要的结果。
+    """运行工作进程。
 
-    Returns:
-        None，函数执行后的结果。
+    Raises:
+        RuntimeError: 运行时依赖或状态不满足要求时抛出。
     """
     settings = get_settings()
     configure_tracing(endpoint=settings.otel_exporter_otlp_endpoint)
     session_factory = create_session_factory(settings.database_url)
-    configure_container(build_sqlalchemy_container(session_factory))
+    container = build_sqlalchemy_container(session_factory)
+    configure_container(container)
 
-    client = await Client.connect(settings.temporal_address, namespace=settings.temporal_namespace)
-    worker = Worker(
-        client,
-        task_queue=TASK_QUEUE,
-        workflows=[SupportTicketWorkflow],
-        activities=[intake_ticket_activity, apply_approval_activity],
+    registry = ModuleRegistry(
+        lambda manifest: build_module_context(
+            container,
+            config=build_module_config(manifest, settings),
+        )
     )
-    await worker.run()
+    for module in build_builtin_modules(
+        ModuleAssemblyContext(
+            container=container,
+            session_factory=session_factory,
+            support_notification_gateway=build_support_notification_gateway(settings),
+        )
+    ):
+        registry.register(module)
+    registry.validate()
+    client = await Client.connect(settings.temporal_address, namespace=settings.temporal_namespace)
+    workers: list[Worker] = []
+    for registered in registry.list_modules():
+        runtime = registered.runtime
+        if not runtime.temporal_workflows and not runtime.temporal_activities:
+            continue
+        workers.append(
+            Worker(
+                client,
+                task_queue=registered.manifest.task_queue,
+                workflows=runtime.temporal_workflows,
+                activities=runtime.temporal_activities,
+            )
+        )
+    if not workers:
+        raise RuntimeError("no module Temporal workers were registered")
+    await asyncio.gather(*(worker.run() for worker in workers))
 
 
 if __name__ == "__main__":
