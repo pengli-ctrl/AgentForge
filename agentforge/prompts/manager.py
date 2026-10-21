@@ -1,14 +1,4 @@
-"""Prompt 模板管理器 — 加载、渲染、版本控制。
-
-从 prompts/templates/ 目录加载 Prompt 模板文件，
-支持变量渲染和版本管理。
-
-设计原则：
-- 模板与代码分离：Prompt 模板存放在 templates/ 目录，不硬编码在 Python 中
-- 版本管理：模板文件通过 Git 进行版本控制
-- 变量渲染：支持 {variable} 风格的变量替换
-- 回退机制：模板不存在时使用默认模板
-"""
+"""管理器模块。"""
 
 from __future__ import annotations
 
@@ -20,23 +10,13 @@ logger = logging.getLogger(__name__)
 
 
 class PromptManager:
-    """Prompt 模板管理器 — 加载、渲染、版本控制。
-
-    从指定目录加载 .txt 格式的 Prompt 模板文件，
-    支持 {variable} 风格的变量渲染。
-
-    Args:
-        template_dir: 模板文件目录。
-    """
+    """提示词相关组件。"""
 
     def __init__(self, template_dir: str = "") -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 PromptManager。
 
         Args:
-            template_dir: str，调用方传入的 template_dir 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            template_dir: 模板。
         """
         if not template_dir:
             # 默认使用本模块下的 templates 目录
@@ -45,19 +25,16 @@ class PromptManager:
         self._cache: dict[str, str] = {}
 
     def load(self, name: str) -> str:
-        """加载 Prompt 模板。
-
-        从 template_dir/{name}.txt 加载模板内容。
-        加载后缓存，后续读取直接从缓存返回。
+        """加载提示词。
 
         Args:
-            name: 模板名称（不含扩展名）。
+            name: 资源或对象名称。
 
         Returns:
-            模板内容字符串。
+            字符串结果。
 
         Raises:
-            FileNotFoundError: 模板文件不存在时抛出。
+            FileNotFoundError: 操作无法完成时抛出。
         """
         if name in self._cache:
             return self._cache[name]
@@ -76,17 +53,14 @@ class PromptManager:
         return content
 
     def render(self, name: str, **variables: Any) -> str:
-        """加载并渲染 Prompt 模板。
-
-        使用 Python str.format() 进行变量替换。
-        模板中的 {variable} 会被替换为 variables 中对应的值。
+        """渲染提示词。
 
         Args:
-            name: 模板名称。
-            **variables: 模板变量。
+            name: 资源或对象名称。
+            variables: 输入参数。
 
         Returns:
-            渲染后的 Prompt 字符串。
+            字符串结果。
         """
         template = self.load(name)
 
@@ -104,7 +78,7 @@ class PromptManager:
         """列出所有可用的模板名称。
 
         Returns:
-            模板名称列表（不含扩展名）。
+            结果列表。
         """
         if not os.path.exists(self.template_dir):
             return []
@@ -125,10 +99,10 @@ class PromptManager:
         """获取模板信息。
 
         Args:
-            name: 模板名称。
+            name: 资源或对象名称。
 
         Returns:
-            包含模板名称、路径、大小的字典。
+            结构化结果字典。
         """
         file_path = os.path.join(self.template_dir, f"{name}.txt")
         exists = os.path.exists(file_path)

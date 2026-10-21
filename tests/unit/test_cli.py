@@ -14,24 +14,15 @@ class TestParserCreation:
     """参数解析器测试。"""
 
     def test_parser_has_subcommands(self) -> None:
-        """验证 parser_has_subcommands 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证解析器具有对应的测试场景。"""
         cli = CLIClient()
         parser = cli._create_parser()
-        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
         with pytest.raises(SystemExit):
             parser.parse_args(["--help"])
 
     def test_parser_accepts_url_and_api_key(self) -> None:
-        """验证 parser_accepts_url_and_api_key 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证解析器URL及API键对应的测试场景。"""
         cli = CLIClient()
         parser = cli._create_parser()
         parsed = parser.parse_args(
@@ -54,13 +45,10 @@ class TestNoCommand:
     """无子命令测试。"""
 
     def test_no_command_prints_help_returns_zero(self, capsys) -> None:
-        """验证 no_command_prints_help_returns_zero 对应的业务行为、边界条件和回归场景。
+        """验证无返回零对应的测试场景。
 
         Args:
-            capsys: Any，调用方传入的 capsys 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            capsys: 输入参数。
         """
         cli = CLIClient()
         exit_code = cli.run([])
@@ -70,14 +58,10 @@ class TestNoCommand:
 
 
 class TestSubmitCommand:
-    """submit 子命令测试。"""
+    """验证测试提交行为的测试集合。"""
 
     def test_submit_parses_workflow_and_input(self) -> None:
-        """验证 submit_parses_workflow_and_input 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证提交解析工作流及输入对应的测试场景。"""
         cli = CLIClient()
         parser = cli._create_parser()
         parsed = parser.parse_args(
@@ -97,14 +81,10 @@ class TestSubmitCommand:
 
 
 class TestStatusCommand:
-    """status 子命令测试。"""
+    """验证测试状态行为的测试集合。"""
 
     def test_status_parses_task_id(self) -> None:
-        """验证 status_parses_task_id 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证状态解析任务ID对应的测试场景。"""
         cli = CLIClient()
         parser = cli._create_parser()
         parsed = parser.parse_args(["status", "task-abc-123"])
@@ -113,14 +93,10 @@ class TestStatusCommand:
 
 
 class TestServeCommand:
-    """serve 子命令测试。"""
+    """验证测试提供行为的测试集合。"""
 
     def test_serve_parses_host_and_port(self) -> None:
-        """验证 serve_parses_host_and_port 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证提供解析及对应的测试场景。"""
         cli = CLIClient()
         parser = cli._create_parser()
         parsed = parser.parse_args(
@@ -137,11 +113,7 @@ class TestServeCommand:
         assert parsed.port == 9000
 
     def test_serve_defaults(self) -> None:
-        """验证 serve_defaults 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证提供默认项对应的测试场景。"""
         cli = CLIClient()
         parser = cli._create_parser()
         parsed = parser.parse_args(["serve"])
@@ -153,7 +125,11 @@ class TestErrorHandling:
     """错误处理测试。"""
 
     def test_invalid_json_input_returns_error_code(self, capsys) -> None:
-        """submit 命令传入无效 JSON 时返回退出码 1。"""
+        """验证无效JSON输入返回错误代码对应的测试场景。
+
+        Args:
+            capsys: 输入参数。
+        """
         cli = CLIClient()
         exit_code = cli.run(
             [
@@ -170,7 +146,11 @@ class TestErrorHandling:
         assert "Error" in captured.err
 
     def test_connection_error_returns_error_code(self, capsys) -> None:
-        """无法连接时返回退出码 1。"""
+        """无法连接时返回退出码 1。
+
+        Args:
+            capsys: 输入参数。
+        """
         cli = CLIClient()
         exit_code = cli.run(
             [
@@ -184,24 +164,16 @@ class TestErrorHandling:
 
 
 class TestModuleLevelApp:
-    """模块级 app 实例测试。"""
+    """验证测试模块级别应用行为的测试集合。"""
 
     def test_app_is_cli_client(self) -> None:
-        """验证 app_is_cli_client 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证应用是否客户端对应的测试场景。"""
         from agentforge.cli.main import app
 
         assert isinstance(app, CLIClient)
 
     def test_main_function_exists(self) -> None:
-        """验证 main_function_exists 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证函数存在对应的测试场景。"""
         from agentforge.cli.main import main
 
         assert callable(main)

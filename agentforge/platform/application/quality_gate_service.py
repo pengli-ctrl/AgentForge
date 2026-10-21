@@ -1,13 +1,4 @@
-"""AgentForge 平台应用服务层：quality_gate_service。
-
-本模块实现 quality_gate_service 应用服务，编排多个领域对象和基础设施组件完成业务流程。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：QualityGateService。
-"""
+"""质量门禁服务模块。"""
 
 from __future__ import annotations
 
@@ -20,15 +11,7 @@ from agentforge.platform.domain.retrieval import RetrievalReport
 
 
 class QualityGateService:
-    """发布质量门禁。
-
-    基于离线评估报告（召回评估 + 分类评估）对发布候选做门槛判定：
-    - BLOCK：存在硬性失败项（召回/引用/分类不达标，或出现高风险漏报）。
-    - HOLD：仅触发软性告警（低于理想目标但高于硬底线）。
-    - PASS：全部达标。
-
-    纯函数式判定，不写库；便于单测与 CI 回归复用。
-    """
+    """发布质量门禁。"""
 
     # 硬底线：低于该值直接 BLOCK。
     HARD_RECALL = 0.6
@@ -48,13 +31,13 @@ class QualityGateService:
     TARGET_RISK_ACCURACY = 0.9
 
     def gate_retrieval(self, report: RetrievalReport) -> QualityGateResult:
-        """执行 gate_retrieval 对应的逻辑，并返回处理结果。
+        """执行门禁检查检索。
 
         Args:
-            report: RetrievalReport，调用方传入的 report 参数。
+            report: 报告。
 
         Returns:
-            QualityGateResult，函数执行后的结果。
+            质量门禁结果结果。
         """
         metrics = {
             "recall_at_k": report.recall_at_k,
@@ -86,13 +69,13 @@ class QualityGateService:
         return self._finalize(metrics=metrics, passed=passed, warned=warned, failed=failed)
 
     def gate_classification(self, report) -> QualityGateResult:
-        """执行 gate_classification 对应的逻辑，并返回处理结果。
+        """执行门禁检查分类。
 
         Args:
-            report: Any，调用方传入的 report 参数。
+            report: 报告。
 
         Returns:
-            QualityGateResult，函数执行后的结果。
+            质量门禁结果结果。
         """
         metrics = {
             "classification_accuracy": report.classification_accuracy,
@@ -157,15 +140,15 @@ class QualityGateService:
         retrieval: RetrievalReport | None = None,
         classification=None,
     ) -> QualityGateResult:
-        """执行 gate 对应的逻辑，并返回处理结果。
+        """执行门禁。
 
         Args:
-            candidate: ReleaseCandidate，调用方传入的 candidate 参数。
-            retrieval: RetrievalReport | None，调用方传入的 retrieval 参数。
-            classification: Any，调用方传入的 classification 参数。
+            candidate: 候选结果。
+            retrieval: 检索。
+            classification: 分类。
 
         Returns:
-            QualityGateResult，函数执行后的结果。
+            质量门禁结果结果。
         """
         gates: list[QualityGateResult] = []
         if retrieval is not None:
@@ -194,16 +177,16 @@ class QualityGateService:
         warned: list[str],
         failed: list[str],
     ) -> QualityGateResult:
-        """执行 _finalize 对应的逻辑，并返回处理结果。
+        """完成质量门禁。
 
         Args:
-            metrics: dict[str, float]，调用方传入的 metrics 参数。
-            passed: list[str]，调用方传入的 passed 参数。
-            warned: list[str]，调用方传入的 warned 参数。
-            failed: list[str]，调用方传入的 failed 参数。
+            metrics: 指标。
+            passed: 通过。
+            warned: 输入参数。
+            failed: 失败。
 
         Returns:
-            QualityGateResult，函数执行后的结果。
+            质量门禁结果结果。
         """
         if failed:
             verdict = QualityGateVerdict.BLOCK

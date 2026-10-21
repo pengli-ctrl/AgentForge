@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_api_auth。
+"""API鉴权测试模块。
 
 本测试模块验证 test_api_auth 覆盖的业务路径、边界条件和回归场景。
 
@@ -7,7 +7,10 @@
 - 所有租户相关数据都必须携带 tenant_id 并保持隔离。
 - 关键执行路径应保留日志、审计或链路追踪信息。
 -
-主要函数：build_authenticated_client、test_tenant_api_key_is_required_and_scoped、test_admin_key_can_manage_outbox_but_tenant_key_cannot、base_settings、test_default_settings_require_auth、test_dev_without_keys_falls_back_to_disabled、test_prod_without_keys_refuses_startup、test_prod_with_keys_enables_auth。
+主要函数：build_authenticated_client、test_tenant_api_key_is_required_and_scoped、test_admin_key_can_ma
+    nage_outbox_but_tenant_key_cannot、base_settings、test_default_settings_require_auth、test_dev_
+    without_keys_falls_back_to_disabled、test_prod_without_keys_refuses_startup、test_prod_with_ke
+    ys_enables_auth。
 """
 
 from fastapi.testclient import TestClient
@@ -19,10 +22,10 @@ from agentforge.platform.settings import Settings
 
 
 def build_authenticated_client() -> TestClient:
-    """构建目标对象，并返回调用方需要的结果。
+    """构建客户端。
 
     Returns:
-        TestClient，函数执行后的结果。
+        测试客户端结果。
     """
     authenticator = ApiKeyAuthenticator(
         enabled=True,
@@ -34,11 +37,7 @@ def build_authenticated_client() -> TestClient:
 
 
 def test_tenant_api_key_is_required_and_scoped() -> None:
-    """验证 tenant_api_key_is_required_and_scoped 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证租户API键是否必需及按范围隔离对应的测试场景。"""
     client = build_authenticated_client()
     event = {
         "tenant_id": "tenant-1",
@@ -73,11 +72,7 @@ def test_tenant_api_key_is_required_and_scoped() -> None:
 
 
 def test_admin_key_can_manage_outbox_but_tenant_key_cannot() -> None:
-    """验证 admin_key_can_manage_outbox_but_tenant_key_cannot 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证管理键可以Outbox租户键无法对应的测试场景。"""
     client = build_authenticated_client()
 
     assert client.get("/v1/outbox/failed").status_code == 401
@@ -101,13 +96,13 @@ def test_admin_key_can_manage_outbox_but_tenant_key_cannot() -> None:
 
 
 def base_settings(**overrides) -> Settings:
-    """执行 base_settings 对应的逻辑，并返回处理结果。
+    """处理基础配置。
 
     Args:
-        **overrides: Any，调用方传入的 **overrides 参数。
+        overrides: 配置覆盖项。
 
     Returns:
-        Settings，函数执行后的结果。
+        配置结果。
     """
     values = dict(
         env="dev",
@@ -120,36 +115,26 @@ def base_settings(**overrides) -> Settings:
 
 
 def test_default_settings_require_auth(monkeypatch) -> None:
-    """验证 default_settings_require_auth 对应的业务行为、边界条件和回归场景。
+    """验证默认配置要求鉴权对应的测试场景。
 
     Args:
-        monkeypatch: Any，调用方传入的 monkeypatch 参数。
-
-    Returns:
-        None，函数执行后的结果。
+        monkeypatch: pytest 提供的猴子补丁对象。
     """
     s = base_settings()
     assert s.auth_enabled is True
 
 
 def test_dev_without_keys_falls_back_to_disabled() -> None:
-    """验证 dev_without_keys_falls_back_to_disabled 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证不包含键回退返回到停用对应的测试场景。"""
     s = base_settings(env="dev")
     assert _resolve_auth_enabled(s) is False
 
 
 def test_prod_without_keys_refuses_startup() -> None:
-    """验证 prod_without_keys_refuses_startup 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
+    """验证生产不包含键对应的测试场景。
 
     Raises:
-        AssertionError: 当输入、状态或外部依赖不满足要求时抛出。
+        AssertionError: 操作无法完成时抛出。
     """
     s = base_settings(env="prod")
     try:
@@ -161,23 +146,16 @@ def test_prod_without_keys_refuses_startup() -> None:
 
 
 def test_prod_with_keys_enables_auth() -> None:
-    """验证 prod_with_keys_enables_auth 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证生产使用键鉴权对应的测试场景。"""
     s = base_settings(env="prod", api_keys={"k": "t1"})
     assert _resolve_auth_enabled(s) is True
 
 
 def test_prod_no_keys_allow_no_auth_env_opens(monkeypatch) -> None:
-    """验证 prod_no_keys_allow_no_auth_env_opens 对应的业务行为、边界条件和回归场景。
+    """验证生产无键允许无鉴权环境对应的测试场景。
 
     Args:
-        monkeypatch: Any，调用方传入的 monkeypatch 参数。
-
-    Returns:
-        None，函数执行后的结果。
+        monkeypatch: pytest 提供的猴子补丁对象。
     """
     monkeypatch.setenv("AGENTFORGE_ALLOW_NO_AUTH", "true")
     s = base_settings(env="prod")
@@ -185,10 +163,6 @@ def test_prod_no_keys_allow_no_auth_env_opens(monkeypatch) -> None:
 
 
 def test_explicit_auth_enabled_false_turns_off_even_with_keys() -> None:
-    """验证 explicit_auth_enabled_false_turns_off_even_with_keys 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证鉴权启用假使用键对应的测试场景。"""
     s = base_settings(env="prod", api_keys={"k": "t1"}, auth_enabled=False)
     assert _resolve_auth_enabled(s) is False

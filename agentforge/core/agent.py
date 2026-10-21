@@ -1,13 +1,4 @@
-"""AgentForge 核心运行时层：agent。
-
-本模块负责 agent 相关能力，是 核心运行时层 的组成部分。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
-- 关键路径应保留日志、指标或链路追踪信息。
-- 主要类：AgentState、Tool、AgentResult、BaseAgent、Agent。
-"""
+"""智能体模块。"""
 
 import asyncio
 import logging
@@ -25,32 +16,15 @@ logger = logging.getLogger(__name__)
 
 
 class AgentState(Enum):
-    """AgentState。
+    """智能体运行状态枚举。"""
 
-    AgentState 是状态或类型枚举，用于约束系统内部取值，避免散落的字符串常量。
-
-    主要成员：
-    - IDLE: 'idle'。
-    - RUNNING: 'running'。
-    - DEGRADED: 'degraded'。
-    - FAILED: 'failed'。
-    - TIMEOUT: 'timeout'。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-    """
-
-    IDLE = "idle"  # 就绪状态。
-    RUNNING = "running"  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-    DEGRADED = "degraded"  # 执行中状态。
-    FAILED = "failed"  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-    TIMEOUT = "timeout"  # 失败重试。
+    IDLE = "idle"  # 空闲状态。
+    RUNNING = "running"
+    DEGRADED = "degraded"  # 降级状态。
+    FAILED = "failed"
+    TIMEOUT = "timeout"  # 超时状态。
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 _AGENT_STATE_TRANSITIONS = {
     AgentState.IDLE: {AgentState.RUNNING},
     AgentState.RUNNING: {
@@ -67,80 +41,48 @@ _AGENT_STATE_TRANSITIONS = {
 
 @dataclass
 class Tool:
-    """Tool。
+    """工具领域组件。
 
-    Tool 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - name: str。
-    - description: str。
-    - parameters: dict。
-    - required: bool。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    Attributes:
+        name: 名称。
+        description: 描述信息。
+        parameters: 参数。
+        required: 是否必填。
     """
 
     name: str
     description: str
-    parameters: dict = field(default_factory=dict)  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    parameters: dict = field(default_factory=dict)
     required: bool = True
 
 
 @dataclass
 class AgentResult:
-    """AgentResult。
+    """智能体结果领域组件。
 
-    AgentResult 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - success: bool。
-    - data: dict。
-    - error: Optional[str]。
-    - degraded: bool。
-    - token_usage: dict。
-    - cost: float。
-    - latency_ms: float。
-    - span: Optional[Span]。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    Attributes:
+        success: 是否成功。
+        data: 数据内容。
+        error: 错误信息。
+        degraded: 是否降级。
+        token_usage: 令牌用量。
+        cost: 成本。
+        latency_ms: 延迟，单位为毫秒。
+        span: 链路片段。
     """
 
     success: bool
     data: dict = field(default_factory=dict)
     error: Optional[str] = None
-    degraded: bool = False  # 获取结果。
-    token_usage: dict = field(default_factory=dict)  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    degraded: bool = False
+    token_usage: dict = field(default_factory=dict)
     cost: float = 0.0
     latency_ms: float = 0.0
-    span: Optional[Span] = None  # Agent 注册与查询。
+    span: Optional[Span] = None
 
 
 class BaseAgent(ABC):
-    """BaseAgent。
-
-    BaseAgent 是核心运行时组件，负责状态管理、调度和跨模块协作。
-
-    主要成员：
-    - 方法 execute()。
-    - 方法 get_tools()。
-    - 方法 get_memory_config()。
-    - 方法 validate_input()。
-    - 方法 on_error()。
-    - 方法 run()。
-    - 方法 name()。
-    - 方法 state()。
-    - 方法 memory()。
-    - 方法 stats()。
-    - 方法 reset()。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-    """
+    """智能体运行时基类，负责状态、记忆、工具、链路追踪和容错。"""
 
     def __init__(
         self,
@@ -148,15 +90,12 @@ class BaseAgent(ABC):
         memory_config: Optional[MemoryConfig] = None,
         timeout_config: Optional[TimeoutConfig] = None,
     ):
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 BaseAgent。
 
         Args:
-            name: str，调用方传入的 name 参数。
-            memory_config: Optional[MemoryConfig]，调用方传入的 memory_config 参数。
-            timeout_config: Optional[TimeoutConfig]，调用方传入的 timeout_config 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            name: 资源或对象名称。
+            memory_config: 记忆配置。
+            timeout_config: 超时配置。
         """
         self._name = name
         self._state = AgentState.IDLE
@@ -169,60 +108,56 @@ class BaseAgent(ABC):
         self._error_count = 0
         self._last_error: Optional[str] = None
 
-    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-
     @abstractmethod
     async def execute(self, input_data: dict) -> dict:
-        """执行 execute 对应的逻辑，并返回处理结果。
+        """执行智能体的具体任务实现。
 
         Args:
-            input_data: dict，调用方传入的 input_data 参数。
+            input_data: 输入数据。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         ...
 
-    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-
     def get_tools(self) -> list[Tool]:
-        """读取并返回指定数据，并返回调用方需要的结果。
+        """获取工具。
 
         Returns:
-            list[Tool]，函数执行后的结果。
+            结果列表。
         """
         return []
 
     def get_memory_config(self) -> MemoryConfig:
-        """读取并返回指定数据，并返回调用方需要的结果。
+        """读取记忆配置。
 
         Returns:
-            MemoryConfig，函数执行后的结果。
+            记忆配置结果。
         """
         return MemoryConfig()
 
     def validate_input(self, input_data: dict) -> bool:
-        """校验输入或状态，并返回调用方需要的结果。
+        """校验输入。
 
         Args:
-            input_data: dict，调用方传入的 input_data 参数。
+            input_data: 输入数据。
 
         Returns:
-            bool，函数执行后的结果。
+            操作是否成功。
         """
         if not isinstance(input_data, dict):
             return False
-        # Agent 注册与查询。
+
         return "query" in input_data
 
     def on_error(self, error: Exception) -> dict:
-        """执行 on_error 对应的逻辑，并返回处理结果。
+        """处理错误。
 
         Args:
-            error: Exception，调用方传入的 error 参数。
+            error: 错误。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         logger.warning("Agent[%s] error: %s", self._name, str(error), exc_info=True)
         return {
@@ -232,29 +167,26 @@ class BaseAgent(ABC):
             "fallback": "default_error_response",
         }
 
-    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-
     async def run(
         self,
         input_data: dict,
         span: Optional[Span] = None,
     ) -> AgentResult:
-        """执行 run 对应的逻辑，并返回处理结果。
+        """运行基础智能体。
 
         Args:
-            input_data: dict，调用方传入的 input_data 参数。
-            span: Optional[Span]，调用方传入的 span 参数。
+            input_data: 输入数据。
+            span: 链路片段对象。
 
         Returns:
-            AgentResult，函数执行后的结果。
+            智能体结果结果。
 
         Raises:
-            ValueError: 当输入、状态或外部依赖不满足要求时抛出。
+            ValueError: 输入值或业务状态不合法时抛出。
         """
         start_time = time.monotonic()
         self._execution_count += 1
 
-        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         if self._state == AgentState.RUNNING:
             return AgentResult(
                 success=False,
@@ -266,16 +198,13 @@ class BaseAgent(ABC):
         status = SpanStatus.OK
 
         try:
-            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             if not self.validate_input(input_data):
                 raise ValueError(f"Invalid input for Agent[{self._name}]")
 
-            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             session_context = await self._memory.read("short_term", "session_context")
             if session_context:
                 input_data["session_context"] = session_context
 
-            # Agent 注册与查询。
             result_data = await self._timeout_mgr.execute_with_agent_timeout(
                 self.execute(input_data)
             )
@@ -298,10 +227,8 @@ class BaseAgent(ABC):
             result_data = self.on_error(e)
 
         finally:
-            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             await self._memory.clear_working()
 
-            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             if span:
                 await self._end_agent_span(span, result_data, status)
 
@@ -312,13 +239,11 @@ class BaseAgent(ABC):
 
         # 就绪状态。
         # 失败状态。
-        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         if self._state == AgentState.TIMEOUT or status == SpanStatus.TIMEOUT:
             # 超时状态。
             # 超时状态。
             pass
         elif self._state == AgentState.FAILED or status == SpanStatus.ERROR:
-            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             pass
         elif degraded:
             status = SpanStatus.DEGRADED
@@ -337,18 +262,12 @@ class BaseAgent(ABC):
             span=span,
         )
 
-    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-
     def _transition_to(self, new_state: AgentState) -> None:
-        """执行 _transition_to 对应的逻辑，并返回处理结果。
+        """迁移到。
 
         Args:
-            new_state: AgentState，调用方传入的 new_state 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            new_state: 状态。
         """
-        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         valid = _AGENT_STATE_TRANSITIONS.get(self._state, set())
 
         if new_state not in valid:
@@ -359,20 +278,17 @@ class BaseAgent(ABC):
                 new_state.value,
                 {s.value for s in valid},
             )
-            return  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+            return
 
         self._state = new_state
 
     async def _end_agent_span(self, span: Span, result: dict, status: SpanStatus) -> None:
-        """执行 _end_agent_span 对应的逻辑，并返回处理结果。
+        """结束当前智能体链路片段。
 
         Args:
-            span: Span，调用方传入的 span 参数。
-            result: dict，调用方传入的 result 参数。
-            status: SpanStatus，调用方传入的 status 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            span: 链路片段对象。
+            result: 处理结果。
+            status: 目标状态。
         """
         span.set_attribute("agent_name", self._name)
         span.set_attribute("execution_count", self._execution_count)
@@ -381,41 +297,39 @@ class BaseAgent(ABC):
             span.set_attribute("tokens", result["tokens"])
         span.status = status
 
-    # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-
     @property
     def name(self) -> str:
-        """执行 name 对应的逻辑，并返回处理结果。
+        """返回对象名称。
 
         Returns:
-            str，函数执行后的结果。
+            字符串结果。
         """
         return self._name
 
     @property
     def state(self) -> AgentState:
-        """执行 state 对应的逻辑，并返回处理结果。
+        """返回当前运行状态。
 
         Returns:
-            AgentState，函数执行后的结果。
+            智能体状态结果。
         """
         return self._state
 
     @property
     def memory(self) -> MemoryManager:
-        """执行 memory 对应的逻辑，并返回处理结果。
+        """执行记忆。
 
         Returns:
-            MemoryManager，函数执行后的结果。
+            记忆管理器结果。
         """
         return self._memory
 
     @property
     def stats(self) -> dict:
-        """执行 stats 对应的逻辑，并返回处理结果。
+        """获取当前统计数据。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         return {
             "name": self._name,
@@ -426,28 +340,13 @@ class BaseAgent(ABC):
         }
 
     def reset(self) -> None:
-        """执行 reset 对应的逻辑，并返回处理结果。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """重置当前状态。"""
         self._state = AgentState.IDLE
         self._last_error = None
 
 
 class Agent:
-    """Agent。
-
-    Agent 是核心运行时组件，负责状态管理、调度和跨模块协作。
-
-    主要成员：
-    - 方法 name()。
-    - 方法 execute()。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-    """
+    """智能体抽象基类，定义统一执行协议和运行时能力。"""
 
     def __init__(
         self,
@@ -457,17 +356,14 @@ class Agent:
         max_iterations: int = 5,
         token_budget: int = 8000,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 Agent。
 
         Args:
-            llm_gateway: Any，调用方传入的 llm_gateway 参数。
-            name: str，调用方传入的 name 参数。
-            tool_registry: Any，调用方传入的 tool_registry 参数。
-            max_iterations: int，调用方传入的 max_iterations 参数。
-            token_budget: int，调用方传入的 token_budget 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            llm_gateway: LLM 网关实例。
+            name: 资源或对象名称。
+            tool_registry: 工具注册表。
+            max_iterations: 最大迭代次数。
+            token_budget: 令牌预算。
         """
         self._llm_gateway = llm_gateway
         self._name = name
@@ -478,21 +374,21 @@ class Agent:
 
     @property
     def name(self) -> str:
-        """执行 name 对应的逻辑，并返回处理结果。
+        """返回对象名称。
 
         Returns:
-            str，函数执行后的结果。
+            字符串结果。
         """
         return self._name
 
     async def execute(self, event):
-        """执行 execute 对应的逻辑，并返回处理结果。
+        """执行核心处理逻辑并返回结果。
 
         Args:
-            event: Any，调用方传入的 event 参数。
+            event: 待处理事件。
 
         Returns:
-            None，函数执行后的结果。
+            处理结果。
         """
         from agentforge.core.event_types import AgentEvent, EventType
 
@@ -557,24 +453,24 @@ class Agent:
             )
 
     def _extract_context(self, context_snapshot: dict) -> dict:
-        """执行 _extract_context 对应的逻辑，并返回处理结果。
+        """提取上下文。
 
         Args:
-            context_snapshot: dict，调用方传入的 context_snapshot 参数。
+            context_snapshot: 上下文快照。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         return context_snapshot
 
     def _build_initial_messages(self, task: str) -> list[dict[str, str]]:
-        """执行 _build_initial_messages 对应的逻辑，并返回处理结果。
+        """构建初始消息。
 
         Args:
-            task: str，调用方传入的 task 参数。
+            task: 任务对象。
 
         Returns:
-            list[dict[str, str]]，函数执行后的结果。
+            结果列表。
         """
         system_prompt = self.prompt_template or "You are a helpful assistant."
         try:
@@ -592,27 +488,27 @@ class Agent:
         relevant_context: dict,
         tool_results: list,
     ) -> dict:
-        """执行 _build_downstream_context 对应的逻辑，并返回处理结果。
+        """构建下游上下文。
 
         Args:
-            original_snapshot: dict，调用方传入的 original_snapshot 参数。
-            relevant_context: dict，调用方传入的 relevant_context 参数。
-            tool_results: list，调用方传入的 tool_results 参数。
+            original_snapshot: 原始上下文快照。
+            relevant_context: 筛选后的相关上下文。
+            tool_results: 工具执行结果列表。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         return {"agent_result": {"summary": self._summarize(None, tool_results)}}
 
     def _summarize(self, response, tool_results: list) -> str:
-        """执行 _summarize 对应的逻辑，并返回处理结果。
+        """汇总智能体。
 
         Args:
-            response: Any，调用方传入的 response 参数。
-            tool_results: list，调用方传入的 tool_results 参数。
+            response: 响应。
+            tool_results: 工具执行结果列表。
 
         Returns:
-            str，函数执行后的结果。
+            字符串结果。
         """
         if response is not None and bool(getattr(response, "content", None)):
             return response.content
@@ -620,23 +516,23 @@ class Agent:
         return "; ".join(outputs) if outputs else ""
 
     def _get_tool_schemas(self) -> list[dict]:
-        """执行 _get_tool_schemas 对应的逻辑，并返回处理结果。
+        """获取工具结构定义。
 
         Returns:
-            list[dict]，函数执行后的结果。
+            结果列表。
         """
         if self._tool_registry is None:
             return []
         return self._tool_registry.get_schemas()
 
     async def _execute_tool(self, tool_call):
-        """执行 _execute_tool 对应的逻辑，并返回处理结果。
+        """执行工具。
 
         Args:
-            tool_call: Any，调用方传入的 tool_call 参数。
+            tool_call: 工具调用。
 
         Returns:
-            None，函数执行后的结果。
+            处理结果。
         """
         if self._tool_registry is None:
             from agentforge.core.base_tool import ToolResult
@@ -650,13 +546,13 @@ class Agent:
 
     @staticmethod
     def _usage_tokens(usage: dict) -> int:
-        """执行 _usage_tokens 对应的逻辑，并返回处理结果。
+        """统计本次执行的令牌用量。
 
         Args:
-            usage: dict，调用方传入的 usage 参数。
+            usage: 用量统计数据。
 
         Returns:
-            int，函数执行后的结果。
+            整数结果。
         """
         if "total_tokens" in usage:
             return int(usage.get("total_tokens", 0) or 0)

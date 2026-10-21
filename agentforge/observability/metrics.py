@@ -1,16 +1,4 @@
-"""Prometheus 指标定义 — 任务数、Agent 执行耗时、LLM 调用次数等。
-
-用于全链路可观测性（Layer 4 容错防线）。
-指标通过 /metrics 端点以 Prometheus 格式暴露。
-
-核心指标：
-- agentforge_tasks_total：任务总数（按状态分）
-- agentforge_agent_duration_seconds：Agent 执行耗时直方图
-- agentforge_llm_calls_total：LLM 调用次数
-- agentforge_tool_calls_total：工具调用次数（按工具名和成功/失败分）
-- agentforge_event_bus_throughput：事件总线吞吐量
-- agentforge_circuit_breaker_state：熔断器状态
-"""
+"""指标模块。"""
 
 from __future__ import annotations
 
@@ -21,27 +9,13 @@ logger = logging.getLogger(__name__)
 
 
 class MetricsCollector:
-    """Prometheus 指标收集器 — 定义和记录所有业务指标。
-
-    当 prometheus_client 不可用时，使用内存计数器作为回退方案。
-
-    指标定义遵循 Prometheus 最佳实践：
-    - Counter：单调递增的计数器（任务总数、LLM 调用次数）
-    - Histogram：分布统计（Agent 执行耗时）
-    - Gauge：可增可减的仪表盘（活跃任务数、熔断器状态）
-
-    Args:
-        namespace: 指标命名空间（默认 "agentforge"）。
-    """
+    """指标收集器相关组件。"""
 
     def __init__(self, namespace: str = "agentforge") -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 MetricsCollector。
 
         Args:
-            namespace: str，调用方传入的 namespace 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            namespace: 输入参数。
         """
         self.namespace = namespace
         self._prometheus: Any = None
@@ -50,13 +24,9 @@ class MetricsCollector:
         self._init_prometheus()
 
     def _init_prometheus(self) -> None:
-        """初始化 Prometheus 指标定义。"""
+        """初始化 Prometheus 指标注册表。"""
         try:
-            from prometheus_client import (
-                Counter,
-                Gauge,
-                Histogram,
-            )
+            from prometheus_client import Counter, Gauge, Histogram
 
             self._prometheus = True
 
@@ -128,8 +98,8 @@ class MetricsCollector:
         """记录任务状态变更。
 
         Args:
-            status: 任务状态（pending/running/completed/failed/cancelled）。
-            workflow: 工作流名称。
+            status: 目标状态。
+            workflow: 工作流定义或实例。
         """
         if self._prometheus:
             self._metrics["tasks_total"].labels(status=status, workflow=workflow).inc()
@@ -140,12 +110,12 @@ class MetricsCollector:
     def record_agent_duration(
         self, agent_name: str, duration: float, status: str = "success"
     ) -> None:
-        """记录 Agent 执行耗时。
+        """记录智能体持续时间。
 
         Args:
-            agent_name: Agent 名称。
-            duration: 执行耗时（秒）。
-            status: 执行状态（success/error/timeout）。
+            agent_name: 智能体名称。
+            duration: 执行持续时间。
+            status: 目标状态。
         """
         if self._prometheus:
             self._metrics["agent_duration"].labels(agent_name=agent_name, status=status).observe(
@@ -161,8 +131,8 @@ class MetricsCollector:
         """记录 LLM 调用。
 
         Args:
-            agent_name: 调用 LLM 的 Agent 名称。
-            status: 调用状态（success/error/timeout）。
+            agent_name: 智能体名称。
+            status: 目标状态。
         """
         if self._prometheus:
             self._metrics["llm_calls_total"].labels(agent_name=agent_name, status=status).inc()
@@ -175,8 +145,8 @@ class MetricsCollector:
 
         Args:
             tool_name: 工具名称。
-            agent_name: 调用工具的 Agent 名称。
-            status: 调用状态（success/error）。
+            agent_name: 智能体名称。
+            status: 目标状态。
         """
         if self._prometheus:
             self._metrics["tool_calls_total"].labels(
@@ -202,7 +172,7 @@ class MetricsCollector:
         """设置当前活跃任务数。
 
         Args:
-            count: 活跃任务数。
+            count: 数量。
         """
         if self._prometheus:
             self._metrics["active_tasks"].set(count)
@@ -213,8 +183,8 @@ class MetricsCollector:
         """设置熔断器状态。
 
         Args:
-            agent_name: Agent 名称。
-            state: 熔断器状态（0=closed, 1=open, 2=half-open）。
+            agent_name: 智能体名称。
+            state: 当前状态。
         """
         if self._prometheus:
             self._metrics["circuit_breaker_state"].labels(agent_name=agent_name).set(state)
@@ -225,8 +195,8 @@ class MetricsCollector:
         """记录重试。
 
         Args:
-            agent_name: Agent 名称。
-            reason: 重试原因（timeout/error）。
+            agent_name: 智能体名称。
+            reason: 变更原因。
         """
         if self._prometheus:
             self._metrics["retry_count"].labels(agent_name=agent_name, reason=reason).inc()
@@ -235,12 +205,10 @@ class MetricsCollector:
             self._fallback[key] = self._fallback.get(key, 0) + 1
 
     def generate_metrics(self) -> str:
-        """生成 Prometheus 格式的指标文本。
-
-        用于 /metrics 端点暴露。
+        """生成指标。
 
         Returns:
-            Prometheus 格式的指标文本。
+            字符串结果。
         """
         if self._prometheus:
             from prometheus_client import generate_latest
@@ -260,10 +228,10 @@ _metrics_collector: MetricsCollector | None = None
 
 
 def get_metrics_collector() -> MetricsCollector:
-    """获取全局 MetricsCollector 单例。
+    """获取指标收集器。
 
     Returns:
-        全局 MetricsCollector 实例。
+        指标收集器结果。
     """
     global _metrics_collector
     if _metrics_collector is None:

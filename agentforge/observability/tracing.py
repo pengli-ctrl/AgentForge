@@ -1,13 +1,4 @@
-"""AgentForge 可观测性层：tracing。
-
-本模块负责 tracing 相关能力，是 可观测性层 的组成部分。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
-- 关键路径应保留日志、指标或链路追踪信息。
-- 主要类：SpanType、SpanStatus、Span、Trace、Tracer。
-"""
+"""追踪模块。"""
 
 import asyncio
 import time
@@ -18,81 +9,44 @@ from typing import Optional
 
 
 class SpanType(Enum):
-    """SpanType。
+    """链路片段枚举。"""
 
-    SpanType 是状态或类型枚举，用于约束系统内部取值，避免散落的字符串常量。
-
-    主要成员：
-    - CACHE: 'cache'。
-    - ROUTE: 'route'。
-    - INFERENCE: 'inference'。
-    - AGENT: 'agent'。
-    - LOOP: 'loop'。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-    """
-
-    CACHE = "cache"  # 缓存处理。
-    ROUTE = "route"  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-    INFERENCE = "inference"  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-    AGENT = "agent"  # Agent 注册与查询。
-    LOOP = "loop"  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    CACHE = "cache"  # 缓存链路段。
+    ROUTE = "route"
+    INFERENCE = "inference"
+    AGENT = "agent"
+    LOOP = "loop"
 
 
 class SpanStatus(Enum):
-    """SpanStatus。
-
-    SpanStatus 是状态或类型枚举，用于约束系统内部取值，避免散落的字符串常量。
-
-    主要成员：
-    - OK: 'ok'。
-    - ERROR: 'error'。
-    - TIMEOUT: 'timeout'。
-    - DEGRADED: 'degraded'。
-    - PARTIAL: 'partial'。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-    """
+    """链路片段状态枚举。"""
 
     OK = "ok"
     ERROR = "error"
     TIMEOUT = "timeout"
-    DEGRADED = "degraded"  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
-    PARTIAL = "partial"  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    DEGRADED = "degraded"
+    PARTIAL = "partial"
 
 
 @dataclass
 class Span:
-    """Span。
+    """链路片段相关组件。
 
-    Span 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - span_id: str。
-    - parent_span_id: Optional[str]。
-    - span_type: SpanType。
-    - start_time: float。
-    - end_time: Optional[float]。
-    - status: SpanStatus。
-    - attributes: dict。
-    - name: str。
-    - 方法 duration_ms()。
-    - 方法 set_attribute()。
-    - 方法 to_dict()。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    Attributes:
+        span_id: 链路片段ID。
+        parent_span_id: 链路片段ID。
+        span_type: 链路片段。
+        start_time: 开始。
+        end_time: 结束。
+        status: 当前状态。
+        attributes: 字段值。
+        name: 名称。
     """
 
     span_id: str
     parent_span_id: Optional[str]
     span_type: SpanType
-    start_time: float  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+    start_time: float
     end_time: Optional[float] = None
     status: SpanStatus = SpanStatus.OK
     attributes: dict = field(default_factory=dict)
@@ -100,32 +54,29 @@ class Span:
 
     @property
     def duration_ms(self) -> float:
-        """执行 duration_ms 对应的逻辑，并返回处理结果。
+        """返回持续时间。
 
         Returns:
-            float，函数执行后的结果。
+            数值结果。
         """
         if self.end_time is None:
             return 0.0
         return (self.end_time - self.start_time) * 1000
 
     def set_attribute(self, key: str, value) -> None:
-        """执行 set_attribute 对应的逻辑，并返回处理结果。
+        """设置属性。
 
         Args:
-            key: str，调用方传入的 key 参数。
-            value: Any，调用方传入的 value 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            key: 缓存或配置键。
+            value: 待处理值。
         """
         self.attributes[key] = value
 
     def to_dict(self) -> dict:
-        """执行 to_dict 对应的逻辑，并返回处理结果。
+        """处理到字典。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         return {
             "span_id": self.span_id,
@@ -142,26 +93,17 @@ class Span:
 
 @dataclass
 class Trace:
-    """Trace。
+    """链路领域组件。
 
-    Trace 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - trace_id: str。
-    - correlation_id: str。
-    - root_span: Optional[Span]。
-    - spans: list[Span]。
-    - total_cost: float。
-    - total_latency_ms: float。
-    - start_time: float。
-    - end_time: Optional[float]。
-    - 方法 add_span()。
-    - 方法 compute_totals()。
-    - 方法 to_dict()。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
+    Attributes:
+        trace_id: 链路ID。
+        correlation_id: 用于关联同一业务链路的关联 ID。
+        root_span: 根链路片段。
+        spans: 字段值。
+        total_cost: 总计成本。
+        total_latency_ms: 总计。
+        start_time: 开始。
+        end_time: 结束。
     """
 
     trace_id: str
@@ -174,22 +116,15 @@ class Trace:
     end_time: Optional[float] = None
 
     def add_span(self, span: Span) -> None:
-        """执行 add_span 对应的逻辑，并返回处理结果。
+        """保存链路段。
 
         Args:
-            span: Span，调用方传入的 span 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            span: 链路片段对象。
         """
         self.spans.append(span)
 
     def compute_totals(self) -> None:
-        """执行 compute_totals 对应的逻辑，并返回处理结果。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """计算汇总。"""
         self.total_cost = sum(
             s.attributes.get("cost", 0.0) for s in self.spans if s.span_type == SpanType.INFERENCE
         )
@@ -197,10 +132,10 @@ class Trace:
             self.total_latency_ms = (self.end_time - self.start_time) * 1000
 
     def to_dict(self) -> dict:
-        """执行 to_dict 对应的逻辑，并返回处理结果。
+        """处理到字典。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         return {
             "trace_id": self.trace_id,
@@ -213,45 +148,26 @@ class Trace:
 
 
 class Tracer:
-    """Tracer。
-
-    Tracer 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - 方法 start_trace()。
-    - 方法 start_span()。
-    - 方法 end_span()。
-    - 方法 end_trace()。
-    - 方法 get_trace()。
-    - 方法 get_span_children()。
-    - 方法 get_spans_by_type()。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-    """
+    """追踪器相关组件。"""
 
     def __init__(self, max_traces: int = 10000):
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 Tracer。
 
         Args:
-            max_traces: int，调用方传入的 max_traces 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            max_traces: 最大链路。
         """
         self._traces: dict[str, Trace] = {}
         self._max_traces = max_traces
         self._lock = asyncio.Lock()
 
     async def start_trace(self, correlation_id: str) -> Trace:
-        """执行 start_trace 对应的逻辑，并返回处理结果。
+        """执行开始链路。
 
         Args:
-            correlation_id: str，调用方传入的 correlation_id 参数。
+            correlation_id: 用于关联同一业务链路的关联 ID。
 
         Returns:
-            Trace，函数执行后的结果。
+            链路结果。
         """
         trace_id = f"trace-{uuid.uuid4().hex[:16]}"
         root_span = Span(
@@ -270,7 +186,6 @@ class Tracer:
         trace.add_span(root_span)
 
         async with self._lock:
-            # 说明：该步骤用于实现上述逻辑并保证行为稳定。
             if len(self._traces) >= self._max_traces:
                 oldest_key = next(iter(self._traces))
                 del self._traces[oldest_key]
@@ -285,16 +200,16 @@ class Tracer:
         parent_span: Optional[Span] = None,
         name: str = "",
     ) -> Span:
-        """执行 start_span 对应的逻辑，并返回处理结果。
+        """启动链路片段。
 
         Args:
-            trace: Trace，调用方传入的 trace 参数。
-            span_type: SpanType，调用方传入的 span_type 参数。
-            parent_span: Optional[Span]，调用方传入的 parent_span 参数。
-            name: str，调用方传入的 name 参数。
+            trace: 链路。
+            span_type: 链路片段类型。
+            parent_span: 链路片段。
+            name: 资源或对象名称。
 
         Returns:
-            Span，函数执行后的结果。
+            链路片段结果。
         """
         parent_id = (
             parent_span.span_id
@@ -318,15 +233,12 @@ class Tracer:
         status: SpanStatus = SpanStatus.OK,
         attributes: Optional[dict] = None,
     ) -> None:
-        """执行 end_span 对应的逻辑，并返回处理结果。
+        """结束链路片段。
 
         Args:
-            span: Span，调用方传入的 span 参数。
-            status: SpanStatus，调用方传入的 status 参数。
-            attributes: Optional[dict]，调用方传入的 attributes 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            span: 链路片段对象。
+            status: 目标状态。
+            attributes: 输入参数。
         """
         span.end_time = time.monotonic()
         span.status = status
@@ -338,14 +250,11 @@ class Tracer:
         trace: Trace,
         status: SpanStatus = SpanStatus.OK,
     ) -> None:
-        """执行 end_trace 对应的逻辑，并返回处理结果。
+        """执行结束链路。
 
         Args:
-            trace: Trace，调用方传入的 trace 参数。
-            status: SpanStatus，调用方传入的 status 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            trace: 链路。
+            status: 目标状态。
         """
         trace.end_time = time.monotonic()
         if trace.root_span:
@@ -354,36 +263,36 @@ class Tracer:
         trace.compute_totals()
 
     async def get_trace(self, trace_id: str) -> Optional[Trace]:
-        """读取并返回指定数据，并返回调用方需要的结果。
+        """读取链路。
 
         Args:
-            trace_id: str，调用方传入的 trace_id 参数。
+            trace_id: 链路追踪 ID。
 
         Returns:
-            Optional[Trace]，函数执行后的结果。
+            处理结果对象。
         """
         return self._traces.get(trace_id)
 
     async def get_span_children(self, trace: Trace, parent_span: Span) -> list[Span]:
-        """读取并返回指定数据，并返回调用方需要的结果。
+        """获取链路片段。
 
         Args:
-            trace: Trace，调用方传入的 trace 参数。
-            parent_span: Span，调用方传入的 parent_span 参数。
+            trace: 链路。
+            parent_span: 链路片段。
 
         Returns:
-            list[Span]，函数执行后的结果。
+            结果列表。
         """
         return [s for s in trace.spans if s.parent_span_id == parent_span.span_id]
 
     async def get_spans_by_type(self, trace: Trace, span_type: SpanType) -> list[Span]:
-        """读取并返回指定数据，并返回调用方需要的结果。
+        """获取由。
 
         Args:
-            trace: Trace，调用方传入的 trace 参数。
-            span_type: SpanType，调用方传入的 span_type 参数。
+            trace: 链路。
+            span_type: 链路片段类型。
 
         Returns:
-            list[Span]，函数执行后的结果。
+            结果列表。
         """
         return [s for s in trace.spans if s.span_type == span_type]

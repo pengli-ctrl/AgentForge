@@ -1,13 +1,4 @@
-"""AgentForge 平台 API 层：release_router。
-
-本模块定义 release_ 相关 HTTP 接口，负责请求解析、鉴权校验、调用应用服务并组织响应。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要函数：create_release_router。
-"""
+"""释放路由模块。"""
 
 from __future__ import annotations
 
@@ -29,16 +20,13 @@ from agentforge.platform.domain.retrieval import GoldenQuery
 
 
 def create_release_router(container) -> APIRouter:
-    """创建新的业务对象，并返回调用方需要的结果。
+    """创建释放路由。
 
     Args:
-        container: Any，调用方传入的 container 参数。
+        container: 服务容器。
 
     Returns:
-        APIRouter，函数执行后的结果。
-
-    Raises:
-        HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+        处理结果对象。
     """
     router = APIRouter(prefix="/v1/release", tags=["release"])
 
@@ -47,14 +35,14 @@ def create_release_router(container) -> APIRouter:
         request: Request,
         body: dict[str, Any],
     ) -> dict[str, Any]:
-        """执行 register_prompt 对应的逻辑，并返回处理结果。
+        """处理 POST /prompts 请求，注册提示词。
 
         Args:
-            request: Request，调用方传入的 request 参数。
-            body: dict[str, Any]，调用方传入的 body 参数。
+            request: 当前 HTTP 请求。
+            body: 请求体数据。
 
         Returns:
-            dict[str, Any]，函数执行后的结果。
+            结构化结果字典。
         """
         template = PromptTemplate(
             name=str(body["name"]),
@@ -72,15 +60,15 @@ def create_release_router(container) -> APIRouter:
         name: str,
         version: str,
     ) -> dict[str, Any]:
-        """执行 publish_prompt 对应的逻辑，并返回处理结果。
+        """处理 POST /prompts/{name}/{version}/publish 请求，发布提示词。
 
         Args:
-            request: Request，调用方传入的 request 参数。
-            name: str，调用方传入的 name 参数。
-            version: str，调用方传入的 version 参数。
+            request: 当前 HTTP 请求。
+            name: 资源或对象名称。
+            version: 资源版本号。
 
         Returns:
-            dict[str, Any]，函数执行后的结果。
+            结构化结果字典。
         """
         registry: PromptRegistry = container.prompt_registry
         template = registry.publish(name, version)
@@ -88,14 +76,14 @@ def create_release_router(container) -> APIRouter:
 
     @router.post("/models")
     async def register_model(request: Request, body: dict[str, Any]) -> dict[str, Any]:
-        """执行 register_model 对应的逻辑，并返回处理结果。
+        """处理 POST /models 请求，注册模型。
 
         Args:
-            request: Request，调用方传入的 request 参数。
-            body: dict[str, Any]，调用方传入的 body 参数。
+            request: 当前 HTTP 请求。
+            body: 请求体数据。
 
         Returns:
-            dict[str, Any]，函数执行后的结果。
+            结构化结果字典。
         """
         model = ModelVersion(
             name=str(body["name"]),
@@ -110,17 +98,17 @@ def create_release_router(container) -> APIRouter:
 
     @router.post("/gate")
     async def evaluate_gate(request: Request, body: dict[str, Any]) -> dict[str, Any]:
-        """执行 evaluate_gate 对应的逻辑，并返回处理结果。
+        """处理 POST /gate 请求，评估门禁。
 
         Args:
-            request: Request，调用方传入的 request 参数。
-            body: dict[str, Any]，调用方传入的 body 参数。
+            request: 当前 HTTP 请求。
+            body: 请求体数据。
 
         Returns:
-            dict[str, Any]，函数执行后的结果。
+            结构化结果字典。
 
         Raises:
-            HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+            HTTPException: 请求参数、状态或依赖不满足要求时抛出。
         """
         service: QualityGateService = container.quality_gate_service
         candidate_data = body.get("candidate")

@@ -1,36 +1,16 @@
-"""AgentForge 平台 API 层：security。
-
-本模块负责 security 相关的平台能力，是 平台 API 层 的组成部分。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：ApiKeyAuthenticator。
-- 主要函数：verify_event_hmac。
-"""
+"""安全模块。"""
 
 from __future__ import annotations
 
-import hashlib
-import hmac
-
 from fastapi import HTTPException, Request
+
+from agentforge.platform.sdk.security import verify_event_hmac as verify_event_hmac
+
+__all__ = ["ApiKeyAuthenticator", "verify_event_hmac"]
 
 
 class ApiKeyAuthenticator:
-    """ApiKeyAuthenticator。
-
-    ApiKeyAuthenticator 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - 方法 authorize_tenant()。
-    - 方法 authorize_admin()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """API键认证器相关组件。"""
 
     def __init__(
         self,
@@ -38,18 +18,15 @@ class ApiKeyAuthenticator:
         tenant_keys: dict[str, str] | None = None,
         admin_key: str = "",
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 ApiKeyAuthenticator。
 
         Args:
-            enabled: bool，调用方传入的 enabled 参数。
-            tenant_keys: dict[str, str] | None，调用方传入的 tenant_keys 参数。
-            admin_key: str，调用方传入的 admin_key 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            enabled: 启用。
+            tenant_keys: 租户键。
+            admin_key: 管理键。
 
         Raises:
-            ValueError: 当输入、状态或外部依赖不满足要求时抛出。
+            ValueError: 输入值或业务状态不合法时抛出。
         """
         self._enabled = enabled
         self._tenant_keys = dict(tenant_keys or {})
@@ -58,17 +35,14 @@ class ApiKeyAuthenticator:
             raise ValueError("Authentication requires at least one API key")
 
     def authorize_tenant(self, request: Request, tenant_id: str) -> None:
-        """执行 authorize_tenant 对应的逻辑，并返回处理结果。
+        """授权租户。
 
         Args:
-            request: Request，调用方传入的 request 参数。
-            tenant_id: str，调用方传入的 tenant_id 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            request: 当前 HTTP 请求。
+            tenant_id: 租户 ID，用于数据隔离。
 
         Raises:
-            HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+            HTTPException: 请求参数、状态或依赖不满足要求时抛出。
         """
         if not self._enabled:
             return
@@ -82,16 +56,13 @@ class ApiKeyAuthenticator:
             raise HTTPException(status_code=403, detail="API key is not authorized for tenant")
 
     def authorize_admin(self, request: Request) -> None:
-        """执行 authorize_admin 对应的逻辑，并返回处理结果。
+        """授权管理。
 
         Args:
-            request: Request，调用方传入的 request 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            request: 当前 HTTP 请求。
 
         Raises:
-            HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+            HTTPException: 请求参数、状态或依赖不满足要求时抛出。
         """
         if not self._enabled:
             return
@@ -100,31 +71,12 @@ class ApiKeyAuthenticator:
 
     @staticmethod
     def _read_key(request: Request) -> str:
-        """执行 _read_key 对应的逻辑，并返回处理结果。
+        """读取键。
 
         Args:
-            request: Request，调用方传入的 request 参数。
+            request: 当前 HTTP 请求。
 
         Returns:
-            str，函数执行后的结果。
+            字符串结果。
         """
         return request.headers.get("X-API-Key", "")
-
-
-def verify_event_hmac(raw_body: bytes, secret: str, provided: str) -> bool:
-    """执行 verify_event_hmac 对应的逻辑，并返回处理结果。
-
-    Args:
-        raw_body: bytes，调用方传入的 raw_body 参数。
-        secret: str，调用方传入的 secret 参数。
-        provided: str，调用方传入的 provided 参数。
-
-    Returns:
-        bool，函数执行后的结果。
-    """
-    if not secret:
-        return True
-    if not provided:
-        return False
-    expected = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, provided)

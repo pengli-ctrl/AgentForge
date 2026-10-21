@@ -1,13 +1,4 @@
-"""AgentForge 平台领域模型层：knowledge。
-
-本模块定义 knowledge 领域模型，约束业务状态、输入输出结构和跨层数据契约。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：KnowledgeDocument、KnowledgeChunk、RetrievedChunk。
-"""
+"""知识模块。"""
 
 from __future__ import annotations
 
@@ -27,24 +18,17 @@ DEFAULT_VECTOR_WEIGHT = 0.5
 
 
 class KnowledgeDocument(BaseModel):
-    """KnowledgeDocument。
+    """知识文档领域组件。
 
-    KnowledgeDocument 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - document_id: str。
-    - tenant_id: str。
-    - title: str。
-    - content: str。
-    - source_uri: str。
-    - version: int。
-    - metadata: dict[str, Any]。
-    - created_at: datetime。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        document_id: 文档ID。
+        tenant_id: 租户 ID，用于数据隔离。
+        title: 标题。
+        content: 写入内容。
+        source_uri: 来源URI。
+        version: 版本号。
+        metadata: 附加元数据。
+        created_at: 创建时间。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -60,25 +44,18 @@ class KnowledgeDocument(BaseModel):
 
 
 class KnowledgeChunk(BaseModel):
-    """KnowledgeChunk。
+    """知识分块相关组件。
 
-    KnowledgeChunk 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - chunk_id: str。
-    - document_id: str。
-    - tenant_id: str。
-    - content: str。
-    - position: int。
-    - metadata: dict[str, Any]。
-    - embedding: list[float] | None。
-    - embedding_model: str | None。
-    - embedding_version: int | None。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        chunk_id: 分块ID。
+        document_id: 文档ID。
+        tenant_id: 租户 ID，用于数据隔离。
+        content: 写入内容。
+        position: 位置。
+        metadata: 附加元数据。
+        embedding: 字段值。
+        embedding_model: 模型。
+        embedding_version: 版本。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -95,26 +72,20 @@ class KnowledgeChunk(BaseModel):
 
 
 class RetrievedChunk(BaseModel):
-    """RetrievedChunk。
+    """已检索分块相关组件。
 
-    RetrievedChunk 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - chunk_id: str。
-    - document_id: str。
-    - tenant_id: str。
-    - title: str。
-    - content: str。
-    - score: float。
-    - source_uri: str。
-    - mode: str。
-    - fts_score: float | None。
-    - vector_score: float | None。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        chunk_id: 分块ID。
+        document_id: 文档ID。
+        tenant_id: 租户 ID，用于数据隔离。
+        title: 标题。
+        content: 写入内容。
+        score: 评分。
+        source_uri: 来源URI。
+        mode: 模式。
+        fts_score: 评分。
+        vector_score: 评分。
+        metadata: 附加元数据。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -129,3 +100,4 @@ class RetrievedChunk(BaseModel):
     mode: str = "hybrid"
     fts_score: float | None = None
     vector_score: float | None = None
+    metadata: dict[str, object] = Field(default_factory=dict)

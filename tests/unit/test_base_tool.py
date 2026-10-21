@@ -18,18 +18,18 @@ class EchoTool(BaseTool):
 
     @property
     def name(self) -> str:
-        """执行 name 对应的逻辑，并返回处理结果。
+        """返回对象名称。
 
         Returns:
-            str，函数执行后的结果。
+            字符串结果。
         """
         return "echo"
 
     def schema(self) -> dict:
-        """执行 schema 对应的逻辑，并返回处理结果。
+        """返回工具参数的结构定义。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         return {
             "name": "echo",
@@ -44,13 +44,13 @@ class EchoTool(BaseTool):
         }
 
     async def execute(self, **kwargs: Any) -> ToolResult:
-        """执行 execute 对应的逻辑，并返回处理结果。
+        """执行回显工具。
 
         Args:
-            **kwargs: Any，调用方传入的 **kwargs 参数。
+            kwargs: 关键字参数。
 
         Returns:
-            ToolResult，函数执行后的结果。
+            工具结果结果。
         """
         msg = kwargs.get("message", "")
         return ToolResult(success=True, output=f"echo: {msg}")
@@ -61,55 +61,38 @@ class FailTool(BaseTool):
 
     @property
     def name(self) -> str:
-        """执行 name 对应的逻辑，并返回处理结果。
+        """返回对象名称。
 
         Returns:
-            str，函数执行后的结果。
+            字符串结果。
         """
         return "fail_tool"
 
     def schema(self) -> dict:
-        """执行 schema 对应的逻辑，并返回处理结果。
+        """返回工具参数的结构定义。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         return {"name": "fail_tool", "description": "Always fails", "parameters": {}}
 
     async def execute(self, **kwargs: Any) -> ToolResult:
-        """执行 execute 对应的逻辑，并返回处理结果。
+        """执行失败工具。
 
         Args:
-            **kwargs: Any，调用方传入的 **kwargs 参数。
+            kwargs: 关键字参数。
 
         Returns:
-            ToolResult，函数执行后的结果。
+            工具结果结果。
         """
         return ToolResult(success=False, output="", error="intentional failure")
 
 
 class TestToolResult:
-    """TestToolResult。
-
-    TestToolResult 组织一组相关测试，覆盖正常流程、边界条件和回归场景。
-
-    主要成员：
-    - 方法 test_success_result()。
-    - 方法 test_failure_result()。
-    - 方法 test_to_json_serializes_correctly()。
-    - 方法 test_to_json_with_error()。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-    """
+    """验证工具结果模型的测试集合。"""
 
     def test_success_result(self) -> None:
-        """验证 success_result 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证成功结果对应的测试场景。"""
         result = ToolResult(success=True, output="ok")
         assert result.success is True
         assert result.output == "ok"
@@ -117,21 +100,13 @@ class TestToolResult:
         assert result.metadata == {}
 
     def test_failure_result(self) -> None:
-        """验证 failure_result 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证失败结果对应的测试场景。"""
         result = ToolResult(success=False, output="", error="boom")
         assert result.success is False
         assert result.error == "boom"
 
     def test_to_json_serializes_correctly(self) -> None:
-        """验证 to_json_serializes_correctly 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证到JSON序列化正确对应的测试场景。"""
         result = ToolResult(success=True, output="hello", error=None)
         data = json.loads(result.to_json())
         assert data["success"] is True
@@ -139,11 +114,7 @@ class TestToolResult:
         assert data["error"] is None
 
     def test_to_json_with_error(self) -> None:
-        """验证 to_json_with_error 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证到JSON使用错误对应的测试场景。"""
         result = ToolResult(success=False, output="", error="fail")
         data = json.loads(result.to_json())
         assert data["success"] is False
@@ -154,29 +125,17 @@ class TestBaseTool:
     """BaseTool 抽象基类测试。"""
 
     def test_cannot_instantiate_abstract_class(self) -> None:
-        """验证 cannot_instantiate_abstract_class 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证无法实例化抽象类对应的测试场景。"""
         with pytest.raises(TypeError):
             BaseTool()  # type: ignore[abstract]
 
     def test_concrete_tool_has_name(self) -> None:
-        """验证 concrete_tool_has_name 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证具体工具具有名称对应的测试场景。"""
         tool = EchoTool()
         assert tool.name == "echo"
 
     def test_concrete_tool_has_schema(self) -> None:
-        """验证 concrete_tool_has_schema 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证具体工具具有结构对应的测试场景。"""
         tool = EchoTool()
         schema = tool.schema()
         assert schema["name"] == "echo"
@@ -184,11 +143,7 @@ class TestBaseTool:
 
     @pytest.mark.asyncio
     async def test_concrete_tool_execute(self) -> None:
-        """验证 concrete_tool_execute 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证具体工具执行对应的测试场景。"""
         tool = EchoTool()
         result = await tool.execute(message="hello world")
         assert result.success is True
@@ -196,29 +151,10 @@ class TestBaseTool:
 
 
 class TestToolRegistry:
-    """TestToolRegistry。
-
-    TestToolRegistry 组织一组相关测试，覆盖正常流程、边界条件和回归场景。
-
-    主要成员：
-    - 方法 test_register_and_get_schemas()。
-    - 方法 test_register_multiple_tools()。
-    - 方法 test_execute_registered_tool()。
-    - 方法 test_execute_unregistered_tool_returns_error()。
-    - 方法 test_execute_fail_tool()。
-    - 方法 test_overwrite_tool_on_re_register()。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-    """
+    """验证工具注册表行为的测试集合。"""
 
     def test_register_and_get_schemas(self) -> None:
-        """验证 register_and_get_schemas 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证注册及获取结构对应的测试场景。"""
         registry = ToolRegistry()
         registry.register(EchoTool())
         schemas = registry.get_schemas()
@@ -226,11 +162,7 @@ class TestToolRegistry:
         assert schemas[0]["name"] == "echo"
 
     def test_register_multiple_tools(self) -> None:
-        """验证 register_multiple_tools 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证注册多个工具对应的测试场景。"""
         registry = ToolRegistry()
         registry.register(EchoTool())
         registry.register(FailTool())
@@ -238,11 +170,7 @@ class TestToolRegistry:
 
     @pytest.mark.asyncio
     async def test_execute_registered_tool(self) -> None:
-        """验证 execute_registered_tool 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证执行已注册工具对应的测试场景。"""
         registry = ToolRegistry()
         registry.register(EchoTool())
         result = await registry.execute("echo", {"message": "test"})
@@ -251,11 +179,7 @@ class TestToolRegistry:
 
     @pytest.mark.asyncio
     async def test_execute_unregistered_tool_returns_error(self) -> None:
-        """验证 execute_unregistered_tool_returns_error 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证执行未注册工具返回错误对应的测试场景。"""
         registry = ToolRegistry()
         result = await registry.execute("nonexistent", {})
         assert result.success is False
@@ -263,11 +187,7 @@ class TestToolRegistry:
 
     @pytest.mark.asyncio
     async def test_execute_fail_tool(self) -> None:
-        """验证 execute_fail_tool 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证执行失败工具对应的测试场景。"""
         registry = ToolRegistry()
         registry.register(FailTool())
         result = await registry.execute("fail_tool", {})

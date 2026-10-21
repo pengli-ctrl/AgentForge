@@ -1,13 +1,4 @@
-"""AgentForge 任务存储层：task_store。
-
-本模块负责 task_store 相关能力，是 任务存储层 的组成部分。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
-- 关键路径应保留日志、指标或链路追踪信息。
-- 主要类：TaskStore。
-"""
+"""任务存储模块。"""
 
 from __future__ import annotations
 
@@ -20,24 +11,13 @@ logger = logging.getLogger(__name__)
 
 
 class TaskStore:
-    """任务持久化存储 — CRUD + 状态机管理。
-
-    支持两种后端：
-    - in-memory（默认）：使用字典存储，适合开发/测试
-    - MySQL（生产环境）：通过数据库连接池操作
-
-    Args:
-        db_pool: 数据库连接池（可选，不传则使用内存存储）。
-    """
+    """任务领域组件。"""
 
     def __init__(self, db_pool: Any = None) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 TaskStore。
 
         Args:
-            db_pool: Any，调用方传入的 db_pool 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            db_pool: 数据库。
         """
         self.db_pool = db_pool
         self._store: dict[str, Task] = {}
@@ -46,10 +26,10 @@ class TaskStore:
         """创建新任务。
 
         Args:
-            task: 要创建的任务对象。
+            task: 任务对象。
 
         Returns:
-            创建后的任务对象（含生成的 task_id）。
+            任务结果。
         """
         if self.db_pool:
             await self._db_create(task)
@@ -71,20 +51,20 @@ class TaskStore:
             task_id: 任务 ID。
 
         Returns:
-            任务对象，不存在则返回 None。
+            任务无结果。
         """
         if self.db_pool:
             return await self._db_get(task_id)
         return self._store.get(task_id)
 
     async def get_by_correlation_id(self, correlation_id: str) -> Task | None:
-        """根据 correlation_id 查询任务。
+        """获取由关联ID。
 
         Args:
-            correlation_id: 关联 ID。
+            correlation_id: 用于关联同一业务链路的关联 ID。
 
         Returns:
-            任务对象，不存在则返回 None。
+            任务无结果。
         """
         if self.db_pool:
             return await self._db_get_by_correlation_id(correlation_id)
@@ -103,20 +83,17 @@ class TaskStore:
     ) -> Task | None:
         """更新任务状态（带状态机校验）。
 
-        状态转换必须合法，否则抛出 ValueError。
-        更新状态时自动设置 started_at 或 completed_at 时间戳。
-
         Args:
             task_id: 任务 ID。
-            new_status: 新状态。
-            result: 任务结果（COMPLETED 时设置）。
-            error: 失败原因（FAILED 时设置）。
+            new_status: 状态。
+            result: 处理结果。
+            error: 错误。
 
         Returns:
-            更新后的任务对象，任务不存在则返回 None。
+            任务无结果。
 
         Raises:
-            ValueError: 状态转换不合法时抛出。
+            ValueError: 输入值或业务状态不合法时抛出。
         """
         task = await self.get(task_id)
         if task is None:
@@ -150,13 +127,11 @@ class TaskStore:
     async def cancel(self, task_id: str) -> Task | None:
         """取消任务。
 
-        只有 PENDING 或 RUNNING 状态的任务可以取消。
-
         Args:
             task_id: 任务 ID。
 
         Returns:
-            更新后的任务对象，任务不存在或状态不允许取消则返回 None。
+            任务无结果。
         """
         task = await self.get(task_id)
         if task is None:
@@ -181,12 +156,12 @@ class TaskStore:
         """查询任务列表。
 
         Args:
-            status: 按状态过滤（可选）。
-            limit: 返回数量上限。
+            status: 目标状态。
+            limit: 返回记录的最大数量。
             offset: 分页偏移量。
 
         Returns:
-            任务列表。
+            结果列表。
         """
         if self.db_pool:
             return await self._db_list(status, limit, offset)
@@ -204,7 +179,7 @@ class TaskStore:
             task_id: 任务 ID。
 
         Returns:
-            是否删除成功。
+            操作是否成功。
         """
         if self.db_pool:
             return await self._db_delete(task_id)
@@ -217,7 +192,11 @@ class TaskStore:
     # --- MySQL 后端方法（生产环境使用） ---
 
     async def _db_create(self, task: Task) -> None:
-        """MySQL 后端：创建任务记录。"""
+        """处理数据库创建。
+
+        Args:
+            task: 任务对象。
+        """
         async with self.db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO tasks (task_id, workflow_name, input_data, status, "
@@ -241,13 +220,27 @@ class TaskStore:
             )
 
     async def _db_get(self, task_id: str) -> Task | None:
-        """MySQL 后端：根据 ID 查询任务。"""
+        """处理数据库获取。
+
+        Args:
+            task_id: 任务 ID。
+
+        Returns:
+            任务无结果。
+        """
         async with self.db_pool.acquire() as conn:
             row = await conn.fetchone("SELECT * FROM tasks WHERE task_id = %s", (task_id,))
             return _row_to_task(row) if row else None
 
     async def _db_get_by_correlation_id(self, correlation_id: str) -> Task | None:
-        """MySQL 后端：根据 correlation_id 查询任务。"""
+        """处理数据库获取由关联ID。
+
+        Args:
+            correlation_id: 用于关联同一业务链路的关联 ID。
+
+        Returns:
+            任务无结果。
+        """
         async with self.db_pool.acquire() as conn:
             row = await conn.fetchone(
                 "SELECT * FROM tasks WHERE correlation_id = %s",
@@ -256,7 +249,11 @@ class TaskStore:
             return _row_to_task(row) if row else None
 
     async def _db_update(self, task: Task) -> None:
-        """MySQL 后端：更新任务记录。"""
+        """处理数据库更新。
+
+        Args:
+            task: 任务对象。
+        """
         async with self.db_pool.acquire() as conn:
             await conn.execute(
                 "UPDATE tasks SET status=%s, result=%s, error=%s, "
@@ -272,7 +269,16 @@ class TaskStore:
             )
 
     async def _db_list(self, status: TaskStatus | None, limit: int, offset: int) -> list[Task]:
-        """MySQL 后端：查询任务列表。"""
+        """处理数据库查询。
+
+        Args:
+            status: 目标状态。
+            limit: 返回记录的最大数量。
+            offset: 分页偏移量。
+
+        Returns:
+            结果列表。
+        """
         async with self.db_pool.acquire() as conn:
             if status is not None:
                 rows = await conn.fetchall(
@@ -288,27 +294,41 @@ class TaskStore:
             return [_row_to_task(row) for row in rows]
 
     async def _db_delete(self, task_id: str) -> bool:
-        """MySQL 后端：删除任务。"""
+        """判断数据库删除是否成立。
+
+        Args:
+            task_id: 任务 ID。
+
+        Returns:
+            操作是否成功。
+        """
         async with self.db_pool.acquire() as conn:
             result = await conn.execute("DELETE FROM tasks WHERE task_id = %s", (task_id,))
             return result > 0
 
 
 def _json_dumps(data: Any) -> str:
-    """安全序列化 JSON 数据。"""
+    """处理JSON。
+
+    Args:
+        data: 待处理数据。
+
+    Returns:
+        字符串结果。
+    """
     import json
 
     return json.dumps(data, ensure_ascii=False, default=str)
 
 
 def _row_to_task(row: Any) -> Task:
-    """将数据库行转换为 Task 对象。
+    """处理记录到任务。
 
     Args:
-        row: 数据库行（支持 dict 或 tuple）。
+        row: 记录。
 
     Returns:
-        Task 对象。
+        任务结果。
     """
     import json
 

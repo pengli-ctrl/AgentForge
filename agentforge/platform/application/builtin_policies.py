@@ -1,13 +1,4 @@
-"""AgentForge 平台应用服务层：builtin_policies。
-
-本模块负责 builtin_policies 相关的平台能力，是 平台应用服务层 的组成部分。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要函数：builtin_policies、seed_rbac。
-"""
+"""内置策略模块。"""
 
 from __future__ import annotations
 
@@ -16,10 +7,10 @@ from agentforge.platform.domain.rbac import Permission, Role
 
 
 def builtin_policies() -> list[ActionPolicy]:
-    """执行 builtin_policies 对应的逻辑，并返回处理结果。
+    """处理内置策略。
 
     Returns:
-        list[ActionPolicy]，函数执行后的结果。
+        结果列表。
     """
     return [
         ActionPolicy(
@@ -29,6 +20,96 @@ def builtin_policies() -> list[ActionPolicy]:
             risk_level="high",
             required_permission="ticket.writeback",
             require_approval=True,
+            allowed_roles=[],
+            enabled=True,
+        ),
+        ActionPolicy(
+            name="expense_claim_approve",
+            tenant_id="*",
+            action="expense.claim.approve",
+            risk_level="high",
+            required_permission="expense.claim.approve",
+            require_approval=False,
+            allowed_roles=[],
+            enabled=True,
+        ),
+        ActionPolicy(
+            name="expense_claim_reject",
+            tenant_id="*",
+            action="expense.claim.reject",
+            risk_level="high",
+            required_permission="expense.claim.approve",
+            require_approval=False,
+            allowed_roles=[],
+            enabled=True,
+        ),
+        ActionPolicy(
+            name="expense_ledger_writeback",
+            tenant_id="*",
+            action="expense.ledger.writeback",
+            risk_level="high",
+            required_permission="expense.ledger.writeback",
+            require_approval=False,
+            allowed_roles=[],
+            enabled=True,
+        ),
+        ActionPolicy(
+            name="expense_ledger_verify",
+            tenant_id="*",
+            action="expense.ledger.verify",
+            risk_level="medium",
+            required_permission="expense.ledger.verify",
+            require_approval=False,
+            allowed_roles=[],
+            enabled=True,
+        ),
+        ActionPolicy(
+            name="expense_ledger_compensate",
+            tenant_id="*",
+            action="expense.ledger.compensate",
+            risk_level="high",
+            required_permission="expense.ledger.compensate",
+            require_approval=False,
+            allowed_roles=[],
+            enabled=True,
+        ),
+        ActionPolicy(
+            name="expense_invoice_write",
+            tenant_id="*",
+            action="expense.invoice.write",
+            risk_level="medium",
+            required_permission="expense.invoice.write",
+            require_approval=False,
+            allowed_roles=[],
+            enabled=True,
+        ),
+        ActionPolicy(
+            name="expense_invoice_verify",
+            tenant_id="*",
+            action="expense.invoice.verify",
+            risk_level="medium",
+            required_permission="expense.invoice.verify",
+            require_approval=False,
+            allowed_roles=[],
+            enabled=True,
+        ),
+        ActionPolicy(
+            name="expense_invoice_release",
+            tenant_id="*",
+            action="expense.invoice.release",
+            risk_level="high",
+            required_permission="expense.invoice.release",
+            require_approval=False,
+            allowed_roles=[],
+            enabled=True,
+        ),
+        ActionPolicy(
+            name="expense_invoice_override",
+            tenant_id="*",
+            action="expense.invoice.override",
+            risk_level="high",
+            required_permission="expense.invoice.override",
+            require_approval=False,
             allowed_roles=[],
             enabled=True,
         ),
@@ -46,23 +127,23 @@ def builtin_policies() -> list[ActionPolicy]:
 
 
 def _async_relation_check(openfga_client):
-    """执行 _async_relation_check 对应的逻辑，并返回处理结果。
+    """处理异步关系检查。
 
     Args:
-        openfga_client: Any，调用方传入的 openfga_client 参数。
+        openfga_client: 客户端。
 
     Returns:
-        None，函数执行后的结果。
+        处理结果。
     """
 
     async def _check(tuple_) -> bool:
-        """执行 _check 对应的逻辑，并返回处理结果。
+        """执行内部一致性检查。
 
         Args:
-            tuple_: Any，调用方传入的 tuple_ 参数。
+            tuple_: 输入参数。
 
         Returns:
-            bool，函数执行后的结果。
+            操作是否成功。
         """
         return openfga_client.acheck(
             tuple_.tenant_id,
@@ -76,13 +157,10 @@ def _async_relation_check(openfga_client):
 
 
 async def seed_rbac(repository) -> None:
-    """执行 seed_rbac 对应的逻辑，并返回处理结果。
+    """初始化RBAC。
 
     Args:
-        repository: Any，调用方传入的 repository 参数。
-
-    Returns:
-        None，函数执行后的结果。
+        repository: 数据仓储实现。
     """
     roles = [
         Role(
@@ -99,6 +177,25 @@ async def seed_rbac(repository) -> None:
             built_in=True,
         ),
         Role(
+            role_id="role-finance-approver",
+            tenant_id="*",
+            name="finance_approver",
+            description="Finance approver for expense claims and ledger access.",
+            permissions=[
+                "expense.claim.read",
+                "expense.claim.approve",
+                "expense.ledger.writeback",
+                "expense.ledger.verify",
+                "expense.ledger.compensate",
+                "expense.invoice.read",
+                "expense.invoice.write",
+                "expense.invoice.verify",
+                "expense.invoice.release",
+                "expense.invoice.override",
+            ],
+            built_in=True,
+        ),
+        Role(
             role_id="role-support-agent",
             tenant_id="*",
             name="support_agent",
@@ -108,7 +205,13 @@ async def seed_rbac(repository) -> None:
         ),
     ]
     existing = await repository.list_roles("*")
-    if existing:
-        return
+    by_id = {role.role_id: role for role in existing}
     for role in roles:
-        await repository.save_role(role)
+        current = by_id.get(role.role_id)
+        if current is None:
+            await repository.save_role(role)
+            continue
+        merged_permissions = list(dict.fromkeys([*current.permissions, *role.permissions]))
+        if merged_permissions != current.permissions:
+            current.permissions = merged_permissions
+            await repository.save_role(current)

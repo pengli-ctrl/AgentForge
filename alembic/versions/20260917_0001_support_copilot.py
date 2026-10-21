@@ -1,4 +1,4 @@
-"""AgentForge 数据库迁移层：20260917_0001_support_copilot。
+"""数据库迁移版本 0001_support_copilot。
 
 本模块负责 20260917_0001_support_copilot 相关能力，是 数据库迁移层 的组成部分。
 
@@ -20,11 +20,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    """执行 upgrade 对应的逻辑，并返回处理结果。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """应用当前数据库迁移版本。"""
     op.create_table(
         "tenants",
         sa.Column("tenant_id", sa.String(length=64), primary_key=True),
@@ -39,16 +35,21 @@ def upgrade() -> None:
         sa.Column("ticket_id", sa.String(length=64), primary_key=True),
         sa.Column("tenant_id", sa.String(length=64), nullable=False, index=True),
         sa.Column("source", sa.String(length=32), nullable=False),
+        sa.Column("customer_id", sa.String(length=64), nullable=True),
+        sa.Column("conversation_id", sa.String(length=64), nullable=True),
         sa.Column("subject", sa.Text(), nullable=False, server_default=""),
         sa.Column("status", sa.String(length=32), nullable=False, index=True),
         sa.Column("priority", sa.String(length=8), nullable=False),
         sa.Column("risk_level", sa.String(length=32), nullable=False),
         sa.Column("idempotency_key", sa.String(length=128), nullable=False),
         sa.Column("intent", sa.String(length=128), nullable=True),
+        sa.Column("product", sa.String(length=128), nullable=True),
         sa.Column("assigned_team", sa.String(length=128), nullable=True),
+        sa.Column("confidence", sa.Float(), nullable=True),
         sa.Column("payload", sa.JSON(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("version", sa.Integer(), nullable=False, server_default="1"),
         sa.UniqueConstraint("tenant_id", "idempotency_key", name="uq_tickets_tenant_idempotency"),
     )
     op.create_table(
@@ -70,6 +71,7 @@ def upgrade() -> None:
         sa.Column("payload", sa.JSON(), nullable=False),
         sa.Column("status", sa.String(length=32), nullable=False, server_default="pending"),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("published_at", sa.DateTime(timezone=True), nullable=True),
     )
     op.create_table(
         "audit_events",
@@ -85,11 +87,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """执行 downgrade 对应的逻辑，并返回处理结果。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """回滚当前数据库迁移版本。"""
     op.drop_table("audit_events")
     op.drop_table("outbox_events")
     op.drop_table("approvals")

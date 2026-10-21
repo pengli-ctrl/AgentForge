@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_dashboard。
+"""看板测试模块。
 
 本测试模块验证 test_dashboard 覆盖的业务路径、边界条件和回归场景。
 
@@ -7,7 +7,8 @@
 - 所有租户相关数据都必须携带 tenant_id 并保持隔离。
 - 关键执行路径应保留日志、审计或链路追踪信息。
 -
-主要函数：test_memory_cost_daily_summary_groups_and_filters、test_dashboard_service_aggregates_all_sections、test_sqlalchemy_cost_daily_summary、test_dashboard_endpoints_memory。
+主要函数：test_memory_cost_daily_summary_groups_and_filters、test_dashboard_service_aggregates_all_sec
+    tions、test_sqlalchemy_cost_daily_summary、test_dashboard_endpoints_memory。
 """
 
 from __future__ import annotations
@@ -42,16 +43,16 @@ def _cost(
     amount: float,
     days_ago: int = 0,
 ) -> CostRecord:
-    """执行 _cost 对应的逻辑，并返回处理结果。
+    """处理成本。
 
     Args:
-        tenant: str，调用方传入的 tenant 参数。
-        model: str，调用方传入的 model 参数。
-        amount: float，调用方传入的 amount 参数。
-        days_ago: int，调用方传入的 days_ago 参数。
+        tenant: 租户。
+        model: 模型标识或模型对象。
+        amount: 金额。
+        days_ago: 输入参数。
 
     Returns:
-        CostRecord，函数执行后的结果。
+        成本记录结果。
     """
     return CostRecord(
         tenant_id=tenant,
@@ -67,11 +68,7 @@ def _cost(
 
 @pytest.mark.asyncio
 async def test_memory_cost_daily_summary_groups_and_filters() -> None:
-    """验证 memory_cost_daily_summary_groups_and_filters 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证记忆成本每日摘要及筛选条件对应的测试场景。"""
     repo = MemoryCostRepository()
     await repo.save(_cost("t1", "gpt", 1.0, days_ago=0))
     await repo.save(_cost("t1", "gpt", 2.0, days_ago=0))
@@ -84,17 +81,13 @@ async def test_memory_cost_daily_summary_groups_and_filters() -> None:
     assert daily[0]["request_count"] == 1
     assert daily[0]["amount"] == 4.0  # days_ago=1 的那条
     assert daily[1]["request_count"] == 2
-    assert daily[1]["amount"] == 3.0  # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
+    assert daily[1]["amount"] == 3.0
     assert daily[0]["date"] < daily[1]["date"]
 
 
 @pytest.mark.asyncio
 async def test_dashboard_service_aggregates_all_sections() -> None:
-    """验证 dashboard_service_aggregates_all_sections 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证看板服务聚合全部对应的测试场景。"""
     cost = MemoryCostRepository()
     quota = MemoryTenantQuotaRepository()
     regression = MemoryRegressionRepository()
@@ -143,11 +136,7 @@ async def test_dashboard_service_aggregates_all_sections() -> None:
 
 @pytest.mark.asyncio
 async def test_sqlalchemy_cost_daily_summary() -> None:
-    """验证 sqlalchemy_cost_daily_summary 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证SQLAlchemy成本每日摘要对应的测试场景。"""
     engine = create_async_engine(
         "sqlite+aiosqlite://",
         poolclass=StaticPool,
@@ -167,13 +156,10 @@ async def test_sqlalchemy_cost_daily_summary() -> None:
 
 def _bulk_insert_costs(sync_conn) -> None:
     # 复用 ORM Core 直接插两条不同日期，避免再次起 async session
-    """执行 _bulk_insert_costs 对应的逻辑，并返回处理结果。
+    """处理成本。
 
     Args:
-        sync_conn: Any，调用方传入的 sync_conn 参数。
-
-    Returns:
-        None，函数执行后的结果。
+        sync_conn: 同步。
     """
     from sqlalchemy import insert
 
@@ -206,20 +192,12 @@ def _bulk_insert_costs(sync_conn) -> None:
 
 
 def test_dashboard_endpoints_memory() -> None:
-    """验证 dashboard_endpoints_memory 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证看板端点记忆对应的测试场景。"""
     container = build_memory_container()
     client = TestClient(create_platform_app(container))
 
     async def seed():
-        """执行 seed 对应的逻辑，并返回处理结果。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """初始化初始数据。"""
         await container.cost_repository.save(_cost("t1", "gpt", 2.0, days_ago=0))
         await container.cost_repository.save(_cost("t1", "gpt", 3.0, days_ago=1))
         await container.cost_repository.save(_cost("t1", "claude", 7.0, days_ago=1))

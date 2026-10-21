@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_evaluation_feedback。
+"""评估测试模块。
 
 本测试模块验证 test_evaluation_feedback 覆盖的业务路径、边界条件和回归场景。
 
@@ -7,7 +7,8 @@
 - 所有租户相关数据都必须携带 tenant_id 并保持隔离。
 - 关键执行路径应保留日志、审计或链路追踪信息。
 -
-主要函数：create_ticket、test_review_actions_create_evaluation_samples_and_summary、test_sqlalchemy_evaluation_repository_summary。
+主要函数：create_ticket、test_review_actions_create_evaluation_samples_and_summary、test_sqlalchemy_eva
+    luation_repository_summary。
 """
 
 import asyncio
@@ -17,33 +18,33 @@ from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from agentforge.platform.api.app import create_platform_app
-from agentforge.platform.domain.ticket import RiskLevel
 from agentforge.platform.infrastructure.db.base import Base
 from agentforge.platform.infrastructure.sqlalchemy_evaluation_repository import (
     SQLAlchemyEvaluationRepository,
 )
+from agentforge.platform.modules.support.domain.ticket import RiskLevel
 from agentforge.platform.runtime import build_memory_container
+from tests.platform.support_fixtures import configure_memory_support, create_app_with_support
 
 
-def create_ticket(container, message_id: str):
-    """创建新的业务对象，并返回调用方需要的结果。
+def create_ticket(support, message_id: str):
+    """创建工单。
 
     Args:
-        container: Any，调用方传入的 container 参数。
-        message_id: str，调用方传入的 message_id 参数。
+        support: 客服。
+        message_id: 消息 ID。
 
     Returns:
-        None，函数执行后的结果。
+        处理结果。
     """
 
     async def setup():
-        """执行 setup 对应的逻辑，并返回处理结果。
+        """装配测试环境。
 
         Returns:
-            None，函数执行后的结果。
+            处理结果。
         """
-        return await container.processing_service.process_event(
+        return await support.processing_service.process_event(
             {
                 "tenant_id": "tenant-1",
                 "source": "feishu",
@@ -57,19 +58,12 @@ def create_ticket(container, message_id: str):
 
 
 def test_review_actions_create_evaluation_samples_and_summary() -> None:
-    """验证 review_actions_create_evaluation_samples_and_summary 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证审核操作创建评估样本及摘要对应的测试场景。"""
     container = build_memory_container()
+    support = configure_memory_support(container)
 
     async def ingest():
-        """执行 ingest 对应的逻辑，并返回处理结果。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """写入数据。"""
         await container.knowledge_service.ingest_document(
             tenant_id="tenant-1",
             title="Product usage",
@@ -77,10 +71,10 @@ def test_review_actions_create_evaluation_samples_and_summary() -> None:
         )
 
     asyncio.run(ingest())
-    accepted = create_ticket(container, "eval-msg-1")
-    edited = create_ticket(container, "eval-msg-2")
-    rejected = create_ticket(container, "eval-msg-3")
-    client = TestClient(create_platform_app(container))
+    accepted = create_ticket(support, "eval-msg-1")
+    edited = create_ticket(support, "eval-msg-2")
+    rejected = create_ticket(support, "eval-msg-3")
+    client = TestClient(create_app_with_support(container, support))
 
     client.post(
         f"/v1/tickets/{accepted.ticket_id}/review",
@@ -123,11 +117,7 @@ def test_review_actions_create_evaluation_samples_and_summary() -> None:
 
 @pytest.mark.asyncio
 async def test_sqlalchemy_evaluation_repository_summary() -> None:
-    """验证 sqlalchemy_evaluation_repository_summary 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证SQLAlchemy评估仓储摘要对应的测试场景。"""
     engine = create_async_engine(
         "sqlite+aiosqlite://",
         poolclass=StaticPool,

@@ -20,25 +20,20 @@ from agentforge.core.event_types import AgentEvent, EventType
 from agentforge.llm.gateway import LLMGateway, LLMResponse, ToolCall
 from tests.conftest import MockLLMGateway
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 测试用 Agent 和 Tool
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class SimpleAgent(Agent):
     """简单的测试用 Agent — 用于 ReAct 循环测试。"""
 
     def __init__(self, llm_gateway, tool_registry=None, max_iterations=5, token_budget=8000):
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化简单智能体。
 
         Args:
-            llm_gateway: Any，调用方传入的 llm_gateway 参数。
-            tool_registry: Any，调用方传入的 tool_registry 参数。
-            max_iterations: Any，调用方传入的 max_iterations 参数。
-            token_budget: Any，调用方传入的 token_budget 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            llm_gateway: LLM 网关实例。
+            tool_registry: 工具注册表。
+            max_iterations: 最大迭代次数。
+            token_budget: 令牌预算。
         """
         super().__init__(
             llm_gateway=llm_gateway,
@@ -50,24 +45,24 @@ class SimpleAgent(Agent):
         self.prompt_template = "Task: {task}\nContext: {context}"
 
     def _extract_context(self, context_snapshot: dict[str, Any]) -> dict[str, Any]:
-        """执行 _extract_context 对应的逻辑，并返回处理结果。
+        """提取上下文。
 
         Args:
-            context_snapshot: dict[str, Any]，调用方传入的 context_snapshot 参数。
+            context_snapshot: 上下文快照。
 
         Returns:
-            dict[str, Any]，函数执行后的结果。
+            结构化结果字典。
         """
         return context_snapshot
 
     def _build_initial_messages(self, task: str) -> list[dict[str, str]]:
-        """执行 _build_initial_messages 对应的逻辑，并返回处理结果。
+        """构建初始消息。
 
         Args:
-            task: str，调用方传入的 task 参数。
+            task: 任务对象。
 
         Returns:
-            list[dict[str, str]]，函数执行后的结果。
+            结果列表。
         """
         return [
             {"role": "system", "content": "You are a helpful assistant."},
@@ -80,18 +75,18 @@ class EchoTool(BaseTool):
 
     @property
     def name(self) -> str:
-        """执行 name 对应的逻辑，并返回处理结果。
+        """返回对象名称。
 
         Returns:
-            str，函数执行后的结果。
+            字符串结果。
         """
         return "echo"
 
     def schema(self) -> dict:
-        """执行 schema 对应的逻辑，并返回处理结果。
+        """返回工具参数的结构定义。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         return {
             "type": "function",
@@ -109,21 +104,19 @@ class EchoTool(BaseTool):
         }
 
     async def execute(self, **kwargs: Any) -> ToolResult:
-        """执行 execute 对应的逻辑，并返回处理结果。
+        """执行回显工具。
 
         Args:
-            **kwargs: Any，调用方传入的 **kwargs 参数。
+            kwargs: 关键字参数。
 
         Returns:
-            ToolResult，函数执行后的结果。
+            工具结果结果。
         """
         text = kwargs.get("text", "")
         return ToolResult(success=True, output=f"Echo: {text}")
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 单轮 ReAct 测试
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestReActSingleIteration:
@@ -131,7 +124,7 @@ class TestReActSingleIteration:
 
     @pytest.mark.asyncio
     async def test_single_iteration_no_tool_calls(self) -> None:
-        """LLM 返回无 tool_calls → 循环立即终止。"""
+        """验证单个无工具调用对应的测试场景。"""
         llm = MockLLMGateway(
             [
                 LLMResponse(content="Final answer", model="mock"),
@@ -178,7 +171,7 @@ class TestReActSingleIteration:
 
     @pytest.mark.asyncio
     async def test_no_prompt_template(self) -> None:
-        """prompt_template 为空时优雅处理。"""
+        """验证无提示词模板对应的测试场景。"""
         llm = MockLLMGateway(
             [
                 LLMResponse(content="ok", model="mock"),
@@ -200,9 +193,7 @@ class TestReActSingleIteration:
         assert llm.call_count == 1
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 多轮 ReAct 测试
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestReActMultipleIterations:
@@ -295,28 +286,14 @@ class TestReActMultipleIterations:
 
     @pytest.mark.asyncio
     async def test_tool_result_in_messages(self) -> None:
-        """验证工具结果作为 observation 累积到 messages。"""
+        """验证工具结果在消息对应的测试场景。"""
         received_messages: list[Any] = []
 
         class CapturingGateway(LLMGateway):
-            """CapturingGateway。
-
-            CapturingGateway 封装外部系统或基础设施协议，向上提供稳定、可测试的接口。
-
-            主要成员：
-            - 方法 chat()。
-
-            设计约束：
-            - 保持接口稳定，避免调用方依赖内部实现细节。
-            - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-            """
+            """记录请求内容的测试网关。"""
 
             def __init__(self):
-                """初始化实例，并保存运行所需的依赖、配置和内部状态。
-
-                Returns:
-                    None，函数执行后的结果。
-                """
+                """初始化捕获。"""
                 super().__init__(model="capture")
                 self._responses = [
                     LLMResponse(
@@ -332,16 +309,16 @@ class TestReActMultipleIterations:
 
             async def chat(self, messages, tools=None, max_tokens=None, temperature=None):
                 # 深拷贝 messages，因为 ReAct 循环会原地修改同一个列表
-                """执行 chat 对应的逻辑，并返回处理结果。
+                """发送捕获。
 
                 Args:
-                    messages: Any，调用方传入的 messages 参数。
-                    tools: Any，调用方传入的 tools 参数。
-                    max_tokens: Any，调用方传入的 max_tokens 参数。
-                    temperature: Any，调用方传入的 temperature 参数。
+                    messages: 消息列表。
+                    tools: 可供模型调用的工具定义。
+                    max_tokens: 生成结果允许使用的最大 Token 数。
+                    temperature: 模型采样温度。
 
                 Returns:
-                    None，函数执行后的结果。
+                    处理结果。
                 """
                 import copy
 
@@ -377,9 +354,7 @@ class TestReActMultipleIterations:
         assert "Echo: check" in received_messages[1][3]["content"]
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 终止条件测试
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestReActTermination:
@@ -387,7 +362,7 @@ class TestReActTermination:
 
     @pytest.mark.asyncio
     async def test_max_iterations_termination(self) -> None:
-        """LLM 持续返回 tool_calls → 达到 max_iterations 终止。"""
+        """验证最大迭代次数对应的测试场景。"""
         llm = MockLLMGateway(
             [
                 LLMResponse(
@@ -420,7 +395,7 @@ class TestReActTermination:
 
     @pytest.mark.asyncio
     async def test_token_budget_termination(self) -> None:
-        """累计 token 接近预算 → 强制终止循环。"""
+        """验证令牌预算对应的测试场景。"""
         llm = MockLLMGateway(
             [
                 LLMResponse(
@@ -463,7 +438,7 @@ class TestReActTermination:
 
     @pytest.mark.asyncio
     async def test_max_iterations_one(self) -> None:
-        """max_iterations=1 → 只执行一轮。"""
+        """验证最大迭代次数单个对应的测试场景。"""
         llm = MockLLMGateway(
             [
                 LLMResponse(
@@ -493,9 +468,7 @@ class TestReActTermination:
         assert llm.call_count == 1
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 与现有 Agent 子类兼容性测试
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestReActWithExistingAgents:

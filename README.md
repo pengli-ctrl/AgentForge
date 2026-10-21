@@ -3,421 +3,430 @@
 ![CI](https://img.shields.io/badge/CI-passing-brightgreen)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
-![Tests](https://img.shields.io/badge/Tests-728%20passed-brightgreen)
-![Code Style](https://img.shields.io/badge/code%20style-black-000000)
+![Tests](https://img.shields.io/badge/Tests-884%20passed-brightgreen)
+![Version](https://img.shields.io/badge/version-3.1.0-blue)
 
-> 面向中小企业的 **AI Agent 编排 + 企业治理平台**——从多 Agent 编排、智能路由、成本管控，到多租户客服工单全流程（检索→生成→审批→写回）的一站式 AI 平台基础设施。
+> **让 AI 从 Demo 走进真实业务，而不是停在 Prompt 和演示里。**
 
-> 📖 **想快速了解项目全貌？** 一页纲领性总览（做到什么程度 / 解决什么问题 / 核心亮点）见 [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md)。
+AgentForge 是一个面向企业 AI 业务流的 **共享平台内核 + 可装配业务模块 + 多租户 SaaS/私有化交付** 框架。
 
-AgentForge 是一个 AI Agent 编排 + 企业治理一体化平台。上层是**多 Agent 编排引擎**：三层架构（编排层 / 运行时层 / 网关层），内置 DAG 任务引擎（最大 50 节点）、5 模型智能路由、语义缓存、三级 Memory、全链路 Trace。下层是**企业 AI 平台层**（首个落地场景：客服与售后工单智能处理）：多租户、RBAC + 声明式策略引擎、租户配额与成本治理、全过程审计、Temporal 工作流 + Outbox 可靠投递、检索评估与离线回归、连接器与工单写回。开源项目，**728 个自动化测试全部通过**（其中 platform 层 262 项），black/isort/flake8/mypy 全绿。
+它把模型接入、Agent 编排、RAG、权限策略、审批、审计、配额成本、可靠工作流和外部系统连接沉淀为统一底座。业务团队只需实现自己的领域模块，就能把客服、报销等 AI 场景做成可治理、可计量、可运营、可交付的产品。
 
----
+当前版本：`3.1.0`。已落地 **Support、Expense、Demo Asset** 三个模块，支持 SaaS 和私有化两种交付形态。
 
-## 架构总览
+### 一分钟了解 AgentForge
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      编 排 层 (Orchestration)                    │
-│  DAG任务引擎(50节点) · Planner Agent · LoopBlock · ContextStore  │
-│  静态编排(Kahn拓扑排序) · 动态编排 · 运行时重编排                  │
-├─────────────────────────────────────────────────────────────────┤
-│                      运 行 时 层 (Runtime)                       │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
-│  │CodeReview│  │  Test    │  │   Doc    │  │ Security │  ...×5  │
-│  │  Agent   │  │  Agent   │  │  Agent   │  │  Agent   │         │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘           │
-│  统一Agent基类(abc+5接口) · 三级Memory · Tool框架(Function Calling) │
-├─────────────────────────────────────────────────────────────────┤
-│                      网 关 层 (AI Gateway)                       │
-│  5模型智能路由 · 语义缓存(命中率38%) · Token成本管控 · 全链路Trace  │
-│  Qwen3-Pro · GLM-5 · Kimi · MiniMax · DeepSeek-V3              │
-├─────────────────────────────────────────────────────────────────┤
-│                      企 业 AI 平 台 层 (Platform)                │
-│  多租户 · RBAC+策略引擎 · 配额成本 · 全过程审计                   │
-│  客服工单全流程 · Temporal工作流 · Outbox/DLQ · 检索评估 · 连接器  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-| 层级 | 职责 | 核心组件 |
-|---|---|---|
-| **编排层** | 任务拆解、节点调度、数据流转 | DAG任务引擎(Kahn拓扑排序+并行调度), Planner Agent(自动拆解), LoopBlock(循环控制器), ContextStore(节点间数据流转) |
-| **运行时层** | Agent执行、Memory管理、工具调用 | 统一Agent基类(abc+5标准接口), 5类Agent注册, 三级Memory(工作/短期/长期), Tool框架(Function Calling) |
-| **网关层** | 模型路由、缓存、成本管控、可观测 | 5模型智能路由(能力/成本/延迟三维评分), 语义缓存(Embedding>0.92), Token级成本统计+P0-P3预算告警, 全链路Trace/Span(五种Span类型) |
-| **平台层** | 企业治理 + 业务场景成环 | 多租户隔离, RBAC+声明式策略引擎, 租户配额与成本看板, 全过程审计, 客服工单全流程(检索→生成→审批→写回), Temporal工作流, Outbox/DLQ, 检索评估与离线回归, 连接器与Webhook |
-
----
-
-## 核心设计
-
-### DAG任务引擎
-
-- 支持最大**50节点**的有向无环图
-- **Kahn算法**拓扑排序 O(V+E)，无依赖节点并行执行
-- **三种编排模式**：静态编排（开发者手动定义DAG）、动态编排（Planner Agent自动生成）、运行时重编排（执行中动态插入/替换节点）
-- **ContextStore** 节点间数据流转，读写锁保护并行节点
-- **LoopBlock**：DAG内嵌子图+循环控制器，最大5次硬约束，退出条件可配置
-
-### 5模型智能路由
-
-- 五个模型：**Qwen3-Pro、GLM-5、Kimi、MiniMax、DeepSeek-V3**
-- Classifier Agent 评估任务类型和复杂度
-- **三维评分矩阵**：能力(0.5)、成本(0.3)、延迟(0.2) 加权求和
-- 简单任务→MiniMax（成本 1/10），复杂任务→Qwen3-Pro
-
-### 语义缓存
-
-- Embedding相似度 **>0.92** 阈值（实验调优的帕累托最优点）
-- 命中率 **38%**，准确率 **98%+**
-- LRU + TTL 24小时淘汰策略
-
-### 三层超时体系
-
-| 层级 | 超时 | 说明 |
-|---|---|---|
-| LLM调用 | 10s | 基于15000+请求P95分布调优 |
-| Agent执行 | 30s | `asyncio.wait_for` |
-| DAG全局 | 300s | `cancel` + `partial_success` |
-
-### 四级降级策略
-
-| 级别 | 策略 |
+| 你关心的问题 | AgentForge 提供什么 |
 |---|---|
-| **L1 模型级** | 主模型→备选模型→最轻量模型→预设回复 |
-| **L2 节点级** | 重试2次→fallback默认值→degraded标记 |
-| **L3 DAG级** | 失败节点>30%提前终止 |
-| **L4 系统级** | 全局降级+P0告警 |
+| AI 能力如何落地到真实业务？ | DAG 编排、Planner、Agent Runtime、工具调用、RAG、模型路由和语义缓存 |
+| 企业如何放心使用 AI？ | 多租户、RBAC、声明式策略、人工审批、全程审计、Secret Reference 和 fail-closed 安全默认 |
+| 多个业务如何共用一套平台？ | `ModuleManifest` / `ModuleRuntime` / SDK Port / `ModuleRegistry` 的模块化装配 |
+| 如何控制成本和资源？ | 租户配额、Token 成本追踪、套餐、用量计量、超额策略、告警和账单 |
+| 长流程如何可靠执行？ | Temporal Workflow、Schedule、独立 Task Queue、事务 Outbox、DLQ、重放和幂等处理器 |
+| 如何同时服务 SaaS 和私有化客户？ | 租户生命周期、套餐控制面、Helm Chart、existing Secret、Migration Job 和运维手册 |
+| 出了问题如何排查？ | Trace、Prometheus 指标、结构化日志、Audit、成本看板和运营总览 |
 
-### 请求放大管控
+### 适合谁
 
-三层限制防止级联失控：
-- DAG规模 ≤ 50 节点
-- 单请求LLM调用 ≤ 100 次
-- 并发DAG ≤ 10 × 并行节点 ≤ 5
-
-### 三级Memory
-
-| 类型 | 类比 | 说明 |
-|---|---|---|
-| **工作记忆** | CPU寄存器 | 当前对话上下文 |
-| **短期记忆** | 内存 | Session级缓存 |
-| **长期记忆** | 硬盘 | 持久化知识库，基于RAG |
-
-### 全链路可观测
-
-- **五种Span类型**：`CacheSpan`、`RouteSpan`、`InferenceSpan`、`AgentSpan`、`LoopSpan`
-- Token级成本统计 + **P0-P3** 四级预算告警
-- 每个请求→Agent→模型→Token 全链路追踪
-
----
-
-## AI 平台层（首个场景：客服智能工单处理）
-
-面向中小企业客服/售后场景的企业 AI 平台，用**治理边界**把 AI 的自动化能力约束在企业可控范围内：AI 可以分类、检索、总结、起草，**但所有面向客户和高度风险的动作必须在人工审核批准后才能执行**。
-
-### 治理与安全边界
-
-- **多租户隔离**：所有领域模型（工单、知识、RBAC、配额、审计、连接器）均按租户隔离
-- **RBAC + 声明式策略引擎**：角色/权限 + `ActionPolicy`（fail-closed、风险级、审批要求、allow-list）组合求值，给出 allowed / denied / requires_approval 决策；可选接 OpenFGA 式关系检查
-- **高风险动作审计闭环**：`HighRiskActionAuthorizer` 对"写回工单系统"等高危动作强制人工审批边界（工单未到 READY_TO_PUBLISH / 未获批 → DENIED），并把每次授权（放行/拒绝）写入审计事件，回答"谁执行、为何允许"
-- **租户级配额治理**：月度预算 / 告警阈值 / 硬上限，`QuotaAwareModelGateway` 逐租户强制
-- **全过程审计**：审计事件、操作者、`trace_id`、成本汇总，支撑合规追踪
-
-### 工单全流程闭环
-
-```
-飞书/Webhook → 签名校验+幂等 → 工单创建/状态机 → 意图+风险分类
-  → 知识检索(pgvector+FTS混合) → 回复草稿生成+引用校验
-  → 风险评估 → 低风险进人工审核 / 高风险进审批 → 审批通过 → 写回业务系统
-  → 反馈沉淀为评估样本 → 成本/审计/Trace 全程记录
-```
-
-- **工单生命周期**：创建、幂等键、状态机、风险分类、优先级
-- **Temporal 工作流**：审批 Signal、Outbox、失败重试、DLQ 重放
-- **人工审核**：接受 / 编辑 / 驳回 / 升级，审核后回复发布
-- **连接器与写回**：`Connector` ABC + Registry、Webhook 泛化（HMAC 验签）、`OpenAPIAdapter`（幂等键头+有界重试+令牌桶限流+审计）、CRM/工单系统写回闭环
-
-### 检索、评估与版本治理
-
-- **混合检索**：PostgreSQL FTS + pgvector（HNSW/GIN 索引），`KnowledgeRepository.search`，Memory 与 SQLAlchemy 双实现
-- **检索重排与召回评估**：确定性 `HybridReranker`、Recall@K / Precision@K / MRR / 引用正确率、在线 `RetrievalEvaluationService`（GoldenQuery→QueryEvaluation→RetrievalReport）
-- **结构化分类质量门禁**：分类准确率 / 优先级准确率 / 结构化合法率 / 高风险漏报率；版本化 `PromptRegistry` 与 `ModelVersionRegistry`；发布质量门禁（PASS / HOLD / BLOCK，高风险漏报一票否决）
-- **离线回归 + Golden Dataset**：`RegressionRunner`（加载 Golden → 召回+分类评估 → 质量门禁 → 报告持久化）
-
-### 平台 API 一览
-
-| 路由前缀 | 能力 |
+| 角色 | 典型目标 |
 |---|---|
-| `/v1/tickets` | 工单详情、审核（approve/reject）、质检（review）、回复、写回 |
-| `/v1/console` | 客服工作台、审批收件箱、管理控制台聚合概览、多租户成本 |
-| `/v1/rbac` | 角色 CRUD、权限设置、用户-角色赋值、`/v1/authorize` 授权检查 |
-| `/v1/policies` | 策略热加载控制面：列出 + `source_revision`、`GET /v1/policies/revision`、`POST /v1/policies/reload`（原子换载，坏配置 422 保留旧策略） |
-| `/v1/quotas` | 租户配额管理 |
-| `/v1/audit` | 审计事件查询 |
-| `/v1/costs` | 成本与模型分布 |
-| `/v1/knowledge` | 知识入库与混合检索（支持重排） |
-| `/v1/evaluations` | 检索/分类质量评估 |
-| `/v1/regression` | Golden 维护 + 回归触发与记录 |
-| `/v1/connectors` | 连接器注册与管理 |
-| `/v1/outbox` | Outbox 事件管理、DLQ 查询与重放 |
+| **AI 平台 / 架构团队** | 建设企业级 AI 中台，统一模型访问、Agent 运行时、RAG、治理和成本边界，避免每个业务重复造轮子 |
+| **企业 SaaS 产品团队** | 把客服、财务、运营等流程产品化，快速增加 AI 能力并保持多租户隔离 |
+| **解决方案 / 私有化交付团队** | 用同一套代码完成 SaaS 或客户独立部署，覆盖租户配置、迁移、备份、恢复和回滚 |
+| **后端 / Agent 工程师** | 通过 SDK 和模板开发新业务模块，复用 Tool、Memory、Temporal、Outbox、Connector 与观测能力 |
+| **运维 / 安全 / 合规团队** | 通过 fail-closed 鉴权、审计脱敏、策略、配额、DLQ、只读容器和生产检查清单控制风险 |
+
+> 如果你只需要一次性 Prompt Demo，AgentForge 可能偏重；如果你需要把 AI 做成可上线、可治理、可复制交付的业务平台，它就是为此设计的。
+
+### 可以用它做什么
+
+- **智能客服**：Webhook/Feishu 接入 → 分类 → 知识检索 → 回复草稿 → 人工审核 → 写回 → SLA 和通知。
+- **财务报销**：票据上传/OCR → 字段确认 → 政策校验 → 审批 → 发票门禁 → 台账 → ERP/财务系统写回。
+- **企业行业模块**：基于模块 SDK 开发库存、合同、采购、物流等新领域模块，不修改平台 core。
+- **多租户 SaaS**：按套餐开通模块，按 OCR、Token、Workflow、存储和通知计量，生成告警与账单。
+- **私有化交付**：Helm 部署 API、Worker、Outbox Worker 和 Migration Job，连接客户既有 PostgreSQL、Temporal、对象存储和 Valkey。
 
 ---
 
-## 量化成果
+## 核心能力
 
-| 指标 | 数值 | 说明 |
+| 能力域 | 关键能力 | 对使用者的价值 |
 |---|---|---|
-| LLM调用成本降低 | **68%** | 缓存38%直接省 + 路由优化30% |
-| 端到端延迟降低 | **38%** | 缓存跳过推理 + 路由优先低延迟模型 |
-| 任务完成率 | **97%** | 15000+请求统计 |
-| 级联失败率 | **<0.3%** | 结构化输出+交叉验证+兜底默认值 |
-| 缓存命中率 | **38%** | Embedding相似度>0.92 |
-| 自动化测试 | **728个** | 全部通过，CI绿灯（单元+集成+平台三层） |
-| Agent类型 | **5类** | 代码审查/测试执行/文档生成/安全扫描/部署 |
-| DAG最大规模 | **50节点** | Kahn拓扑排序+并行调度 |
-| platform测试 | **262个** | 企业 AI 平台层专项测试 |
+| **Agent 运行时与编排** | 统一 Agent、三级 Memory、Tool、ContextStore、DAG、Planner、LoopBlock、超时、降级和请求放大保护 | 快速构建复杂 AI 流程，同时控制并发、失败和成本 |
+| **模型与知识网关** | 模型路由、语义缓存、Token 成本、Trace、混合检索、精排和幻觉防护 | 用统一接口接入模型与知识，按任务选择成本/质量平衡 |
+| **企业治理** | 多租户、RBAC、声明式策略、审批、Audit、脱敏、保留期和 PII 生命周期 | 把 AI 放进企业权限和责任边界，而不是绕过现有制度 |
+| **可靠工作流与集成** | Temporal、Schedule、独立 Task Queue、事务 Outbox、Kafka、Handler Receipt、DLQ、Connector 和 Webhook HMAC | 长流程可恢复，外部副作用可审计、可重试、可补偿 |
+| **业务模块平台** | Module Manifest、SDK Port、Entry Point 插件、双仓储、租户模块配置、契约测试和版本策略 | 一个内核承载多个业务，模块可独立开发、测试和交付 |
+| **SaaS 与私有化** | 租户生命周期、套餐、计量、告警、账单、运营总览、Helm、Secret 和 Migration | 从第一天就具备商业化交付能力，而不是上线后再补平台能力 |
 
-> 以上数据来自基准测试（2000条标注query）和日常使用（持续3周，累计15000+请求），非商用生产环境。
+## 架构一览
 
----
-
-## 技术栈
-
-| 类别 | 技术选型 |
-|---|---|
-| 语言 | Python 3.10+ |
-| 后端框架 | FastAPI + 异步 SQLAlchemy |
-| LLM推理 | vLLM(私有化部署) + 5 API模型(Qwen3-Pro / GLM-5 / Kimi / MiniMax / DeepSeek-V3) |
-| 任务编排 | DAG引擎(Kahn拓扑排序+并行调度) + Planner Agent |
-| 工作流 | Temporal Python SDK |
-| 事件投递 | Outbox 模式 + Redis Pub/Sub → Kafka（带 DLQ 重放） |
-| 状态存储 | Redis / Valkey |
-| 数据库 | PostgreSQL（FTS + pgvector 混合检索）+ Alembic 迁移 |
-| 向量检索 | FAISS / pgvector |
-| 关键词检索 | BM25 (rank_bm25) / PostgreSQL FTS |
-| 代码解析 | tree-sitter |
-| 容器化 | Docker / Docker Compose |
-| 可观测性 | OpenTelemetry + Prometheus + Grafana |
-| 工具协议 | Function Calling |
-| 连接器 | Feishu、Webhook（HMAC 验签）、OpenAPI（幂等+限流+审计） |
-
----
-
-## 项目结构
-
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│ 接入：REST API / Webhook / Feishu / OpenAPI Connector / CLI / SDK   │
+├─────────────────────────────────────────────────────────────────────┤
+│ 业务模块：Support / Expense / Demo Asset / 自定义模块               │
+│ 分层：api · application · domain · infrastructure · workflows        │
+├─────────────────────────────────────────────────────────────────────┤
+│ 企业平台治理：Tenant · RBAC · Policy · Approval · Audit · Quota     │
+│               SaaS 控制面 · 模块配置 · Connector · Secret          │
+├──────────────────────────────────┬──────────────────────────────────┤
+│ Agent 运行时与编排               │ 模型与知识网关                   │
+│ Agent / Memory / Tool / Context  │ Router / Cache / RAG / Cost      │
+│ DAG / Planner / LoopBlock        │ Trace / Reranker / Guard         │
+├──────────────────────────────────┴──────────────────────────────────┤
+│ 可靠交付：Temporal · Outbox / Kafka · DLQ · Schedule · Reconciliation│
+├─────────────────────────────────────────────────────────────────────┤
+│ 数据与观测：PostgreSQL/pgvector · Object Store · Valkey · OTel      │
+└─────────────────────────────────────────────────────────────────────┘
 ```
+
+### 一条业务请求如何穿过系统
+
+```text
+用户 / 外部系统
+  -> 鉴权、租户状态、模块开关
+  -> 业务模块 API 与领域用例
+  -> Agent 编排、RAG、模型网关、工具和 Connector
+  -> 高风险动作进入审批与策略检查
+  -> Audit、Outbox、Temporal、成本和用量记录
+  -> 业务结果返回，异步任务继续可靠执行
+```
+
+### 为什么这样设计
+
+- **治理只做一次**：租户、权限、审计、配额、成本和可观测性属于共享内核，不在每个业务里重复实现。
+- **业务真正解耦**：平台 core 不导入 Support、Expense 或第三方模块；模块只依赖 SDK Port 和自身 Port。
+- **可靠性内建**：业务写入与 Outbox、Temporal、幂等 Handler 和 DLQ 一起设计，而不是上线后补重试。
+- **交付形态统一**：同一份平台代码支持 SaaS 控制面和私有化 Helm，不靠两套分叉代码维护。
+- **安全默认开启**：生产鉴权 fail-closed，敏感配置使用 `secret_refs`，高风险写回必须经过策略与审批。
+
+## 项目状态
+
+AgentForge `3.1.0` 已达到 **可运行、可测试、可扩展、可私有化交付的商业基线**：
+
+- 平台共享内核、模块 SDK、租户模块配置和三个业务模块已完成；
+- SaaS 租户生命周期、套餐、计量、账单和运营控制面已完成；
+- Temporal、Outbox、DLQ、对象存储、Valkey 和真实基础设施测试入口已完成；
+- 安全基线、审计脱敏、PII 生命周期、Helm 和运维手册已完成；
+- 离线测试基线：**884 passed，7 skipped**，其中 platform 测试 **418 项**。
+
+生产上线仍需结合客户环境完成：真实 IdP/SSO、Vault/KMS、WAF/DLP、PostgreSQL/Temporal/MinIO/Valkey 高可用、镜像 CVE/SBOM 扫描，以及 Kubernetes 安装、升级、回滚和灾备演练。
+
+---
+
+## 当前项目结构
+
+```text
 AgentForge/
 ├── agentforge/
-│   ├── core/                     # 运行时层
-│   │   ├── agent.py              # 统一Agent基类(abc+5标准接口)
-│   │   ├── memory.py             # 三级Memory(工作/短期/长期)
-│   │   ├── base_tool.py          # Tool框架(Function Calling)
-│   │   ├── agent_registry.py     # Agent注册表
-│   │   └── context_store.py      # 节点间数据流转
-│   ├── orchestration/            # 编排层
-│   │   ├── dag_engine.py         # DAG任务引擎(Kahn拓扑排序+并行调度)
-│   │   ├── planner.py            # Planner Agent(自动任务拆解)
-│   │   ├── loop_block.py         # LoopBlock循环控制器
-│   │   ├── timeout.py            # 三层超时体系
-│   │   ├── degradation.py        # 四级降级策略
-│   │   └── request_guard.py      # 请求放大管控
-│   ├── gateway/                  # 网关层
-│   │   ├── router.py             # 5模型智能路由
-│   │   ├── semantic_cache.py     # 语义缓存(Embedding>0.92)
-│   │   ├── cost_tracker.py       # Token级成本统计+预算告警
-│   │   └── model_registry.py     # 模型注册表
-│   ├── observability/            # 可观测性
-│   │   ├── tracing.py            # Trace/Span(五种类型)
-│   │   ├── metrics.py            # Prometheus指标
-│   │   └── logger.py             # 结构化日志
-│   ├── rag/                      # RAG工程化
-│   │   ├── ast_chunker.py        # AST感知分块
-│   │   ├── hybrid_retriever.py   # BM25+FAISS混合检索
-│   │   ├── reranker.py           # LLM精排
-│   │   └── hallucination_guard.py # 幻觉防护
-│   ├── safety/                   # 安全防护
-│   │   ├── trust_boundary.py     # 确定性校验
-│   │   ├── pulse_shaper.py       # 请求整形
-│   │   ├── aimd_controller.py    # AIMD 限速
-│   │   └── conflict_arbiter.py   # 冲突仲裁
-│   ├── tools/                    # 工具实现
-│   ├── agents/                   # Agent实现(5类)
-│   ├── api/                      # 编排层 FastAPI 入口
-│   └── platform/                 # 企业 AI 平台层
-│       ├── api/                  # 平台 REST API(工单/控制台/RBAC/配额/审计/...)
-│       ├── application/          # 应用服务(策略引擎/配额/评估/质量门禁/连接器...)
-│       ├── domain/               # 领域模型(工单/RBAC/配额/审计/策略/事件...)
-│       ├── infrastructure/       # 基础设施(Memory/SQLAlchemy双实现, Outbox, Kafka, Temporal)
-│       ├── workflows/            # Temporal 工作流(客服工单)
-│       ├── connectors/           # 连接器(Feishu)
-│       └── runtime.py            # 装配(ServiceContainer)
+│   ├── agents/                       # Agent 实现
+│   ├── api/                          # 编排层 FastAPI 入口
+│   ├── cli/                          # 编排层 CLI
+│   ├── core/                         # Agent、Memory、Tool、Context、Registry
+│   ├── gateway/                      # 模型路由、语义缓存、成本、模型注册
+│   ├── llm/                          # LLM 适配与网关
+│   ├── observability/                # Trace、Metrics、结构化日志
+│   ├── orchestration/                # DAG、Planner、LoopBlock、超时、降级
+│   ├── prompts/                      # Prompt 模板与资源
+│   ├── rag/                          # AST 分块、混合检索、精排、幻觉防护
+│   ├── safety/                       # 信任边界、请求整形、AIMD、冲突仲裁
+│   ├── sdk/                          # 编排层客户端 SDK
+│   ├── storage/                      # Redis 状态、任务和 Trace 存储
+│   ├── tools/                        # Tool 实现
+│   ├── workflow/                     # 编排工作流运行时
+│   └── platform/                     # 企业 AI 平台层
+│       ├── api/                      # 平台 REST API
+│       ├── application/              # 策略、配额、评估、质量门禁、SaaS 控制面
+│       ├── cli/                      # 平台 CLI
+│       ├── connectors/               # Connector 基础设施
+│       ├── core/                     # ModuleRegistry 与模块契约基础设施
+│       ├── domain/                   # 租户、RBAC、审计、事件、用量等模型
+│       ├── infrastructure/           # Memory/SQLAlchemy、Outbox、Temporal、S3、Valkey
+│       ├── modules/                  # 业务模块（平台核心不直接导入）
+│       │   ├── support/              # 客服工单模块
+│       │   │   ├── api/              # Support/Feishu Router
+│       │   │   ├── application/      # 分类、处理、审核、SLA、通知、写回
+│       │   │   ├── connectors/       # Feishu Connector
+│       │   │   ├── domain/           # Ticket 与状态机
+│       │   │   ├── infrastructure/   # Memory/SQLAlchemy、通知、Feishu 回复
+│       │   │   ├── workflows/        # 工单工作流和 SLA 扫描
+│       │   │   ├── config.py         # Support 配置 schema
+│       │   │   ├── module.py         # ModuleManifest / ModuleRuntime
+│       │   │   ├── ports.py          # 模块 Port
+│       │   │   ├── runtime.py        # 模块运行时
+│       │   │   └── README.md
+│       │   ├── expense/              # 报销模块
+│       │   │   ├── api/              # 报销、OCR、发票、台账、写回 API
+│       │   │   ├── application/      # Claim、OCR、审批、政策、发票门禁、台账
+│       │   │   ├── domain/           # Claim、Invoice、Attachment、OCR、Ledger
+│       │   │   ├── infrastructure/   # Memory/SQLAlchemy 仓储
+│       │   │   ├── workflows/        # OCR、写回和门禁扫描工作流
+│       │   │   ├── config.py         # Expense 配置 schema
+│       │   │   ├── module.py         # ModuleManifest / ModuleRuntime
+│       │   │   ├── ports.py          # 模块 Port
+│       │   │   ├── runtime.py        # 模块运行时
+│       │   │   └── README.md
+│       │   └── demo_asset/           # 第三方模块参考实现
+│       │       ├── api/              # Asset API
+│       │       ├── application/      # Asset 用例、Audit、Outbox
+│       │       ├── domain/           # Asset 领域模型
+│       │       ├── infrastructure/   # Memory/SQLAlchemy 仓储
+│       │       ├── workflows/        # Asset Temporal Workflow/Activity
+│       │       ├── config.py         # Asset 配置 schema
+│       │       ├── module.py         # ModuleManifest / ModuleRuntime
+│       │       ├── ports.py          # 模块 Port
+│       │       └── README.md
+│       ├── observability/            # 平台观测扩展
+│       ├── sdk/                      # 模块 Port、契约测试和 Connector SDK
+│       ├── security/                 # Secret、OIDC、脱敏、PII 生命周期
+│       ├── workflows/                # 平台工作流注册
+│       └── runtime.py                # ServiceContainer 与 composition root
+├── bench/                            # 负载生成与性能测试脚本
 ├── configs/
-│   ├── workflows/                # DAG工作流配置
-│   ├── dev/ · prod/              # 运行环境配置
-│   └── logging.yaml              # 日志配置
-├── tests/                        # 728个测试(单元+集成+平台)
-├── docs/                         # 架构/ADR/总览 文档
-├── alembic/                      # 数据库迁移
-├── deploy/                       # 部署配置
-└── ...
+│   ├── dev/                          # 开发环境配置
+│   ├── prod/                         # 生产环境配置
+│   ├── workflows/                    # DAG 工作流配置
+│   └── logging.yaml                  # 日志配置
+├── tests/
+│   ├── unit/                         # 单元测试
+│   ├── integration/                  # 集成测试
+│   ├── platform/                     # 平台与模块测试
+│   └── infra/                        # PostgreSQL/Temporal/MinIO/Valkey 真实基础设施测试
+├── docs/
+│   ├── architecture.md               # 当前架构
+│   ├── commercial/                   # SaaS 控制面
+│   ├── infrastructure/               # 生产基础设施集成
+│   ├── modules/                      # 模块接入与版本策略
+│   ├── release/                      # 3.1.0 发布与迁移
+│   └── security/                     # 安全清单与私有化运行手册
+├── alembic/                          # PostgreSQL 数据库迁移
+│   └── versions/                     # Alembic revision
+├── deploy/
+│   ├── grafana/                      # Grafana 配置
+│   ├── helm/agentforge/              # 私有化 Helm Chart
+│   │   ├── templates/                # Kubernetes 资源模板
+│   │   ├── Chart.yaml
+│   │   └── values.yaml
+│   └── platform/                     # 本地、演示和基础设施 Compose
+├── templates/module-template/        # 可运行第三方模块模板
+├── examples/                         # 编排和装配示例
+├── migrations/                       # 早期 SQL 基线；正式迁移使用 alembic/
+├── scripts/                          # 发布、备份、恢复、迁移演练、安全扫描
+├── requirements/                     # 分拆依赖文件
+├── .github/                          # CI、Issue 和 PR 模板
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── README.md
+├── README.en.md
+├── SECURITY.md
+├── Makefile
+├── pyproject.toml
+├── Dockerfile
+└── docker-compose.yml                # 早期编排层 Compose，保留兼容
 ```
 
 ---
 
 ## 快速开始
 
-### 编排层 Quick Start
+### 安装
 
-```python
-from agentforge.gateway import SmartRouter
-from agentforge.orchestration import DAGEngine, DAGNode
-
-# 初始化 AI Gateway（5模型智能路由 + 语义缓存 + 成本管控）
-router = SmartRouter()
-
-# 路由决策：按任务类型与复杂度选择模型（simple→MiniMax，complex→Qwen3-Pro）
-decision = await router.route(
-    task_type="code_gen",
-    complexity=0.9,
-    input_text="实现一个支持分页的 REST API",
-)
-print(f"selected={decision.selected_model}, scores={decision.scores_per_model}")
-
-# 定义 DAG 工作流
-dag = DAGEngine(max_nodes=50, global_timeout=300)
-dag.add_node(DAGNode("code_scan", agent="security-scan",
-                     input_mapping={"code": "$input.code"}))
-dag.add_node(DAGNode("code_review", agent="code-review",
-                     input_mapping={"code": "$ctx.code_scan.output"}))
-dag.add_edge("code_scan", "code_review")
-
-# 执行
-result = await dag.execute("task-001", input_data={"code": open("main.py").read()})
-print(f"成本: ¥{result.total_cost:.4f}, 延迟: {result.total_latency:.1f}s, 完成率: {result.success_rate}")
+```bash
+python -m venv .venv
+source .venv/bin/activate       # Linux/macOS
+# .venv\Scripts\activate        # Windows
+pip install -r requirements-dev.txt
+pip install -e .
 ```
 
-### 平台层 Quick Start（RBAC 授权检查）
+### 启动平台层
 
-```python
-from agentforge.platform.runtime import build_memory_container
-
-container = build_memory_container()
-# 给用户分配角色，即可进行授权决策
-decision = await container.policy_engine.authorize(
-    tenant_id="tenant-a",
-    principal="user-1",
-    action="ticket.writeback",
-    resource={"ticket_id": "t-1", "status": "READY_TO_PUBLISH"},
-)
-print(decision.outcome)  # allowed / denied / requires_approval
+```bash
+make platform-up
 ```
+
+平台 API 默认监听 `http://localhost:8000`，健康检查：
+
+```text
+GET /health/live
+GET /health/ready
+```
+
+`/health/live` 表示进程存活，`/health/ready` 表示应用已初始化；两者都不是数据库、Temporal、Valkey 或对象存储的深度健康检查。
+
+只启动本地基础设施：
+
+```bash
+make platform-lite-up
+```
+
+等价于：
+
+```bash
+docker compose -f deploy/platform/docker-compose.lite.yml up -d
+```
+
+完整 Compose 包含 PostgreSQL、Valkey、Temporal、MinIO、Kafka、OTel Collector、API、Worker 和 Outbox Worker。详细说明见 [deploy/platform/README.md](deploy/platform/README.md)。
+
+### 鉴权
+
+平台鉴权默认开启（fail-closed）。生产环境未配置 API Key 时会拒绝启动。
+
+```bash
+export AGENTFORGE_ADMIN_API_KEY='replace-with-a-strong-secret'
+export AGENTFORGE_API_KEYS='{"replace-with-tenant-key":"tenant-a"}'
+```
+
+仅本地临时开发可显式关闭鉴权：
+
+```bash
+export AGENTFORGE_ALLOW_NO_AUTH=true
+```
+
+该开关禁止用于公开环境。
+
+### 模块裁剪
+
+```bash
+AGENTFORGE_ENABLED_MODULES=support
+AGENTFORGE_ENABLED_MODULES=expense
+AGENTFORGE_ENABLED_MODULES=support,expense
+```
+
+默认启用 `support,expense`；`asset` 参考模块通过模块插件或测试装配启用。
+
+### 私有化 Helm
+
+```bash
+kubectl create namespace agentforge
+helm upgrade --install agentforge deploy/helm/agentforge \
+  -n agentforge \
+  --set image.repository=registry.example.com/agentforge \
+  --set image.tag=3.1.0 \
+  --set existingSecret=agentforge-secrets
+```
+
+生产安装、备份、恢复、升级与回滚见 [私有化部署运行手册](docs/security/PRIVATE_DEPLOYMENT_RUNBOOK.md)。
 
 ---
 
-## 工程保障
+## 平台 API
 
-- **测试**：700+ 自动化测试（单元 + 集成 + 平台三层，当前 728），本地全绿
-- **静态检查**：black / isort / flake8（max-line-length=100）/ mypy 全仓零错误
-- **CI**：GitHub Actions 全量测试（Python 3.10/3.11/3.12），不使用 continue-on-error 掩盖失败
-- **类型安全**：mypy 严格模式覆盖全仓
-- **性能**：本地负载压测（自研多进程压测器，零外部依赖）测得平台 API 峰值 ~580–630 rps、推荐承载 ~500 rps/25 并发，详见 [P1-1 压测报告](docs/bench/P1-1-load-capacity.md)
-- **可观测闭环**：LLM 调用逐条 trace（model/tokens/cost/latency/tenant）+ 工单→推理 trace_id 传播 + 进程内 `TraceRecorder`（有界 FIFO）+ dashboard `GET /v1/console/traces`；Langfuse/OTLP 接线方式文档化（[docs/observability/P1-2-observability.md](docs/observability/P1-2-observability.md)），本地零外部依赖可回查，生产可平滑接成熟可观测件
+主要 API 分组：
 
----
+| 前缀 | 能力 |
+|---|---|
+| `/v1/support` | Support 工单与兼容业务入口 |
+| `/v1/expense` | 报销、OCR、附件、审批、台账、发票门禁 |
+| `/v1/assets` | Demo Asset 参考模块（Manifest 前缀） |
+| `/v1/console` | 运营控制台聚合与审批收件箱 |
+| `/v1/rbac` | 角色、权限和用户角色赋值 |
+| `/v1/authorize` | 声明式授权决策 |
+| `/v1/policies` | 声明式策略查询与热加载 |
+| `/v1/quotas` | 租户配额管理 |
+| `/v1/audit` | 审计查询、导出、保留期清理 |
+| `/v1/costs` | 成本与模型分布 |
+| `/v1/knowledge` | 知识入库与混合检索 |
+| `/v1/evaluations` | 检索和分类评估 |
+| `/v1/regression` | Golden Dataset 与离线回归 |
+| `/v1/release` | Prompt/模型版本发布与质量门禁 |
+| `/v1/connectors` | Connector 注册和管理 |
+| `/v1/outbox` | Outbox、DLQ、重放与丢弃 |
+| `/v1/admin/*` | 租户、套餐、计量、账单和运营总览 |
 
-## 技术文章
-
-| 文章 | 主题 | 链接 |
-|---|---|---|
-| 三层架构设计 | 编排层/运行时层/网关层的设计哲学 | [阅读](https://pengli-ctrl.github.io/blog/posts/04-agentforge-architecture-evolution) |
-| DAG编排引擎 | 从静态编排到Planner Agent动态拆解 | [阅读](https://pengli-ctrl.github.io/blog/posts/05-orchestration-engine-evolution) |
-| AI Gateway | 5模型路由+语义缓存+Token级成本管控 | [阅读](https://pengli-ctrl.github.io/blog/posts/06-ai-gateway-design) |
-| 可靠性设计 | 三层超时/四级降级/请求放大管控 | [阅读](https://pengli-ctrl.github.io/blog/posts/07-production-reliability) |
-| RAG工程化 | 幻觉率从46%降到16.2%的五层防护 | [阅读](https://pengli-ctrl.github.io/blog/posts/01-rag-engineering-hallucination-prevention) |
-
-
----
-
-## 部署
-
-> 历史演进导致当前存在 **两套相互独立的 Compose 集群**。它们跑的是两个不同
-> 的应用（早期「编排层」单 Agent 服务 vs 当前「平台层」企业 AI 平台），API
-> 端口均为 `8000`、状态存储端口均为 `6379`，**不可在同一台主机同时启用**。
-> 请按下面的取舍选择其一，并先 `down` 掉另一套。
-
-### 两套集群一览
-
-| 集群 | Compose 文件 | 组成 | 说明 |
-|---|---|---|---|
-| **平台层（推荐 / 当前主形态）** | `deploy/platform/docker-compose.platform.yml` | api + worker + outbox-worker + postgres / valkey / temporal / minio / otel / kafka | 企业客服 AI 平台全栈（工单 / RBAC / 配额 / 审计 / 质量门禁 / 连接器） |
-| 平台层·基础设施(轻量) | `deploy/platform/docker-compose.lite.yml` | 仅 postgres / valkey / temporal / minio | 本地开发用基础依赖，无 api/worker/kafka |
-| **编排层（遗留 / 早期形态）** | `docker-compose.yml` | app + redis / mysql / kafka | 早期 Stage-A 单 Agent 编排服务，被平台层替代，保留兼容 |
-
-### 推荐入口：平台层全栈启动
-
-```bash
-# 启动平台层（api + worker + outbox-worker + 全部基础设施）
-make platform-up        # 等价: docker-compose -f deploy/platform/docker-compose.platform.yml up -d
-# 停止
-make platform-down
-```
-
-平台层 API 默认监听 `http://localhost:8000`（各 `/v1/*` 路由见上表）。
-
-#### 鉴权（安全默认开启）
-
-平台层 **鉴权默认开启（fail-closed）**，与全局安全默认保持一致：
-
-- 启动后用默认演示密钥调用需鉴权接口：请求头 `X-Admin-Key: dev-admin-key-please-override`；
-- **生产环境必须覆盖默认密钥**，否则存在暴露风险：
-
-```bash
-AGENTFORGE_ADMIN_API_KEY='你的强密钥' docker-compose -f deploy/platform/docker-compose.platform.yml up -d api
-```
-
-- 未配置任何密钥且环境为 `prod`/`staging` 时，服务会 **拒绝启动**（fail-closed），
-  需显式配置密钥，或临时 `AGENTFORGE_ALLOW_NO_AUTH=true`（严禁用于公开暴露）。
-
-### 仅启动平台层基础设施（本地开发）
-
-```bash
-make platform-lite-up    # postgres / valkey / temporal / minio
-make platform-lite-down
-```
-
-### 编排层（遗留入口）
-
-```bash
-# 若确需使用早期编排层
-make docker-up           # 等价: docker-compose up -d
-make docker-down
-```
-
-### 端口对照与互斥提醒
-
-| 端口 | 编排层 | 平台层 |
-|---|---|---|
-| `8000` | app (0.0.0.0) | api (0.0.0.0) |
-| `6379` | redis | valkey |
-| `9092` | kafka | kafka |
-| `5432` | — | postgres |
-| `7233` | — | temporal |
-| `8080` | — | temporal-ui |
-| `9000/9001` | — | minio |
-
-两套共享 `8000/6379/9092`。**同机请勿同时启用**，先用 `down` 停止一套再启另一套。
-
+SaaS API 细节见 [SaaS 控制面](docs/commercial/SAAS_CONTROL_PLANE.md)。
 
 ---
 
-## 关于作者
+## 开发与测试
 
-**彭黎** — 8年后端研发，3年团队管理，专注 AI Agent 架构与企业 AI 平台方向。
+```bash
+make format       # black + isort
+make lint         # flake8 + isort + black
+make type-check   # mypy
+make test         # 全量离线测试
+make test-unit
+make test-integration
+```
 
-- 📝 博客：https://pengli-ctrl.github.io/blog
-- 💻 GitHub：https://github.com/pengli-ctrl
-- 📧 邮箱：pl2847253@gmail.com
-- 📖 掘金：https://juejin.cn/user/4140096632135322
+平台和模块测试：
+
+```bash
+python -m pytest tests/platform -q
+```
+
+真实基础设施测试：
+
+```bash
+make test-infra
+# Windows PowerShell
+./scripts/run_infra_tests.ps1
+```
+
+`tests/infra` 在没有 `AGENTFORGE_RUN_INFRA_TESTS=1` 时会跳过真实基础设施用例。脚本会自动启动 `docker-compose.lite.yml`，创建测试数据库并执行基础设施测试和 migration drill。
+
+发布验证：
+
+```bash
+make release-check
+python scripts/security_scan.py
+```
+
+详细测试范围和环境变量见 [生产基础设施集成](docs/infrastructure/PRODUCTION_INTEGRATION.md)。
+
+---
+
+## 文档索引
+
+| 文档 | 内容 |
+|---|---|
+| [架构设计](docs/architecture.md) | 当前分层、模块边界、数据路径和部署形态 |
+| [模块接入指南](docs/modules/MODULE_INTEGRATION_GUIDE.md) | 第三方模块实现、契约、租户隔离和验收 |
+| [模块版本与弃用](docs/modules/VERSIONING_AND_DEPRECATION.md) | 语义版本、事件兼容和弃用窗口 |
+| [Support 模块](agentforge/platform/modules/support/README.md) | 工单、SLA、审核、通知和写回 |
+| [Expense 模块](agentforge/platform/modules/expense/README.md) | 报销、OCR、审批、发票门禁和台账 |
+| [Demo Asset 模块](agentforge/platform/modules/demo_asset/README.md) | 第三方模块参考实现 |
+| [模块模板](templates/module-template/README.md) | 可运行模块模板说明 |
+| [SaaS 控制面](docs/commercial/SAAS_CONTROL_PLANE.md) | 租户生命周期、套餐、计量、账单和运营 |
+| [基础设施集成](docs/infrastructure/PRODUCTION_INTEGRATION.md) | PostgreSQL、Temporal、MinIO、Valkey、Outbox 与测试 |
+| [私有化部署运行手册](docs/security/PRIVATE_DEPLOYMENT_RUNBOOK.md) | Helm 安装、备份、恢复、升级和回滚 |
+| [安全清单](docs/security/SECURITY_CHECKLIST.md) | 已实现控制项与现场验收项 |
+| [迁移指南](docs/release/MIGRATION_GUIDE_3.1.0.md) | 3.0.0 到 3.1.0 的迁移步骤 |
+| [发布说明](docs/release/RELEASE_NOTES_3.1.0.md) | 3.1.0 能力和兼容性 |
+
+---
+
+## 技术栈
+
+- Python 3.10+、FastAPI、Pydantic 2、异步 SQLAlchemy 2
+- PostgreSQL 15+、Alembic、pgvector、全文检索
+- Temporal 1.32+、Outbox、Kafka
+- Valkey/Redis 7+、MinIO/S3
+- OpenTelemetry、Prometheus、Grafana
+- Docker Compose、Helm
+- Feishu、Webhook HMAC、OpenAPI Connector
+
+---
+
+## 安全
+
+- 生产默认 fail-closed，必须配置 `AGENTFORGE_API_KEYS` 或 `AGENTFORGE_ADMIN_API_KEY`。
+- Secret 引用支持 `env://`、`vault://`、`kms://`、`secret://`，配置拒绝明文敏感值。
+- 审计导出默认递归脱敏 Bearer Token、邮箱、电话和身份证号。
+- 附件下载 URL 有效期限制为 1-3600 秒，默认 300 秒。
+- 私有化容器默认非 root、只读根文件系统并丢弃 Linux capabilities。
+- 漏洞报告流程见 [SECURITY.md](SECURITY.md)。
+
+---
+
+## 已知边界
+
+- OIDC 已提供 Port、Principal 和租户/权限校验，但真实企业 IdP discovery、JWKS 和 group claim 映射需要按客户环境接入。
+- Vault/KMS Provider 已提供适配接口，生产密钥托管、轮换和密钥策略仍需现场验收。
+- Helm Chart 不内置 PostgreSQL、Temporal、MinIO 或 Valkey，生产使用外部高可用服务。
+- 当前 Compose 用于本地开发、演示和集成测试，不是生产高可用方案。
+- 更细粒度的部门/项目预算和门禁指标增量物化尚未实现。
 
 ---
 

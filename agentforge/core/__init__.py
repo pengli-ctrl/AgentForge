@@ -1,7 +1,4 @@
-"""AgentForge 核心运行时层包初始化。
-
-本模块声明包边界，并保证目录可稳定导入。
-"""
+"""包公共导出。"""
 
 from agentforge.core.agent import AgentResult, BaseAgent, Tool
 from agentforge.core.agent_registry import AgentRegistry

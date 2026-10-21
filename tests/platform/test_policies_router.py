@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_policies_router。
+"""策略路由测试模块。
 
 本测试模块验证 test_policies_router 覆盖的业务路径、边界条件和回归场景。
 
@@ -7,7 +7,8 @@
 - 所有租户相关数据都必须携带 tenant_id 并保持隔离。
 - 关键执行路径应保留日志、审计或链路追踪信息。
 -
-主要函数：test_policies_list_and_revision、test_policies_reload_success_bumps_revision、test_policies_reload_bad_policy_fails_closed_keeps_old、test_policies_reload_bad_body_422。
+主要函数：test_policies_list_and_revision、test_policies_reload_success_bumps_revision、test_policies_r
+    eload_bad_policy_fails_closed_keeps_old、test_policies_reload_bad_body_422。
 """
 
 from __future__ import annotations
@@ -32,11 +33,7 @@ VALID_POLICY = {
 
 @pytest.mark.asyncio
 async def test_policies_list_and_revision() -> None:
-    """验证 policies_list_and_revision 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证策略查询及修订对应的测试场景。"""
     container = build_memory_container()
     app = create_platform_app(container)
     client = TestClient(app)
@@ -55,11 +52,7 @@ async def test_policies_list_and_revision() -> None:
 
 @pytest.mark.asyncio
 async def test_policies_reload_success_bumps_revision() -> None:
-    """验证 policies_reload_success_bumps_revision 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证策略重新加载成功修订对应的测试场景。"""
     container = build_memory_container()
     app = create_platform_app(container)
     client = TestClient(app)
@@ -80,11 +73,7 @@ async def test_policies_reload_success_bumps_revision() -> None:
 
 @pytest.mark.asyncio
 async def test_policies_reload_bad_policy_fails_closed_keeps_old() -> None:
-    """验证 policies_reload_bad_policy_fails_closed_keeps_old 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证策略重新加载异常策略失败已关闭旧对应的测试场景。"""
     container = build_memory_container()
     app = create_platform_app(container)
     client = TestClient(app)
@@ -108,11 +97,7 @@ async def test_policies_reload_bad_policy_fails_closed_keeps_old() -> None:
 
 @pytest.mark.asyncio
 async def test_policies_reload_bad_body_422() -> None:
-    """验证 policies_reload_bad_body_422 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证策略重新加载异常请求体对应的测试场景。"""
     container = build_memory_container()
     app = create_platform_app(container)
     client = TestClient(app)

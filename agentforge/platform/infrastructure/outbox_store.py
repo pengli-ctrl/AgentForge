@@ -1,71 +1,55 @@
-"""AgentForge 平台基础设施层：outbox_store。
-
-本模块实现 outbox_store 的持久化接口，隔离业务逻辑与具体存储细节。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：SQLAlchemyOutboxStore。
-"""
+"""Outbox存储模块。"""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from agentforge.platform.domain.events import EventEnvelope
-from agentforge.platform.infrastructure.db.models import OutboxEventRecord
+from agentforge.platform.infrastructure.db.models import (
+    OutboxEventRecord,
+    OutboxHandlerReceiptRecord,
+)
 
 
 class SQLAlchemyOutboxStore:
-    """SQLAlchemyOutboxStore。
-
-    SQLAlchemyOutboxStore 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - 方法 fetch_pending()。
-    - 方法 mark_published()。
-    - 方法 mark_failed()。
-    - 方法 list_failed()。
-    - 方法 list_events()。
-    - 方法 get_event()。
-    - 方法 count_events()。
-    - 方法 discard()。
-    - 方法 replay()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """Outbox相关组件。"""
 
     def __init__(
         self,
         session_factory: async_sessionmaker[AsyncSession],
         max_attempts: int = 5,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 SQLAlchemyOutboxStore。
 
         Args:
-            session_factory: async_sessionmaker[AsyncSession]，调用方传入的 session_factory 参数。
-            max_attempts: int，调用方传入的 max_attempts 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            session_factory: 数据库会话工厂。
+            max_attempts: 最大。
         """
         self._session_factory = session_factory
         self._max_attempts = max_attempts
 
-    async def fetch_pending(self, limit: int = 100) -> list[EventEnvelope]:
-        """从外部或内部来源获取数据，并返回调用方需要的结果。
+    async def enqueue(self, event: EventEnvelope) -> None:
+        """写入队列Outbox。
 
         Args:
-            limit: int，调用方传入的 limit 参数。
+            event: 待处理事件。
+        """
+        async with self._session_factory() as session:
+            await session.merge(OutboxEventRecord.from_event(event))
+            await session.commit()
+
+    async def fetch_pending(self, limit: int = 100) -> list[EventEnvelope]:
+        """获取待处理。
+
+        Args:
+            limit: 返回记录的最大数量。
 
         Returns:
-            list[EventEnvelope]，函数执行后的结果。
+            结果列表。
         """
         async with self._session_factory() as session:
             statement = (
@@ -78,13 +62,10 @@ class SQLAlchemyOutboxStore:
             return [EventEnvelope.model_validate(record.payload) for record in records]
 
     async def mark_published(self, event_id: str) -> None:
-        """执行 mark_published 对应的逻辑，并返回处理结果。
+        """标记已发布。
 
         Args:
-            event_id: str，调用方传入的 event_id 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            event_id: 事件 ID。
         """
         async with self._session_factory() as session:
             record = await session.get(OutboxEventRecord, event_id)
@@ -95,14 +76,11 @@ class SQLAlchemyOutboxStore:
             await session.commit()
 
     async def mark_failed(self, event_id: str, error: str) -> None:
-        """执行 mark_failed 对应的逻辑，并返回处理结果。
+        """标记失败。
 
         Args:
-            event_id: str，调用方传入的 event_id 参数。
-            error: str，调用方传入的 error 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            event_id: 事件 ID。
+            error: 错误。
         """
         async with self._session_factory() as session:
             record = await session.get(OutboxEventRecord, event_id)
@@ -114,14 +92,99 @@ class SQLAlchemyOutboxStore:
                 record.status = "failed"
             await session.commit()
 
-    async def list_failed(self, limit: int = 100) -> list[dict]:
-        """查询并返回列表结果，并返回调用方需要的结果。
+    async def claim_handler(
+        self,
+        event_id: str,
+        handler_name: str,
+        *,
+        lease_seconds: int = 60,
+    ) -> str:
+        """处理报销单处理器。
 
         Args:
-            limit: int，调用方传入的 limit 参数。
+            event_id: 事件 ID。
+            handler_name: 处理器名称。
+            lease_seconds: 输入参数。
 
         Returns:
-            list[dict]，函数执行后的结果。
+            字符串结果。
+        """
+        now = datetime.now(timezone.utc)
+        async with self._session_factory() as session:
+            record = await session.get(OutboxHandlerReceiptRecord, (event_id, handler_name))
+            if record is None:
+                session.add(
+                    OutboxHandlerReceiptRecord(
+                        event_id=event_id,
+                        handler_name=handler_name,
+                        status="processing",
+                        claimed_at=now,
+                    )
+                )
+                try:
+                    await session.commit()
+                except IntegrityError:
+                    await session.rollback()
+                    return "busy"
+                return "claimed"
+            if record.status == "completed":
+                return "completed"
+            claimed_at = record.claimed_at
+            if claimed_at.tzinfo is None:
+                claimed_at = claimed_at.replace(tzinfo=timezone.utc)
+            lease_start = now - timedelta(seconds=lease_seconds)
+            if record.status == "processing" and claimed_at > lease_start:
+                return "busy"
+            record.status = "processing"
+            record.claimed_at = now
+            record.last_error = None
+            await session.commit()
+            return "claimed"
+
+    async def complete_handler(self, event_id: str, handler_name: str) -> None:
+        """完成处理器。
+
+        Args:
+            event_id: 事件 ID。
+            handler_name: 处理器名称。
+        """
+        async with self._session_factory() as session:
+            record = await session.get(OutboxHandlerReceiptRecord, (event_id, handler_name))
+            if record is None:
+                return
+            record.status = "completed"
+            record.processed_at = datetime.now(timezone.utc)
+            record.last_error = None
+            await session.commit()
+
+    async def release_handler(self, event_id: str, handler_name: str, error: str = "") -> None:
+        """处理释放处理器。
+
+        Args:
+            event_id: 事件 ID。
+            handler_name: 处理器名称。
+            error: 错误。
+        """
+        async with self._session_factory() as session:
+            record = await session.get(OutboxHandlerReceiptRecord, (event_id, handler_name))
+            if record is None or record.status == "completed":
+                return
+            if error:
+                record.status = "failed"
+                record.last_error = error[:2000]
+                await session.commit()
+                return
+            await session.delete(record)
+            await session.commit()
+
+    async def list_failed(self, limit: int = 100) -> list[dict]:
+        """查询失败。
+
+        Args:
+            limit: 返回记录的最大数量。
+
+        Returns:
+            结果列表。
         """
         async with self._session_factory() as session:
             statement = (
@@ -149,16 +212,16 @@ class SQLAlchemyOutboxStore:
         limit: int = 100,
         cursor: str | None = None,
     ) -> tuple[list[dict], str | None]:
-        """查询并返回列表结果，并返回调用方需要的结果。
+        """查询事件。
 
         Args:
-            tenant_id: str | None，调用方传入的 tenant_id 参数。
-            status: str | None，调用方传入的 status 参数。
-            limit: int，调用方传入的 limit 参数。
-            cursor: str | None，调用方传入的 cursor 参数。
+            tenant_id: 租户 ID，用于数据隔离。
+            status: 目标状态。
+            limit: 返回记录的最大数量。
+            cursor: 分页游标。
 
         Returns:
-            tuple[list[dict], str | None]，函数执行后的结果。
+            结果元组。
         """
         async with self._session_factory() as session:
             statement = select(OutboxEventRecord)
@@ -178,14 +241,14 @@ class SQLAlchemyOutboxStore:
             )
 
     async def get_event(self, tenant_id: str | None, event_id: str) -> dict | None:
-        """读取并返回指定数据，并返回调用方需要的结果。
+        """读取事件。
 
         Args:
-            tenant_id: str | None，调用方传入的 tenant_id 参数。
-            event_id: str，调用方传入的 event_id 参数。
+            tenant_id: 租户 ID，用于数据隔离。
+            event_id: 事件 ID。
 
         Returns:
-            dict | None，函数执行后的结果。
+            结构化结果字典。
         """
         async with self._session_factory() as session:
             record = await session.get(OutboxEventRecord, event_id)
@@ -206,13 +269,13 @@ class SQLAlchemyOutboxStore:
             }
 
     async def count_events(self, tenant_id: str | None = None) -> dict[str, int]:
-        """执行 count_events 对应的逻辑，并返回处理结果。
+        """统计事件。
 
         Args:
-            tenant_id: str | None，调用方传入的 tenant_id 参数。
+            tenant_id: 租户 ID，用于数据隔离。
 
         Returns:
-            dict[str, int]，函数执行后的结果。
+            结构化结果字典。
         """
         async with self._session_factory() as session:
             from sqlalchemy import func
@@ -232,14 +295,14 @@ class SQLAlchemyOutboxStore:
             }
 
     async def discard(self, tenant_id: str | None, event_id: str) -> bool:
-        """执行 discard 对应的逻辑，并返回处理结果。
+        """判断丢弃是否成立。
 
         Args:
-            tenant_id: str | None，调用方传入的 tenant_id 参数。
-            event_id: str，调用方传入的 event_id 参数。
+            tenant_id: 租户 ID，用于数据隔离。
+            event_id: 事件 ID。
 
         Returns:
-            bool，函数执行后的结果。
+            操作是否成功。
         """
         async with self._session_factory() as session:
             record = await session.get(OutboxEventRecord, event_id)
@@ -255,13 +318,13 @@ class SQLAlchemyOutboxStore:
 
     @staticmethod
     def _to_summary(record) -> dict:
-        """执行 _to_summary 对应的逻辑，并返回处理结果。
+        """将 Outbox 记录转换为摘要响应。
 
         Args:
-            record: Any，调用方传入的 record 参数。
+            record: 待处理的领域记录。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         return {
             "event_id": record.event_id,
@@ -275,13 +338,13 @@ class SQLAlchemyOutboxStore:
         }
 
     async def replay(self, event_id: str) -> bool:
-        """执行 replay 对应的逻辑，并返回处理结果。
+        """重放Outbox。
 
         Args:
-            event_id: str，调用方传入的 event_id 参数。
+            event_id: 事件 ID。
 
         Returns:
-            bool，函数执行后的结果。
+            操作是否成功。
         """
         async with self._session_factory() as session:
             record = await session.get(OutboxEventRecord, event_id)
@@ -290,5 +353,10 @@ class SQLAlchemyOutboxStore:
             record.status = "pending"
             record.attempts = 0
             record.last_error = None
+            await session.execute(
+                delete(OutboxHandlerReceiptRecord).where(
+                    OutboxHandlerReceiptRecord.event_id == event_id
+                )
+            )
             await session.commit()
             return True

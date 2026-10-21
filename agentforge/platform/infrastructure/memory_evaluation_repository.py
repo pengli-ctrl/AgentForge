@@ -1,13 +1,4 @@
-"""AgentForge 平台基础设施层：memory_evaluation_repository。
-
-本模块提供 memory_evaluation_repository 的内存实现，用于单元测试、本地开发和离线验证。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：MemoryEvaluationRepository。
-"""
+"""记忆评估仓储模块。"""
 
 from __future__ import annotations
 
@@ -15,36 +6,17 @@ from agentforge.platform.domain.evaluation import EvaluationSample
 
 
 class MemoryEvaluationRepository:
-    """MemoryEvaluationRepository。
-
-    MemoryEvaluationRepository 负责数据读写，并确保租户隔离、事务一致性和持久化细节不泄漏到应用层。
-
-    主要成员：
-    - 方法 save()。
-    - 方法 list_samples()。
-    - 方法 summary()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """评估仓储，负责持久化读写。"""
 
     def __init__(self) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """初始化 MemoryEvaluationRepository。"""
         self.samples: list[EvaluationSample] = []
 
     async def save(self, sample: EvaluationSample) -> None:
-        """执行 save 对应的核心操作，并保持调用契约稳定。
+        """保存评估。
 
         Args:
-            sample: EvaluationSample，调用方传入的 sample 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            sample: 评估样本。
         """
         self.samples.append(sample)
 
@@ -54,15 +26,15 @@ class MemoryEvaluationRepository:
         limit: int = 100,
         action: str | None = None,
     ) -> list[EvaluationSample]:
-        """查询并返回列表结果，并返回调用方需要的结果。
+        """查询样本。
 
         Args:
-            tenant_id: str，调用方传入的 tenant_id 参数。
-            limit: int，调用方传入的 limit 参数。
-            action: str | None，调用方传入的 action 参数。
+            tenant_id: 租户 ID，用于数据隔离。
+            limit: 返回记录的最大数量。
+            action: 待执行动作名称。
 
         Returns:
-            list[EvaluationSample]，函数执行后的结果。
+            结果列表。
         """
         samples = [
             sample
@@ -72,13 +44,13 @@ class MemoryEvaluationRepository:
         return sorted(samples, key=lambda sample: sample.created_at, reverse=True)[:limit]
 
     async def summary(self, tenant_id: str) -> dict:
-        """执行 summary 对应的逻辑，并返回处理结果。
+        """处理摘要。
 
         Args:
-            tenant_id: str，调用方传入的 tenant_id 参数。
+            tenant_id: 租户 ID，用于数据隔离。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         samples = [sample for sample in self.samples if sample.tenant_id == tenant_id]
         counts = {
@@ -90,15 +62,15 @@ class MemoryEvaluationRepository:
 
     @staticmethod
     def _summary(tenant_id: str, sample_count: int, counts: dict[str, int]) -> dict:
-        """执行 _summary 对应的逻辑，并返回处理结果。
+        """处理摘要。
 
         Args:
-            tenant_id: str，调用方传入的 tenant_id 参数。
-            sample_count: int，调用方传入的 sample_count 参数。
-            counts: dict[str, int]，调用方传入的 counts 参数。
+            tenant_id: 租户 ID，用于数据隔离。
+            sample_count: 样本数量。
+            counts: 输入参数。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         denominator = sample_count or 1
         return {

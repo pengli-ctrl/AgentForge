@@ -1,12 +1,4 @@
-"""P1-1 压测 · 平台应用启动模块（内存容器 + 预置数据，不依赖任何外部服务）。
-
-同时支持 uvicorn 两种加载方式：
-  single / default : ``uvicorn bench.platform_bench_app:app``
-  multi-worker     : ``uvicorn bench.platform_bench_app:create_bench_app --factory --workers N``
-
-数据全部落在内存 repo，保证可复现、可上 GitHub、无外部依赖。
-构建用「独立事件循环」执行，避免 Windows spawn 子进程 + asyncio.run 冲突。
-"""
+"""平台应用模块。"""
 
 from __future__ import annotations
 
@@ -22,20 +14,24 @@ from agentforge.platform.runtime import build_memory_container
 
 
 def _day(offset: int) -> datetime.datetime:
-    """执行 _day 对应的逻辑，并返回处理结果。
+    """返回相对当前 UTC 日期偏移后的日期边界。
 
     Args:
-        offset: int，调用方传入的 offset 参数。
+        offset: 分页偏移量。
 
     Returns:
-        datetime.datetime，函数执行后的结果。
+        处理结果对象。
     """
     d = datetime.datetime.now(datetime.timezone.utc)
     return d - datetime.timedelta(days=offset)
 
 
 async def seed(container) -> None:
-    """预置少量真实数据，让 /v1/console/* 与 /v1/costs/* 返回非空结果。"""
+    """初始化初始数据。
+
+    Args:
+        container: 服务容器。
+    """
     await seed_rbac(container.rbac_repository)
     await seed_rbac(container.high_risk_authorizer._rbac_repository)
 
@@ -64,10 +60,10 @@ async def seed(container) -> None:
 
 
 async def _build():
-    """执行 _build 对应的逻辑，并返回处理结果。
+    """构建对象。
 
     Returns:
-        None，函数执行后的结果。
+        处理结果。
     """
     container = build_memory_container(
         authenticator=ApiKeyAuthenticator(enabled=False),
@@ -79,23 +75,21 @@ async def _build():
 def _run(coro):
     """在独立线程的专用事件循环里执行协程。
 
-    规避两个坑：
-    - uvicorn --workers 在 Windows 用 spawn 起子进程，导入本模块时主线程已在运行
-      事件循环，任何在同一线程再跑 loop 都会触发
-      ``Cannot run the event loop while another loop is running``。
-    - 将 async 构建放在独立线程 + 独立 loop，通过 run_coroutine_threadsafe 取结果，
-      与 uvicorn 的事件循环彻底隔离。
+    Args:
+        coro: 输入参数。
+
+    Returns:
+        处理结果。
+
+    Raises:
+        result['error']: 操作无法完成时抛出。
     """
     import threading
 
     result: dict = {}
 
     def _target():
-        """执行 _target 对应的逻辑，并返回处理结果。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """处理目标。"""
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
@@ -114,7 +108,11 @@ def _run(coro):
 
 
 def create_bench_app():
-    """uvicorn --factory 入口：每次调用独立构建（支持 --workers）。"""
+    """创建应用。
+
+    Returns:
+        处理结果。
+    """
     return _run(_build())
 
 

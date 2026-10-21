@@ -23,15 +23,19 @@ class TestConditionParser:
 
     @pytest.fixture
     def parser(self) -> ConditionParser:
-        """执行 parser 对应的逻辑，并返回处理结果。
+        """处理解析器。
 
         Returns:
-            ConditionParser，函数执行后的结果。
+            解析器结果。
         """
         return ConditionParser()
 
     def test_equal_string(self, parser: ConditionParser) -> None:
-        """等于比较（字符串）。"""
+        """等于比较（字符串）。
+
+        Args:
+            parser: 解析器实例。
+        """
         assert (
             parser.evaluate("result.severity == 'critical'", {"result": {"severity": "critical"}})
             is True
@@ -42,22 +46,38 @@ class TestConditionParser:
         )
 
     def test_equal_number(self, parser: ConditionParser) -> None:
-        """等于比较（数字）。"""
+        """等于比较（数字）。
+
+        Args:
+            parser: 解析器实例。
+        """
         assert parser.evaluate("result.count == 5", {"result": {"count": 5}}) is True
         assert parser.evaluate("result.count == 5", {"result": {"count": 3}}) is False
 
     def test_less_than(self, parser: ConditionParser) -> None:
-        """小于比较。"""
+        """小于比较。
+
+        Args:
+            parser: 解析器实例。
+        """
         assert parser.evaluate("result.pass_rate < 0.8", {"result": {"pass_rate": 0.6}}) is True
         assert parser.evaluate("result.pass_rate < 0.8", {"result": {"pass_rate": 0.9}}) is False
 
     def test_greater_than(self, parser: ConditionParser) -> None:
-        """大于比较。"""
+        """大于比较。
+
+        Args:
+            parser: 解析器实例。
+        """
         assert parser.evaluate("result.score > 80", {"result": {"score": 90}}) is True
         assert parser.evaluate("result.score > 80", {"result": {"score": 70}}) is False
 
     def test_not_equal(self, parser: ConditionParser) -> None:
-        """不等于比较。"""
+        """不等于比较。
+
+        Args:
+            parser: 解析器实例。
+        """
         assert (
             parser.evaluate("result.status != 'failed'", {"result": {"status": "success"}}) is True
         )
@@ -66,12 +86,20 @@ class TestConditionParser:
         )
 
     def test_default_condition(self, parser: ConditionParser) -> None:
-        """default 条件始终为 True。"""
+        """验证默认对应的测试场景。
+
+        Args:
+            parser: 解析器实例。
+        """
         assert parser.evaluate("default", {}) is True
         assert parser.evaluate("default", {"result": {}}) is True
 
     def test_boolean_check(self, parser: ConditionParser) -> None:
-        """布尔检查（只有路径没有操作符）。"""
+        """布尔检查（只有路径没有操作符）。
+
+        Args:
+            parser: 解析器实例。
+        """
         assert (
             parser.evaluate("result.has_vulnerabilities", {"result": {"has_vulnerabilities": True}})
             is True
@@ -85,17 +113,29 @@ class TestConditionParser:
         assert parser.evaluate("result.has_vulnerabilities", {"result": {}}) is False
 
     def test_greater_equal(self, parser: ConditionParser) -> None:
-        """大于等于比较。"""
+        """大于等于比较。
+
+        Args:
+            parser: 解析器实例。
+        """
         assert parser.evaluate("result.count >= 5", {"result": {"count": 5}}) is True
         assert parser.evaluate("result.count >= 5", {"result": {"count": 4}}) is False
 
     def test_less_equal(self, parser: ConditionParser) -> None:
-        """小于等于比较。"""
+        """小于等于比较。
+
+        Args:
+            parser: 解析器实例。
+        """
         assert parser.evaluate("result.count <= 5", {"result": {"count": 5}}) is True
         assert parser.evaluate("result.count <= 5", {"result": {"count": 6}}) is False
 
     def test_nested_path(self, parser: ConditionParser) -> None:
-        """嵌套路径解析。"""
+        """嵌套路径解析。
+
+        Args:
+            parser: 解析器实例。
+        """
         context = {"result": {"details": {"level": "critical"}}}
         assert parser.evaluate("result.details.level == 'critical'", context) is True
 
@@ -105,7 +145,11 @@ class TestWorkflowEngine:
 
     @pytest.fixture
     def config_dir(self) -> str:
-        """获取工作流配置目录。"""
+        """获取工作流配置目录。
+
+        Returns:
+            字符串结果。
+        """
         return os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
             "configs",
@@ -114,16 +158,32 @@ class TestWorkflowEngine:
 
     @pytest.fixture
     def registry(self) -> AgentRegistry:
-        """Agent 注册表。"""
+        """Agent 注册表。
+
+        Returns:
+            智能体注册表结果。
+        """
         return AgentRegistry()
 
     @pytest.fixture
     def engine(self, registry: AgentRegistry, config_dir: str) -> WorkflowEngine:
-        """工作流引擎。"""
+        """工作流引擎。
+
+        Args:
+            registry: 注册表实例。
+            config_dir: 配置。
+
+        Returns:
+            工作流引擎结果。
+        """
         return WorkflowEngine(registry=registry, config_dir=config_dir)
 
     def test_load_workflow(self, engine: WorkflowEngine) -> None:
-        """加载工作流 YAML。"""
+        """加载工作流 YAML。
+
+        Args:
+            engine: 执行引擎实例。
+        """
         workflow = engine.load("code-review-pipeline")
 
         assert workflow.name == "code-review-pipeline"
@@ -133,14 +193,22 @@ class TestWorkflowEngine:
         assert "doc-generator" in workflow.step_map
 
     def test_load_security_workflow(self, engine: WorkflowEngine) -> None:
-        """加载安全审查工作流。"""
+        """加载安全审查工作流。
+
+        Args:
+            engine: 执行引擎实例。
+        """
         workflow = engine.load("security-review-pipeline")
 
         assert workflow.name == "security-review-pipeline"
         assert "security-scan" in workflow.step_map
 
     def test_get_next_agent_default(self, engine: WorkflowEngine) -> None:
-        """默认路由 — 条件不匹配时走 default。"""
+        """验证获取下一个智能体默认对应的测试场景。
+
+        Args:
+            engine: 执行引擎实例。
+        """
         workflow = engine.load("code-review-pipeline")
 
         next_agent = engine.get_next_agent(
@@ -152,7 +220,11 @@ class TestWorkflowEngine:
         assert next_agent == "test-execution"
 
     def test_get_next_agent_critical(self, engine: WorkflowEngine) -> None:
-        """critical 路由 — 发现安全问题先跑安全扫描。"""
+        """验证获取下一个智能体对应的测试场景。
+
+        Args:
+            engine: 执行引擎实例。
+        """
         workflow = engine.load("code-review-pipeline")
 
         next_agent = engine.get_next_agent(
@@ -164,31 +236,43 @@ class TestWorkflowEngine:
         assert next_agent == "security-scan"
 
     def test_get_next_agent_test_fail(self, engine: WorkflowEngine) -> None:
-        """测试不通过路由回代码审查。"""
+        """测试不通过路由回代码审查。
+
+        Args:
+            engine: 执行引擎实例。
+        """
         workflow = engine.load("code-review-pipeline")
 
         next_agent = engine.get_next_agent(
             workflow,
             "test-execution",
-            {"pass_rate": 0.6},  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+            {"pass_rate": 0.6},
         )
 
         assert next_agent == "code-review"
 
     def test_get_next_agent_test_pass(self, engine: WorkflowEngine) -> None:
-        """测试通过路由到文档生成。"""
+        """测试通过路由到文档生成。
+
+        Args:
+            engine: 执行引擎实例。
+        """
         workflow = engine.load("code-review-pipeline")
 
         next_agent = engine.get_next_agent(
             workflow,
             "test-execution",
-            {"pass_rate": 0.95},  # 说明：该步骤用于实现上述逻辑并保证行为稳定。
+            {"pass_rate": 0.95},
         )
 
         assert next_agent == "doc-generator"
 
     def test_get_next_agent_complete(self, engine: WorkflowEngine) -> None:
-        """文档生成完成路由到 complete。"""
+        """验证获取下一个智能体完成对应的测试场景。
+
+        Args:
+            engine: 执行引擎实例。
+        """
         workflow = engine.load("code-review-pipeline")
 
         next_agent = engine.get_next_agent(
@@ -200,7 +284,11 @@ class TestWorkflowEngine:
         assert next_agent == "complete"
 
     def test_get_next_agent_security_vulnerabilities(self, engine: WorkflowEngine) -> None:
-        """安全扫描发现漏洞路由回代码审查。"""
+        """安全扫描发现漏洞路由回代码审查。
+
+        Args:
+            engine: 执行引擎实例。
+        """
         workflow = engine.load("code-review-pipeline")
 
         next_agent = engine.get_next_agent(
@@ -212,7 +300,11 @@ class TestWorkflowEngine:
         assert next_agent == "code-review"
 
     def test_list_workflows(self, engine: WorkflowEngine) -> None:
-        """列出已加载的工作流。"""
+        """列出已加载的工作流。
+
+        Args:
+            engine: 执行引擎实例。
+        """
         engine.load("code-review-pipeline")
         engine.load("security-review-pipeline")
 

@@ -11,7 +11,7 @@ assignees: ''
 - AgentForge version: 
 - Python version: 
 - OS: 
-- Deployment method: [ ] Docker Compose [ ] Manual [ ] Other
+- Deployment method: [ ] Docker Compose Lite [ ] Docker Compose Platform [ ] Helm/Kubernetes [ ] Manual [ ] Other
 - LLM backend: 
 
 ## Reproduction Steps

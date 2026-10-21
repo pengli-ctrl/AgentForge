@@ -49,3 +49,9 @@ docker-compose.override.yml
 
 # Config (keep examples, ignore local overrides)
 configs/local/
+
+# Local scratch space
+work/
+
+# Generated benchmark evidence
+bench/results_*.json

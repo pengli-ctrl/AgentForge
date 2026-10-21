@@ -1,8 +1,4 @@
-"""指标暴露接口 — Prometheus 格式的指标暴露。
-
-API 端点：
-    GET /metrics — Prometheus 格式的指标数据
-"""
+"""指标模块。"""
 
 from __future__ import annotations
 
@@ -15,30 +11,21 @@ logger = logging.getLogger(__name__)
 
 
 class MetricsRoutes:
-    """指标暴露路由处理器。
-
-    封装 Prometheus 指标的 HTTP 暴露逻辑。
-
-    Args:
-        metrics: MetricsCollector 实例（不传则使用全局单例）。
-    """
+    """指标暴露路由处理器。"""
 
     def __init__(self, metrics: MetricsCollector | None = None) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 MetricsRoutes。
 
         Args:
-            metrics: MetricsCollector | None，调用方传入的 metrics 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            metrics: 指标。
         """
         self.metrics = metrics or get_metrics_collector()
 
     async def get_metrics(self) -> str:
-        """获取 Prometheus 格式的指标数据。
+        """读取指标。
 
         Returns:
-            Prometheus 格式的指标文本。
+            字符串结果。
         """
         return self.metrics.generate_metrics()
 
@@ -46,7 +33,7 @@ class MetricsRoutes:
         """获取指标信息摘要。
 
         Returns:
-            包含指标名称和描述的字典。
+            结构化结果字典。
         """
         return {
             "metrics_endpoint": "/metrics",

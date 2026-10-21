@@ -1,13 +1,4 @@
-"""AgentForge 平台领域模型层：reporting。
-
-本模块定义 reporting 领域模型，约束业务状态、输入输出结构和跨层数据契约。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：ReportType、ReportFormat、OperationsReport、ScheduledReport、ReportRun。
-"""
+"""报告模块。"""
 
 from __future__ import annotations
 
@@ -21,19 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ReportType(str, Enum):
-    """ReportType。
-
-    ReportType 是状态或类型枚举，用于约束系统内部取值，避免使用散落的字符串常量。
-
-    主要成员：
-    - COST: 'cost'。
-    - AUDIT: 'audit'。
-    - QUALITY: 'quality'。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """报告枚举。"""
 
     COST = "cost"
     AUDIT = "audit"
@@ -41,44 +20,24 @@ class ReportType(str, Enum):
 
 
 class ReportFormat(str, Enum):
-    """ReportFormat。
-
-    ReportFormat 是状态或类型枚举，用于约束系统内部取值，避免使用散落的字符串常量。
-
-    主要成员：
-    - JSON: 'json'。
-    - CSV: 'csv'。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """报告格式化枚举。"""
 
     JSON = "json"
     CSV = "csv"
 
 
 class OperationsReport(BaseModel):
-    """OperationsReport。
+    """操作报告相关组件。
 
-    OperationsReport 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - report_id: str。
-    - tenant_id: str。
-    - report_type: ReportType。
-    - format: ReportFormat。
-    - rows: list[dict[str, Any]]。
-    - summary: dict[str, Any]。
-    - generated_at: datetime。
-    - scheduled_report_id: str | None。
-    - 方法 to_json()。
-    - 方法 to_csv()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        report_id: 报告ID。
+        tenant_id: 租户 ID，用于数据隔离。
+        report_type: 报告。
+        format: 格式化。
+        rows: 字段值。
+        summary: 摘要。
+        generated_at: 于。
+        scheduled_report_id: 报告ID。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -93,10 +52,10 @@ class OperationsReport(BaseModel):
     scheduled_report_id: str | None = None
 
     def to_json(self) -> str:
-        """执行 to_json 对应的逻辑，并返回处理结果。
+        """转换JSON。
 
         Returns:
-            str，函数执行后的结果。
+            字符串结果。
         """
         return json.dumps(
             {
@@ -111,10 +70,10 @@ class OperationsReport(BaseModel):
         )
 
     def to_csv(self) -> str:
-        """执行 to_csv 对应的逻辑，并返回处理结果。
+        """处理到CSV。
 
         Returns:
-            str，函数执行后的结果。
+            字符串结果。
         """
         import csv
         import io
@@ -131,13 +90,13 @@ class OperationsReport(BaseModel):
 
 
 def _json_default(value: Any) -> Any:
-    """执行 _json_default 对应的逻辑，并返回处理结果。
+    """处理JSON默认。
 
     Args:
-        value: Any，调用方传入的 value 参数。
+        value: 待处理值。
 
     Returns:
-        Any，函数执行后的结果。
+        处理结果对象。
     """
     if isinstance(value, datetime):
         return value.isoformat()
@@ -147,13 +106,13 @@ def _json_default(value: Any) -> Any:
 
 
 def _csv_val(value: Any) -> Any:
-    """执行 _csv_val 对应的逻辑，并返回处理结果。
+    """处理CSV。
 
     Args:
-        value: Any，调用方传入的 value 参数。
+        value: 待处理值。
 
     Returns:
-        Any，函数执行后的结果。
+        处理结果对象。
     """
     if isinstance(value, (datetime, Enum)):
         return _json_default(value)
@@ -161,25 +120,18 @@ def _csv_val(value: Any) -> Any:
 
 
 class ScheduledReport(BaseModel):
-    """ScheduledReport。
+    """报告相关组件。
 
-    ScheduledReport 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - report_id: str。
-    - tenant_id: str。
-    - report_type: ReportType。
-    - cadence: str。
-    - enabled: bool。
-    - retention_days: int | None。
-    - created_at: datetime。
-    - last_run_at: datetime | None。
-    - next_run_at: datetime。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        report_id: 报告ID。
+        tenant_id: 租户 ID，用于数据隔离。
+        report_type: 报告。
+        cadence: 周期。
+        enabled: 是否启用。
+        retention_days: 保留。
+        created_at: 创建时间。
+        last_run_at: 运行于。
+        next_run_at: 下一个运行于。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -187,37 +139,27 @@ class ScheduledReport(BaseModel):
     report_id: str
     tenant_id: str
     report_type: ReportType
-    cadence: str = "daily"  # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
+    cadence: str = "daily"
     enabled: bool = True
-    retention_days: int | None = None  # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
+    retention_days: int | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_run_at: datetime | None = None
     next_run_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class ReportRun(BaseModel):
-    """ReportRun。
+    """报告运行相关组件。
 
-    ReportRun 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - run_id: str。
-    - tenant_id: str。
-    - report_type: ReportType。
-    - format: ReportFormat。
-    - rows: list[dict[str, Any]]。
-    - summary: dict[str, Any]。
-    - generated_at: datetime。
-    - scheduled_report_id: str | None。
-    - archived: bool。
-    - 方法 from_operations()。
-    - 方法 to_json()。
-    - 方法 to_csv()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        run_id: 运行ID。
+        tenant_id: 租户 ID，用于数据隔离。
+        report_type: 报告。
+        format: 格式化。
+        rows: 字段值。
+        summary: 摘要。
+        generated_at: 于。
+        scheduled_report_id: 报告ID。
+        archived: 已归档。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -238,14 +180,14 @@ class ReportRun(BaseModel):
         report: OperationsReport,
         run_id: str | None = None,
     ) -> "ReportRun":
-        """执行 from_operations 对应的逻辑，并返回处理结果。
+        """从操作构造当前对象。
 
         Args:
-            report: OperationsReport，调用方传入的 report 参数。
-            run_id: str | None，调用方传入的 run_id 参数。
+            report: 报告。
+            run_id: 运行记录 ID。
 
         Returns:
-            'ReportRun'，函数执行后的结果。
+            处理结果对象。
         """
         return cls(
             run_id=run_id or report.report_id,
@@ -259,10 +201,10 @@ class ReportRun(BaseModel):
         )
 
     def to_json(self) -> str:
-        """执行 to_json 对应的逻辑，并返回处理结果。
+        """转换JSON。
 
         Returns:
-            str，函数执行后的结果。
+            字符串结果。
         """
         return json.dumps(
             {
@@ -278,10 +220,10 @@ class ReportRun(BaseModel):
         )
 
     def to_csv(self) -> str:
-        """执行 to_csv 对应的逻辑，并返回处理结果。
+        """处理到CSV。
 
         Returns:
-            str，函数执行后的结果。
+            字符串结果。
         """
         import csv
         import io
@@ -298,27 +240,27 @@ class ReportRun(BaseModel):
 
 
 def _encode_run_cursor(generated_at, run_id):
-    """执行 _encode_run_cursor 对应的逻辑，并返回处理结果。
+    """编码运行游标。
 
     Args:
-        generated_at: Any，调用方传入的 generated_at 参数。
-        run_id: Any，调用方传入的 run_id 参数。
+        generated_at: 生成时间。
+        run_id: 运行记录 ID。
 
     Returns:
-        None，函数执行后的结果。
+        处理结果。
     """
     raw = generated_at.isoformat() + "|" + run_id
     return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii")
 
 
 def _decode_run_cursor(cursor):
-    """执行 _decode_run_cursor 对应的逻辑，并返回处理结果。
+    """解码运行游标。
 
     Args:
-        cursor: Any，调用方传入的 cursor 参数。
+        cursor: 分页游标。
 
     Returns:
-        None，函数执行后的结果。
+        处理结果。
     """
     if not cursor:
         return None

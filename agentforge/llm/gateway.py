@@ -1,16 +1,4 @@
-"""
-LLM Gateway — LLM 推理服务的抽象封装。
-
-封装 vLLM 推理接口，提供统一的 LLM 调用接口。
-Agent 和工具通过 LLMGateway 调用 LLM，不直接依赖具体推理框架。
-
-核心设计：
-- 统一接口：无论后端是 vLLM、OpenAI API 还是本地模型，接口一致
-- 异步调用：所有 LLM 请求都是异步的
-- 工具调用支持：支持 function calling / tool calling
-- 超时控制：每次调用都有硬性超时
-- 重试机制：对 5xx 和连接错误自动重试，指数退避
-"""
+"""网关模块。"""
 
 from __future__ import annotations
 
@@ -42,8 +30,8 @@ class ToolCall:
     """LLM 请求执行的工具调用。
 
     Attributes:
-        name: 工具名称。
-        arguments: 工具参数。
+        name: 名称。
+        arguments: 参数。
     """
 
     name: str
@@ -55,12 +43,12 @@ class LLMResponse:
     """LLM 响应的标准化格式。
 
     Attributes:
-        content: LLM 生成的文本内容。
-        tool_calls: LLM 请求执行的工具调用列表。
-        has_tool_calls: 是否包含工具调用。
-        usage: token 使用量统计。
-        model: 使用的模型名称。
-        latency: 响应延迟（秒）。
+        content: 写入内容。
+        tool_calls: 工具调用。
+        has_tool_calls: 具有工具调用。
+        usage: 用量。
+        model: 模型。
+        latency: 延迟。
     """
 
     content: str = ""
@@ -72,19 +60,7 @@ class LLMResponse:
 
 
 class LLMGateway(ABC):
-    """LLM 网关抽象基类 — 统一 LLM 调用接口。
-
-    无论后端是 vLLM 私有化部署、OpenAI API 还是本地模型，
-    Agent 和工具都通过此接口调用 LLM。
-
-    实现类需要实现 chat 方法，处理具体的 LLM 调用逻辑。
-
-    Args:
-        model: 模型名称。
-        max_tokens: 单次生成的最大 token 数。
-        timeout: 请求超时时间（秒）。
-        temperature: 采样温度。
-    """
+    """LLM 网关抽象基类 — 统一 LLM 调用接口。"""
 
     def __init__(
         self,
@@ -93,16 +69,13 @@ class LLMGateway(ABC):
         timeout: float = 30.0,
         temperature: float = 0.7,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 LLMGateway。
 
         Args:
-            model: str，调用方传入的 model 参数。
-            max_tokens: int，调用方传入的 max_tokens 参数。
-            timeout: float，调用方传入的 timeout 参数。
-            temperature: float，调用方传入的 temperature 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            model: 模型标识或模型对象。
+            max_tokens: 生成结果允许使用的最大 Token 数。
+            timeout: 操作超时时间。
+            temperature: 模型采样温度。
         """
         self.model = model
         self.max_tokens = max_tokens
@@ -120,13 +93,13 @@ class LLMGateway(ABC):
         """调用 LLM 进行对话。
 
         Args:
-            messages: 消息列表或纯文本 Prompt。
-            tools: 可用工具的 JSON Schema 列表（function calling）。
-            max_tokens: 单次生成的最大 token 数（覆盖默认值）。
-            temperature: 采样温度（覆盖默认值）。
+            messages: 消息列表。
+            tools: 可供模型调用的工具定义。
+            max_tokens: 生成结果允许使用的最大 Token 数。
+            temperature: 模型采样温度。
 
         Returns:
-            标准化的 LLM 响应。
+            LLM 响应对象。
         """
         ...
 
@@ -134,7 +107,7 @@ class LLMGateway(ABC):
         """检查 LLM 服务是否可用。
 
         Returns:
-            服务是否可用。
+            操作是否成功。
         """
         try:
             response = await self.chat("ping", max_tokens=10)
@@ -145,26 +118,7 @@ class LLMGateway(ABC):
 
 
 class VLLMGateway(LLMGateway):
-    """vLLM 推理服务的 Gateway 实现。
-
-    封装 vLLM 的 OpenAI 兼容 API 接口，用于私有化部署场景。
-    使用 httpx.AsyncClient 发送异步 HTTP 请求，支持超时控制和自动重试。
-
-    重试策略：
-    - 最多重试 3 次（共 4 次尝试）
-    - 指数退避：1s → 2s → 4s
-    - 仅对 5xx 服务端错误和连接错误重试
-    - 4xx 客户端错误不重试（请求格式或认证问题）
-
-    Args:
-        endpoint: vLLM 服务的 API 端点。
-        model: 模型名称。
-        api_key: API 密钥（如果需要）。
-        max_tokens: 单次生成的最大 token 数。
-        timeout: 请求超时时间（秒）。
-        temperature: 采样温度。
-        _transport: httpx transport（用于测试注入 MockTransport）。
-    """
+    """VLLM 网关抽象。"""
 
     def __init__(
         self,
@@ -176,19 +130,16 @@ class VLLMGateway(LLMGateway):
         temperature: float = 0.7,
         _transport: Any = None,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 VLLMGateway。
 
         Args:
-            endpoint: str，调用方传入的 endpoint 参数。
-            model: str，调用方传入的 model 参数。
-            api_key: str，调用方传入的 api_key 参数。
-            max_tokens: int，调用方传入的 max_tokens 参数。
-            timeout: float，调用方传入的 timeout 参数。
-            temperature: float，调用方传入的 temperature 参数。
-            _transport: Any，调用方传入的 _transport 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            endpoint: 端点。
+            model: 模型标识或模型对象。
+            api_key: API键。
+            max_tokens: 生成结果允许使用的最大 Token 数。
+            timeout: 操作超时时间。
+            temperature: 模型采样温度。
+            _transport: 传输层。
         """
         super().__init__(model, max_tokens, timeout, temperature)
         self.endpoint = endpoint
@@ -202,26 +153,21 @@ class VLLMGateway(LLMGateway):
         max_tokens: int | None = None,
         temperature: float | None = None,
     ) -> LLMResponse:
-        """通过 vLLM 的 OpenAI 兼容 API 调用 LLM。
-
-        使用 httpx.AsyncClient 发送 POST 请求到 {endpoint}/chat/completions，
-        遵循 OpenAI API 请求/响应格式。支持自动重试和超时控制。
-
-        如果 httpx 未安装，降级为返回空响应（不阻断调用方流程）。
+        """发送VLLM 网关。
 
         Args:
-            messages: 消息列表或纯文本 Prompt。
-            tools: 可用工具的 JSON Schema 列表。
-            max_tokens: 单次生成的最大 token 数。
-            temperature: 采样温度。
+            messages: 消息列表。
+            tools: 可供模型调用的工具定义。
+            max_tokens: 生成结果允许使用的最大 Token 数。
+            temperature: 模型采样温度。
 
         Returns:
-            标准化的 LLM 响应。
+            LLM 响应对象。
 
         Raises:
-            LLMAPIError: 4xx 客户端错误（不重试）。
-            LLMServiceUnavailable: 5xx 服务端错误，重试后仍失败。
-            LLMConnectionError: 连接错误，重试后仍失败。
+            LLMAPIError: 操作无法完成时抛出。
+            LLMServiceUnavailable: 操作无法完成时抛出。
+            LLMConnectionError: 操作无法完成时抛出。
         """
         # 规范化消息格式
         if isinstance(messages, str):
@@ -323,15 +269,13 @@ class VLLMGateway(LLMGateway):
         return LLMResponse(content="", model=self.model, usage={})
 
     def _parse_vllm_response(self, data: dict[str, Any]) -> LLMResponse:
-        """解析 vLLM OpenAI 兼容 API 的响应。
-
-        从响应 JSON 中提取 content、tool_calls 和 usage。
+        """解析VLLM响应。
 
         Args:
-            data: vLLM API 返回的 JSON 数据。
+            data: 待处理数据。
 
         Returns:
-            标准化的 LLMResponse 对象。
+            处理结果对象。
         """
         choices = data.get("choices", [])
         choice = choices[0] if choices else {}

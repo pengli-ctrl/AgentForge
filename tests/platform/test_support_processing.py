@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_support_processing。
+"""客服处理测试模块。
 
 本测试模块验证 test_support_processing 覆盖的业务路径、边界条件和回归场景。
 
@@ -8,30 +8,29 @@
 - 关键执行路径应保留日志、审计或链路追踪信息。
 - 主要类：BadCitationGateway。
 -
-主要函数：test_processing_service_creates_cited_draft、test_processing_service_escalates_without_knowledge、test_processing_service_rejects_invalid_citations。
+主要函数：test_processing_service_creates_cited_draft、test_processing_service_escalates_without_knowl
+    edge、test_processing_service_rejects_invalid_citations。
 """
 
 import pytest
 
 from agentforge.platform.domain.model import ModelResponse
-from agentforge.platform.domain.ticket import TicketStatus
+from agentforge.platform.modules.support.domain.ticket import TicketStatus
 from agentforge.platform.runtime import build_memory_container
+from tests.platform.support_fixtures import configure_memory_support
 
 
 @pytest.mark.asyncio
 async def test_processing_service_creates_cited_draft() -> None:
-    """验证 processing_service_creates_cited_draft 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证处理服务创建引用草稿对应的测试场景。"""
     container = build_memory_container()
+    support = configure_memory_support(container)
     await container.knowledge_service.ingest_document(
         tenant_id="tenant-1",
         title="Product usage",
         content="How to use this product: open the dashboard and follow the setup guide.",
     )
-    ticket = await container.processing_service.process_event(
+    ticket = await support.processing_service.process_event(
         {
             "tenant_id": "tenant-1",
             "source": "feishu",
@@ -46,13 +45,10 @@ async def test_processing_service_creates_cited_draft() -> None:
 
 @pytest.mark.asyncio
 async def test_processing_service_escalates_without_knowledge() -> None:
-    """验证 processing_service_escalates_without_knowledge 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证处理服务升级不包含知识对应的测试场景。"""
     container = build_memory_container()
-    ticket = await container.processing_service.process_event(
+    support = configure_memory_support(container)
+    ticket = await support.processing_service.process_event(
         {
             "tenant_id": "tenant-1",
             "source": "feishu",
@@ -65,26 +61,16 @@ async def test_processing_service_escalates_without_knowledge() -> None:
 
 
 class BadCitationGateway:
-    """BadCitationGateway。
-
-    BadCitationGateway 封装外部系统或基础设施协议，向上提供稳定、可测试的接口。
-
-    主要成员：
-    - 方法 complete()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """异常引用网关抽象。"""
 
     async def complete(self, request):
-        """执行 complete 对应的逻辑，并返回处理结果。
+        """完成异常引用。
 
         Args:
-            request: Any，调用方传入的 request 参数。
+            request: 当前 HTTP 请求。
 
         Returns:
-            None，函数执行后的结果。
+            处理结果。
         """
         return ModelResponse(
             content="Unsupported answer",
@@ -96,18 +82,15 @@ class BadCitationGateway:
 
 @pytest.mark.asyncio
 async def test_processing_service_rejects_invalid_citations() -> None:
-    """验证 processing_service_rejects_invalid_citations 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证处理服务拒绝无效引用对应的测试场景。"""
     container = build_memory_container(model_gateway=BadCitationGateway())
+    support = configure_memory_support(container)
     await container.knowledge_service.ingest_document(
         tenant_id="tenant-1",
         title="Refund policy",
         content="Refunds are available within seven days for product issues.",
     )
-    ticket = await container.processing_service.process_event(
+    ticket = await support.processing_service.process_event(
         {
             "tenant_id": "tenant-1",
             "source": "feishu",

@@ -1,13 +1,4 @@
-"""P1-1 压测 · 一键运行器（多进程负载生成，规避客户端单进程瓶颈）。
-
-流程：
-1. 用 uvicorn 启动 bench 应用（内存容器 + 预置数据，关闭鉴权）到 PORT。
-2. 等待 /health/ready。
-3. 对三个代表性端点各跑一遍多进程并发梯度（吞吐 + 延迟分位）。
-4. 原始数据落 bench/results_*.json，并打印汇总表供写报告。
-
-无需任何外部压测工具（k6/locust）。
-"""
+"""运行模块。"""
 
 from __future__ import annotations
 
@@ -34,13 +25,13 @@ ENDPOINTS = ["health", "overview", "dashboard"]
 
 
 def wait_ready(timeout: float = 60.0) -> bool:
-    """执行 wait_ready 对应的逻辑，并返回处理结果。
+    """等待就绪。
 
     Args:
-        timeout: float，调用方传入的 timeout 参数。
+        timeout: 操作超时时间。
 
     Returns:
-        bool，函数执行后的结果。
+        操作是否成功。
     """
     t0 = time.time()
     while time.time() - t0 < timeout:
@@ -55,11 +46,7 @@ def wait_ready(timeout: float = 60.0) -> bool:
 
 
 def main() -> None:
-    """作为程序入口，解析参数并启动对应流程。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """执行主流程。"""
     print(f"[1/4] 启动 uvicorn ({PORT}) ...")
     proc = subprocess.Popen(
         [

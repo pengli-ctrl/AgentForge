@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_connector。
+"""连接器测试模块。
 
 本测试模块验证 test_connector 覆盖的业务路径、边界条件和回归场景。
 
@@ -7,7 +7,10 @@
 - 所有租户相关数据都必须携带 tenant_id 并保持隔离。
 - 关键执行路径应保留日志、审计或链路追踪信息。
 -
-主要函数：test_webhook_signature_verifier_valid、test_webhook_signature_verifier_invalid、test_webhook_signature_verifier_missing_secret、test_webhook_signature_verifier_provider、test_webhook_adapter_generic_parser、test_webhook_adapter_to_ticket_event、test_registry_register_and_adapter_contract、test_registry_tenant_isolation_on_invoke。
+主要函数：test_webhook_signature_verifier_valid、test_webhook_signature_verifier_invalid、test_webhook_
+    signature_verifier_missing_secret、test_webhook_signature_verifier_provider、test_webhook_adap
+    ter_generic_parser、test_webhook_adapter_to_ticket_event、test_registry_register_and_adapter_c
+    ontract、test_registry_tenant_isolation_on_invoke。
 """
 
 import uuid
@@ -30,13 +33,13 @@ from agentforge.platform.domain.connector import (
 
 
 def _spec(**overrides) -> ConnectorSpec:
-    """执行 _spec 对应的逻辑，并返回处理结果。
+    """处理规格。
 
     Args:
-        **overrides: Any，调用方传入的 **overrides 参数。
+        overrides: 配置覆盖项。
 
     Returns:
-        ConnectorSpec，函数执行后的结果。
+        连接器规格结果。
     """
     base: dict = {
         "connector_id": f"conn-{uuid.uuid4().hex[:8]}",
@@ -51,13 +54,13 @@ def _spec(**overrides) -> ConnectorSpec:
 
 
 def _context(**overrides) -> ConnectorContext:
-    """执行 _context 对应的逻辑，并返回处理结果。
+    """处理上下文。
 
     Args:
-        **overrides: Any，调用方传入的 **overrides 参数。
+        overrides: 配置覆盖项。
 
     Returns:
-        ConnectorContext，函数执行后的结果。
+        连接器上下文结果。
     """
     base: dict = {
         "tenant_id": "t1",
@@ -69,15 +72,8 @@ def _context(**overrides) -> ConnectorContext:
     return ConnectorContext(**base)
 
 
-# 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
-
-
 def test_webhook_signature_verifier_valid() -> None:
-    """验证 webhook_signature_verifier_valid 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证Webhook签名核验器有效对应的测试场景。"""
     verifier = WebhookSignatureVerifier(default_secret="s3cret")
     body = b'{"event_id":"e1","text":"hello"}'
     import hashlib
@@ -89,53 +85,31 @@ def test_webhook_signature_verifier_valid() -> None:
 
 
 def test_webhook_signature_verifier_invalid() -> None:
-    """验证 webhook_signature_verifier_invalid 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证Webhook签名核验器无效对应的测试场景。"""
     verifier = WebhookSignatureVerifier(default_secret="s3cret")
     assert verifier.verify("t1", "123", "n1", b'{"x":1}', "deadbeef") is False
 
 
 def test_webhook_signature_verifier_missing_secret() -> None:
-    """验证 webhook_signature_verifier_missing_secret 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证Webhook签名核验器缺失密钥对应的测试场景。"""
     verifier = WebhookSignatureVerifier(default_secret=None)
     assert verifier.verify("t1", "123", "n1", b"{1}", "sig") is False
 
 
 def test_webhook_signature_verifier_provider() -> None:
-    """验证 webhook_signature_verifier_provider 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证Webhook签名核验器提供方对应的测试场景。"""
 
     class Provider:
-        """Provider。
-
-        Provider 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-        主要成员：
-        - 方法 get_secret()。
-
-        设计约束：
-        - 保持接口稳定，不向调用方暴露不必要的数据结构。
-        - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-        """
+        """可替换的密钥提供方。"""
 
         def get_secret(self, tenant_id: str) -> str | None:
-            """读取并返回指定数据，并返回调用方需要的结果。
+            """获取密钥。
 
             Args:
-                tenant_id: str，调用方传入的 tenant_id 参数。
+                tenant_id: 租户 ID，用于数据隔离。
 
             Returns:
-                str | None，函数执行后的结果。
+                无结果。
             """
             return "p" if tenant_id == "t1" else None
 
@@ -144,15 +118,8 @@ def test_webhook_signature_verifier_provider() -> None:
     assert verifier._secret_for("t2") is None
 
 
-# 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
-
-
 def test_webhook_adapter_generic_parser() -> None:
-    """验证 webhook_adapter_generic_parser 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证Webhook适配器通用解析器对应的测试场景。"""
     adapter = WebhookAdapter("generic", parse_factory=generic_text_parser)
     delivery = adapter.parse(
         "t1",
@@ -166,11 +133,7 @@ def test_webhook_adapter_generic_parser() -> None:
 
 
 def test_webhook_adapter_to_ticket_event() -> None:
-    """验证 webhook_adapter_to_ticket_event 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证Webhook适配器到工单事件对应的测试场景。"""
     adapter = WebhookAdapter("openapi")
     delivery = adapter.parse("t1", {"reply_target": "rt-1"}, event_id="e2", text="x")
     ev = delivery.to_ticket_event()
@@ -180,28 +143,21 @@ def test_webhook_adapter_to_ticket_event() -> None:
     assert ev["reply_target"] == "rt-1"
 
 
-# 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
-
-
 @pytest.mark.asyncio
 async def test_registry_register_and_adapter_contract() -> None:
-    """验证 registry_register_and_adapter_contract 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证注册表注册及适配器契约对应的测试场景。"""
     calls: list[dict] = []
 
     async def request_fn(method: str, url: str, **kwargs) -> dict:
-        """执行 request_fn 对应的逻辑，并返回处理结果。
+        """处理请求函数。
 
         Args:
-            method: str，调用方传入的 method 参数。
-            url: str，调用方传入的 url 参数。
-            **kwargs: Any，调用方传入的 **kwargs 参数。
+            method: HTTP 或业务方法名。
+            url: 目标 URL。
+            kwargs: 关键字参数。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         calls.append({"m": method, "url": url, "h": kwargs.get("headers", {})})
         return {"code": 0}
@@ -224,18 +180,13 @@ async def test_registry_register_and_adapter_contract() -> None:
     assert isinstance(result, ConnectorInvocationResult)
     assert result.ok is True
     assert "code" in result.data
-    # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     assert calls[0]["h"]["X-Idempotency-Key"] == "idem-1"
     assert calls[0]["url"] == "https://crm.test/tickets"
 
 
 @pytest.mark.asyncio
 async def test_registry_tenant_isolation_on_invoke() -> None:
-    """验证 registry_tenant_isolation_on_invoke 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证注册表租户隔离时调用对应的测试场景。"""
     adapter = OpenAPIAdapter(
         "https://crm.test",
         request_fn=None,
@@ -253,16 +204,31 @@ async def test_registry_tenant_isolation_on_invoke() -> None:
         _context(tenant_id="t2"),
     )
     assert result.ok is False
+
+
+@pytest.mark.asyncio
+async def test_registry_tenant_isolation_on_compensate() -> None:
+    """验证注册表租户隔离时补偿对应的测试场景。"""
+    adapter = OpenAPIAdapter("https://crm.test", audit_sink=None)
+    spec = _spec(tenant_id="t1", allowed_actions=["ledger.compensate"])
+    registry = ConnectorRegistry()
+    registry.register(spec, adapter)
+
+    result = await registry.compensate(
+        spec.connector_id,
+        "ledger.compensate",
+        {},
+        _context(tenant_id="t2"),
+    )
+
+    assert result.ok is False
+    assert "tenant mismatch" in (result.error or "")
     assert "tenant" in (result.error or "")
 
 
 @pytest.mark.asyncio
 async def test_registry_action_not_allowed() -> None:
-    """验证 registry_action_not_allowed 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证注册表操作不允许对应的测试场景。"""
     adapter = OpenAPIAdapter("https://crm.test", audit_sink=None)
     spec = _spec(allowed_actions=["publish_review"])
     registry = ConnectorRegistry()
@@ -279,11 +245,7 @@ async def test_registry_action_not_allowed() -> None:
 
 @pytest.mark.asyncio
 async def test_registry_disabled_and_unregistered() -> None:
-    """验证 registry_disabled_and_unregistered 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证注册表停用及未注册对应的测试场景。"""
     registry = ConnectorRegistry()
     unreg = await registry.invoke("nope", "x", {}, _context())
     assert unreg.ok is False
@@ -298,14 +260,9 @@ async def test_registry_disabled_and_unregistered() -> None:
 
 @pytest.mark.asyncio
 async def test_registry_health_and_list() -> None:
-    """验证 registry_health_and_list 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证注册表健康及查询对应的测试场景。"""
     adapter = OpenAPIAdapter("https://x.test", audit_sink=None)
     registry = ConnectorRegistry()
-    # 说明：该步骤用于保证业务流程、租户隔离和可追踪性。
     spec = _spec()
     registry.register(spec, adapter)
     health = await registry.health(spec.connector_id)
@@ -316,29 +273,22 @@ async def test_registry_health_and_list() -> None:
 
 @pytest.mark.asyncio
 async def test_openapi_adapter_retry_on_failure() -> None:
-    """验证 openapi_adapter_retry_on_failure 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-
-    Raises:
-        RuntimeError: 当输入、状态或外部依赖不满足要求时抛出。
-    """
+    """验证OpenAPI适配器重试时失败对应的测试场景。"""
     attempts = {"n": 0}
 
     async def fail_once(method: str, url: str, **kwargs) -> dict:
-        """执行 fail_once 对应的逻辑，并返回处理结果。
+        """处理失败一次。
 
         Args:
-            method: str，调用方传入的 method 参数。
-            url: str，调用方传入的 url 参数。
-            **kwargs: Any，调用方传入的 **kwargs 参数。
+            method: HTTP 或业务方法名。
+            url: 目标 URL。
+            kwargs: 关键字参数。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
 
         Raises:
-            RuntimeError: 当输入、状态或外部依赖不满足要求时抛出。
+            RuntimeError: 运行时依赖或状态不满足要求时抛出。
         """
         attempts["n"] += 1
         if attempts["n"] == 1:
@@ -359,21 +309,14 @@ async def test_openapi_adapter_retry_on_failure() -> None:
 
 @pytest.mark.asyncio
 async def test_openapi_adapter_audit_sink() -> None:
-    """验证 openapi_adapter_audit_sink 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证OpenAPI适配器审计接收器对应的测试场景。"""
     audited: list[dict] = []
 
     async def sink(record: dict) -> None:
-        """执行 sink 对应的逻辑，并返回处理结果。
+        """处理接收器。
 
         Args:
-            record: dict，调用方传入的 record 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            record: 待处理的领域记录。
         """
         audited.append(record)
 
@@ -389,11 +332,7 @@ async def test_openapi_adapter_audit_sink() -> None:
 
 
 def test_credential_reference_never_holds_secret() -> None:
-    """验证 credential_reference_never_holds_secret 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证凭据参考密钥对应的测试场景。"""
     ref = CredentialReference(ref="vault://crm/token", vault="default")
     assert ref.ref.startswith("vault://")
     assert "secret" not in ref.model_dump()

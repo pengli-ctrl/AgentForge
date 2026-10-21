@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_connector_repository。
+"""连接器仓储测试模块。
 
 本测试模块验证 test_connector_repository 覆盖的业务路径、边界条件和回归场景。
 
@@ -13,29 +13,23 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from agentforge.platform.domain.connector import (
-    ConnectorKind,
-    ConnectorRiskLevel,
-    ConnectorSpec,
-)
+from agentforge.platform.domain.connector import ConnectorKind, ConnectorRiskLevel, ConnectorSpec
 from agentforge.platform.infrastructure.db.base import Base
-from agentforge.platform.infrastructure.memory_connector_repository import (
-    MemoryConnectorRepository,
-)
+from agentforge.platform.infrastructure.memory_connector_repository import MemoryConnectorRepository
 from agentforge.platform.infrastructure.sqlalchemy_connector_repository import (
     SQLAlchemyConnectorRepository,
 )
 
 
 def _spec(connector_id: str, tenant_id: str) -> ConnectorSpec:
-    """执行 _spec 对应的逻辑，并返回处理结果。
+    """处理规格。
 
     Args:
-        connector_id: str，调用方传入的 connector_id 参数。
-        tenant_id: str，调用方传入的 tenant_id 参数。
+        connector_id: 连接器 ID。
+        tenant_id: 租户 ID，用于数据隔离。
 
     Returns:
-        ConnectorSpec，函数执行后的结果。
+        连接器规格结果。
     """
     return ConnectorSpec(
         connector_id=connector_id,
@@ -52,11 +46,7 @@ def _spec(connector_id: str, tenant_id: str) -> ConnectorSpec:
 
 @pytest.mark.asyncio
 async def test_memory_repository_roundtrip() -> None:
-    """验证 memory_repository_roundtrip 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证记忆仓储往返对应的测试场景。"""
     repo = MemoryConnectorRepository()
     spec = _spec("conn-m1", "t1")
     await repo.save_spec(spec)
@@ -68,10 +58,10 @@ async def test_memory_repository_roundtrip() -> None:
 
 
 async def _make_sqlalchemy_repo():
-    """执行 _make_sqlalchemy_repo 对应的逻辑，并返回处理结果。
+    """构造SQLAlchemy仓储。
 
     Returns:
-        None，函数执行后的结果。
+        处理结果。
     """
     engine = create_async_engine(
         "sqlite+aiosqlite://",
@@ -86,11 +76,7 @@ async def _make_sqlalchemy_repo():
 
 @pytest.mark.asyncio
 async def test_sqlalchemy_repository_roundtrip_and_tenancy() -> None:
-    """验证 sqlalchemy_repository_roundtrip_and_tenancy 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证SQLAlchemy仓储往返及租户隔离对应的测试场景。"""
     engine, repo = await _make_sqlalchemy_repo()
     spec1 = _spec("conn-s1", "t1")
     spec2 = _spec("conn-s2", "t2")

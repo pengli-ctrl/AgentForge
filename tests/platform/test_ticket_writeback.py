@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_ticket_writeback。
+"""工单写回测试模块。
 
 本测试模块验证 test_ticket_writeback 覆盖的业务路径、边界条件和回归场景。
 
@@ -8,20 +8,17 @@
 - 关键执行路径应保留日志、审计或链路追踪信息。
 - 主要类：_FakeAuditRepo。
 -
-主要函数：test_writeback_success_and_audit、test_writeback_no_connector_raises、test_writeback_failure_raises_and_audits、test_writeback_uses_resolver。
+主要函数：test_writeback_success_and_audit、test_writeback_no_connector_raises、test_writeback_failure_
+    raises_and_audits、test_writeback_uses_resolver。
 """
 
 import pytest
 
 from agentforge.platform.application.connector_registry import ConnectorRegistry
 from agentforge.platform.application.openapi_adapter import OpenAPIAdapter
-from agentforge.platform.application.ticket_writeback import TicketWritebackService
-from agentforge.platform.domain.connector import (
-    ConnectorKind,
-    ConnectorRiskLevel,
-    ConnectorSpec,
-)
-from agentforge.platform.domain.ticket import (
+from agentforge.platform.domain.connector import ConnectorKind, ConnectorRiskLevel, ConnectorSpec
+from agentforge.platform.modules.support.application.writeback import TicketWritebackService
+from agentforge.platform.modules.support.domain.ticket import (
     RiskLevel,
     Ticket,
     TicketPriority,
@@ -30,10 +27,10 @@ from agentforge.platform.domain.ticket import (
 
 
 def _ticket() -> Ticket:
-    """执行 _ticket 对应的逻辑，并返回处理结果。
+    """处理工单。
 
     Returns:
-        Ticket，函数执行后的结果。
+        工单结果。
     """
     return Ticket(
         ticket_id="ticket-wb-1",
@@ -54,33 +51,30 @@ def _ticket() -> Ticket:
 async def _registry_with(
     connector_id: str, tenant_id: str, error: bool = False
 ) -> ConnectorRegistry:
-    """执行 _registry_with 对应的逻辑，并返回处理结果。
+    """处理注册表使用。
 
     Args:
-        connector_id: str，调用方传入的 connector_id 参数。
-        tenant_id: str，调用方传入的 tenant_id 参数。
-        error: bool，调用方传入的 error 参数。
+        connector_id: 连接器 ID。
+        tenant_id: 租户 ID，用于数据隔离。
+        error: 错误。
 
     Returns:
-        ConnectorRegistry，函数执行后的结果。
-
-    Raises:
-        RuntimeError: 当输入、状态或外部依赖不满足要求时抛出。
+        连接器注册表结果。
     """
 
     async def _request(method, url, **kw):  # noqa: ANN001, ANN202
-        """执行 _request 对应的逻辑，并返回处理结果。
+        """处理请求。
 
         Args:
-            method: Any，调用方传入的 method 参数。
-            url: Any，调用方传入的 url 参数。
-            **kw: Any，调用方传入的 **kw 参数。
+            method: HTTP 或业务方法名。
+            url: 目标 URL。
+            kw: 输入参数。
 
         Returns:
-            None，函数执行后的结果。
+            处理结果。
 
         Raises:
-            RuntimeError: 当输入、状态或外部依赖不满足要求时抛出。
+            RuntimeError: 运行时依赖或状态不满足要求时抛出。
         """
         if error:
             raise RuntimeError("boom")
@@ -105,45 +99,24 @@ async def _registry_with(
 
 
 class _FakeAuditRepo:
-    """_FakeAuditRepo。
-
-    _FakeAuditRepo 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - 方法 save()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """模拟审计仓储相关组件。"""
 
     def __init__(self) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """初始化模拟审计仓储。"""
         self.events: list = []
 
     async def save(self, event) -> None:  # noqa: ANN001
-        """执行 save 对应的核心操作，并保持调用契约稳定。
+        """保存模拟审计仓储。
 
         Args:
-            event: Any，调用方传入的 event 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            event: 待处理事件。
         """
         self.events.append(event)
 
 
 @pytest.mark.asyncio
 async def test_writeback_success_and_audit() -> None:
-    """验证 writeback_success_and_audit 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证写回成功及审计对应的测试场景。"""
     registry = await _registry_with("conn-wb", "t1")
     audit = _FakeAuditRepo()
     service = TicketWritebackService(registry, audit_repository=audit)
@@ -157,11 +130,7 @@ async def test_writeback_success_and_audit() -> None:
 
 @pytest.mark.asyncio
 async def test_writeback_no_connector_raises() -> None:
-    """验证 writeback_no_connector_raises 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证写回无连接器抛出对应的测试场景。"""
     registry = ConnectorRegistry()
     service = TicketWritebackService(registry)
     with pytest.raises(ValueError):
@@ -170,11 +139,7 @@ async def test_writeback_no_connector_raises() -> None:
 
 @pytest.mark.asyncio
 async def test_writeback_failure_raises_and_audits() -> None:
-    """验证 writeback_failure_raises_and_audits 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证写回失败抛出及审计对应的测试场景。"""
     registry = await _registry_with("conn-wb-fail", "t1", error=True)
     audit = _FakeAuditRepo()
     service = TicketWritebackService(registry, audit_repository=audit)
@@ -185,11 +150,7 @@ async def test_writeback_failure_raises_and_audits() -> None:
 
 @pytest.mark.asyncio
 async def test_writeback_uses_resolver() -> None:
-    """验证 writeback_uses_resolver 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证写回使用解析器对应的测试场景。"""
     registry = await _registry_with("conn-resolved", "t1")
     service = TicketWritebackService(registry, connector_resolver=lambda _t: "conn-resolved")
     data = await service.write_back(_ticket())

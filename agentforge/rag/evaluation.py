@@ -1,26 +1,4 @@
-"""
-RAGAS 评估框架 — RAG 系统的质量评估（第五层防护）。
-
-评估不需要实时运行，而是在迭代后离线评估。
-Golden Dataset 是人工标注的标准答案集（约 50 条），
-用于衡量 RAG 系统在四个维度上的表现。
-
-四个评估维度：
-1. **Faithfulness（忠实度）**：生成内容是否忠于检索到的上下文，
-   不编造信息。低忠实度意味着 LLM 在"幻觉"。
-2. **Answer Relevancy（回答相关性）**：生成的回答与用户查询的相关程度。
-   低相关性意味着回答偏离了用户意图。
-3. **Context Precision（上下文精确度）**：检索到的上下文中有多少
-   是真正有用的。低精确度意味着检索系统塞入了大量无关信息。
-4. **Context Recall（上下文召回率）**：标准答案所需的信息有多少
-   被检索到了。低召回率意味着检索系统遗漏了关键信息。
-
-这四个维度覆盖了 RAG 系统的两个核心环节：
-- 检索质量（Context Precision + Context Recall）
-- 生成质量（Faithfulness + Answer Relevancy）
-
-整体分数 = 四个维度的加权平均。
-"""
+"""评估模块。"""
 
 from __future__ import annotations
 
@@ -37,12 +15,7 @@ logger = logging.getLogger(__name__)
 # 尝试导入 ragas，做优雅降级
 try:
     from ragas import evaluate as ragas_evaluate
-    from ragas.metrics import (
-        answer_relevancy,
-        context_precision,
-        context_recall,
-        faithfulness,
-    )
+    from ragas.metrics import answer_relevancy, context_precision, context_recall, faithfulness
 
     RAGAS_AVAILABLE = True
 except ImportError:
@@ -60,14 +33,12 @@ DIMENSION_WEIGHTS: dict[str, float] = {
 
 @dataclass
 class GoldenSample:
-    """Golden Dataset 中的一条标准样本。
-
-    人工标注的"标准答案"，用于评估 RAG 系统输出质量。
+    """基准样本相关组件。
 
     Attributes:
-        query: 用户查询。
-        ground_truth_context: 标准答案所需的上下文内容。
-        ground_truth_answer: 标准答案。
+        query: 查询。
+        ground_truth_context: 上下文。
+        ground_truth_answer: 回答。
     """
 
     query: str
@@ -77,16 +48,16 @@ class GoldenSample:
 
 @dataclass
 class EvaluationResult:
-    """RAGAS 评估结果。
+    """评估结果相关组件。
 
     Attributes:
-        faithfulness: 忠实度分数（0-1）。
-        answer_relevancy: 回答相关性分数（0-1）。
-        context_precision: 上下文精确度分数（0-1）。
-        context_recall: 上下文召回率分数（0-1）。
-        overall_score: 综合分数（0-1），加权平均。
-        sample_count: 评估样本数。
-        per_sample: 每条样本的详细分数。
+        faithfulness: 字段值。
+        answer_relevancy: 回答。
+        context_precision: 上下文精确率。
+        context_recall: 上下文召回。
+        overall_score: 评分。
+        sample_count: 样本数量。
+        per_sample: 样本。
     """
 
     faithfulness: float = 0.0
@@ -98,7 +69,11 @@ class EvaluationResult:
     per_sample: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
-        """转换为字典格式。"""
+        """转换为字典格式。
+
+        Returns:
+            结构化结果字典。
+        """
         return {
             "faithfulness": round(self.faithfulness, 4),
             "answer_relevancy": round(self.answer_relevancy, 4),
@@ -115,28 +90,35 @@ class RAGPipelineProtocol(Protocol):
     """RAG 管道协议 — 评估器需要调用的 RAG 系统接口。"""
 
     def retrieve(self, query: str, top_k: int = 5) -> list[str]:
-        """检索与查询相关的代码片段。"""
+        """检索与查询相关的代码片段。
+
+        Args:
+            query: 检索或筛选查询。
+            top_k: 返回结果数量上限。
+
+        Returns:
+            结果列表。
+        """
         ...
 
     def generate(self, query: str, contexts: list[str]) -> str:
-        """基于检索到的上下文生成回答。"""
+        """基于检索到的上下文生成回答。
+
+        Args:
+            query: 检索或筛选查询。
+            contexts: 输入参数。
+
+        Returns:
+            字符串结果。
+        """
         ...
 
 
 class LLMAsJudge:
     """LLM 裁判 — 用 LLM 做语义断言。
 
-    不检查精确文本匹配，而是检查语义是否符合预期。
-    用于评估 LLM 生成的回答在语义层面是否正确，
-    即使措辞不同但语义一致也算通过。
-
-    核心场景：
-    - 检查 LLM 回答是否包含 ground truth 的关键信息点
-    - 检查 LLM 回答是否与上下文一致（不编造）
-    - 检查回答是否偏离了查询意图
-
-    Args:
-        llm_gateway: LLM 网关实例。
+    Attributes:
+        CRITERION_DESCRIPTIONS: 描述。
     """
 
     JUDGE_PROMPT = """You are an expert judge evaluating the quality of AI-generated answers.
@@ -171,13 +153,10 @@ Respond with ONLY a JSON object:
     }
 
     def __init__(self, llm_gateway: LLMGateway) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 LLMAsJudge。
 
         Args:
-            llm_gateway: LLMGateway，调用方传入的 llm_gateway 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            llm_gateway: LLM 网关实例。
         """
         self.llm_gateway = llm_gateway
 
@@ -191,13 +170,13 @@ Respond with ONLY a JSON object:
         """用 LLM 做语义断言。
 
         Args:
-            query: 用户查询。
-            answer: 被评估的回答。
-            expected: 标准答案或预期上下文。
-            criterion: 评估维度（faithfulness / answer_relevancy 等）。
+            query: 检索或筛选查询。
+            answer: 回答。
+            expected: 输入参数。
+            criterion: 输入参数。
 
         Returns:
-            ``(score, reason)`` 元组，score 在 0.0-1.0 之间。
+            结果元组。
         """
         criterion_context = self.CRITERION_DESCRIPTIONS.get(criterion, "Expected Result")
 
@@ -216,13 +195,13 @@ Respond with ONLY a JSON object:
         return self._parse_judge_response(response.content)
 
     def _parse_judge_response(self, output: str) -> tuple[float, str]:
-        """解析 LLM 裁判的 JSON 响应。
+        """解析判定响应。
 
         Args:
-            output: LLM 返回的文本。
+            output: 输出。
 
         Returns:
-            ``(score, reason)`` 元组。解析失败返回 ``(0.0, "parse_error")``。
+            结果元组。
         """
         text = output.strip()
 
@@ -249,11 +228,11 @@ Respond with ONLY a JSON object:
         """批量语义断言。
 
         Args:
-            samples: 每条包含 query, answer, expected 三个键。
-            criterion: 评估维度。
+            samples: 样本。
+            criterion: 输入参数。
 
         Returns:
-            ``(score, reason)`` 元组列表。
+            结果列表。
         """
         results: list[tuple[float, str]] = []
         for sample in samples:
@@ -268,29 +247,13 @@ Respond with ONLY a JSON object:
 
 
 class RAGEvaluator:
-    """RAGAS 评估器 — 对 RAG 系统进行全面质量评估。
-
-    评估流程：
-    1. 遍历 Golden Dataset 中的每条样本
-    2. 用 RAG 管道生成回答（检索 + 生成）
-    3. 用 RAGAS 库的四个维度指标评估
-    4. 返回结构化评估结果
-
-    如果 ragas 库未安装，降级为 LLM-as-Judge 模式：
-    用 LLM 做语义断言代替 RAGAS 的量化指标。
-
-    Args:
-        llm_gateway: LLM 网关实例（RAGAS 和 LLM-as-Judge 都需要）。
-    """
+    """RAG 检索与生成效果评估器。"""
 
     def __init__(self, llm_gateway: LLMGateway) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 RAGEvaluator。
 
         Args:
-            llm_gateway: LLMGateway，调用方传入的 llm_gateway 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            llm_gateway: LLM 网关实例。
         """
         self.llm_gateway = llm_gateway
         self._judge = LLMAsJudge(llm_gateway)
@@ -301,15 +264,15 @@ class RAGEvaluator:
         rag_pipeline: RAGPipelineProtocol,
         top_k: int = 5,
     ) -> dict[str, Any]:
-        """评估 RAG 系统在 Golden Dataset 上的表现。
+        """评估输入数据并生成结果。
 
         Args:
-            golden_dataset: Golden Dataset 样本列表。
-            rag_pipeline: RAG 管道实例，需实现 retrieve 和 generate 方法。
-            top_k: 检索时返回的 Top-K 数量。
+            golden_dataset: 基准数据集。
+            rag_pipeline: RAG流水线。
+            top_k: 返回结果数量上限。
 
         Returns:
-            评估结果字典，包含四个维度分数 + 综合分 + 每条样本详情。
+            结构化结果字典。
         """
         samples = self._normalize_dataset(golden_dataset)
 
@@ -333,13 +296,13 @@ class RAGEvaluator:
         self,
         golden_dataset: list[GoldenSample | dict[str, str]],
     ) -> list[GoldenSample]:
-        """将数据集统一转为 GoldenSample 列表。
+        """规范化数据集。
 
         Args:
-            golden_dataset: 原始数据集，元素可以是 GoldenSample 或 dict。
+            golden_dataset: 基准数据集。
 
         Returns:
-            GoldenSample 列表。
+            结果列表。
         """
         samples: list[GoldenSample] = []
         for item in golden_dataset:
@@ -364,12 +327,12 @@ class RAGEvaluator:
         """对单条样本执行 RAG 流程（检索 + 生成）。
 
         Args:
-            sample: Golden 样本。
-            rag_pipeline: RAG 管道实例。
-            top_k: 检索 Top-K。
+            sample: 评估样本。
+            rag_pipeline: RAG流水线。
+            top_k: 返回结果数量上限。
 
         Returns:
-            ``(retrieved_contexts, generated_answer)`` 元组。
+            结果元组。
         """
         retrieved = rag_pipeline.retrieve(sample.query, top_k=top_k)
         answer = rag_pipeline.generate(sample.query, retrieved)
@@ -381,17 +344,15 @@ class RAGEvaluator:
         rag_pipeline: RAGPipelineProtocol,
         top_k: int,
     ) -> dict[str, Any]:
-        """使用 ragas 库进行正式评估。
-
-        构造 ragas 评估数据集，调用 ragas.evaluate 函数。
+        """评估使用。
 
         Args:
-            samples: GoldenSample 列表。
-            rag_pipeline: RAG 管道实例。
-            top_k: 检索 Top-K。
+            samples: 样本。
+            rag_pipeline: RAG流水线。
+            top_k: 返回结果数量上限。
 
         Returns:
-            评估结果字典。
+            结构化结果字典。
         """
         questions: list[str] = []
         contexts: list[list[str]] = []
@@ -475,23 +436,18 @@ class RAGEvaluator:
         rag_pipeline: RAGPipelineProtocol,
         top_k: int,
     ) -> dict[str, Any]:
-        """使用 LLM-as-Judge 降级评估的异步实现（ragas 未安装时）。
-
-        在既有（或调用方提供的）事件循环内用 ``await`` 驱动 LLM 裁判，
-        不重复创建事件循环。任何样本的 RAG 检索 / 生成 / 裁判失败都会被
-        记录真实错误并跳过该样本，而不是把四个维度静默补成 0 分——后者会
-        伪造一份看似正常、实则无效的错误报告。
+        """评估使用LLM判定异步。
 
         Args:
-            samples: GoldenSample 列表。
-            rag_pipeline: RAG 管道实例。
-            top_k: 检索 Top-K。
+            samples: 样本。
+            rag_pipeline: RAG流水线。
+            top_k: 返回结果数量上限。
 
         Returns:
-            评估结果字典。
+            结构化结果字典。
 
         Raises:
-            RuntimeError: 所有样本都未能取得裁判分数（无法给出有意义的报告）。
+            RuntimeError: 运行时依赖或状态不满足要求时抛出。
         """
         faith_scores: list[float] = []
         relevancy_scores: list[float] = []
@@ -584,26 +540,18 @@ class RAGEvaluator:
         rag_pipeline: RAGPipelineProtocol,
         top_k: int,
     ) -> dict[str, Any]:
-        """使用 LLM-as-Judge 降级评估的同步入口（ragas 未安装时）。
-
-        仅在不存在正在运行的事件循环时，为本批次一次性创建并关闭一个事件
-        循环（不再为每条样本反复新建/关闭）；循环关闭放在 ``finally`` 中，
-        中途异常也不会泄漏。
-
-        若调用方本身正运行在事件循环中（Web/API 常见），本同步方法无法阻塞，
-        会抛出带指引信息的 RuntimeError，由调用方改用
-        :meth:`_evaluate_with_llm_judge_async`，而不是静默返回全 0 分。
+        """评估使用LLM判定。
 
         Args:
-            samples: GoldenSample 列表。
-            rag_pipeline: RAG 管道实例。
-            top_k: 检索 Top-K。
+            samples: 样本。
+            rag_pipeline: RAG流水线。
+            top_k: 返回结果数量上限。
 
         Returns:
-            评估结果字典。
+            结构化结果字典。
 
         Raises:
-            RuntimeError: 已存在运行中的事件循环，或全部样本评估失败。
+            RuntimeError: 运行时依赖或状态不满足要求时抛出。
         """
         try:
             asyncio.get_running_loop()
@@ -635,20 +583,14 @@ class RAGEvaluator:
     ) -> float:
         """计算综合分数（加权平均）。
 
-        权重：
-        - Faithfulness: 30%（忠实度最重要，防幻觉）
-        - Answer Relevancy: 30%（回答必须切题）
-        - Context Precision: 20%（检索质量）
-        - Context Recall: 20%（检索覆盖）
-
         Args:
-            faithfulness: 忠实度分数。
-            answer_relevancy: 回答相关性分数。
-            context_precision: 上下文精确度分数。
-            context_recall: 上下文召回率分数。
+            faithfulness: 输入参数。
+            answer_relevancy: 回答。
+            context_precision: 上下文精确率。
+            context_recall: 上下文召回。
 
         Returns:
-            综合分数（0-1）。
+            数值结果。
         """
         return (
             faithfulness * DIMENSION_WEIGHTS["faithfulness"]

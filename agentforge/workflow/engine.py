@@ -1,26 +1,4 @@
-"""Workflow 引擎 — YAML 工作流解析 + 条件路由执行引擎。
-
-解析 configs/workflows/ 下的 YAML 工作流配置，
-根据 on_complete 条件动态路由到下一个 Agent。
-
-工作流 YAML 格式：
-    name: "code-review-pipeline"
-    description: "代码审查全流程"
-    steps:
-      - agent: code-review
-        on_complete:
-          - condition: "result.severity == 'critical'"
-            next: security-scan
-          - condition: "default"
-            next: test-execution
-
-执行流程：
-1. 加载 YAML 工作流配置
-2. 从第一个 step 开始执行
-3. Agent 执行完成后，根据 on_complete 条件决定下一步
-4. 条件匹配则路由到对应的 Agent，否则走 default
-5. next 为 "complete" 时工作流结束
-"""
+"""引擎模块。"""
 
 from __future__ import annotations
 
@@ -38,11 +16,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class WorkflowStep:
-    """工作流步骤 — 一个 Agent 的执行配置。
+    """工作流中的单个执行步骤。
 
     Attributes:
-        agent: Agent 名称。
-        on_complete: 完成后的条件路由规则列表。
+        agent: 智能体。
+        on_complete: 时完成。
     """
 
     agent: str
@@ -51,13 +29,13 @@ class WorkflowStep:
 
 @dataclass
 class Workflow:
-    """工作流定义 — 从 YAML 解析出的完整工作流。
+    """工作流的 Temporal 工作流。
 
     Attributes:
-        name: 工作流名称。
-        description: 工作流描述。
-        steps: 步骤列表。
-        step_map: Agent 名称到步骤的映射（便于快速查找）。
+        name: 名称。
+        description: 描述信息。
+        steps: 字段值。
+        step_map: 步骤。
     """
 
     name: str = ""
@@ -66,41 +44,24 @@ class Workflow:
     step_map: dict[str, WorkflowStep] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        """构建 step_map 索引。"""
+        """校验并补全初始化后的字段。"""
         for step in self.steps:
             self.step_map[step.agent] = step
 
 
 class WorkflowEngine:
-    """工作流引擎 — YAML 解析 + 条件路由执行。
-
-    加载 YAML 工作流配置，根据 Agent 输出结果动态路由到下一个 Agent。
-    支持多个工作流配置，通过名称切换。
-
-    Args:
-        registry: Agent 注册表。
-        config_dir: YAML 配置文件目录。
-
-    Example:
-        >>> engine = WorkflowEngine(registry=registry,
-        ...                         config_dir="configs/workflows")
-        >>> engine.load("code-review-pipeline")
-        >>> result = await engine.execute("task-001", input_data={...})
-    """
+    """工作流引擎相关组件。"""
 
     def __init__(
         self,
         registry: AgentRegistry,
         config_dir: str = "configs/workflows",
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 WorkflowEngine。
 
         Args:
-            registry: AgentRegistry，调用方传入的 registry 参数。
-            config_dir: str，调用方传入的 config_dir 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            registry: 注册表实例。
+            config_dir: 配置。
         """
         self.registry = registry
         self.config_dir = config_dir
@@ -109,19 +70,17 @@ class WorkflowEngine:
         self._max_iterations: int = 20  # 防止无限循环
 
     def load(self, workflow_name: str) -> Workflow:
-        """加载 YAML 工作流配置。
-
-        从 config_dir/{workflow_name}.yaml 加载工作流定义。
+        """加载工作流引擎。
 
         Args:
             workflow_name: 工作流名称。
 
         Returns:
-            解析后的 Workflow 对象。
+            工作流结果。
 
         Raises:
-            FileNotFoundError: 配置文件不存在时抛出。
-            ValueError: 配置文件格式错误时抛出。
+            FileNotFoundError: 操作无法完成时抛出。
+            ValueError: 输入值或业务状态不合法时抛出。
         """
         import os
 
@@ -164,10 +123,10 @@ class WorkflowEngine:
         """获取已加载的工作流。
 
         Args:
-            name: 工作流名称。
+            name: 资源或对象名称。
 
         Returns:
-            Workflow 对象，未加载则返回 None。
+            工作流无结果。
         """
         return self._workflows.get(name)
 
@@ -175,7 +134,7 @@ class WorkflowEngine:
         """列出所有已加载的工作流名称。
 
         Returns:
-            工作流名称列表。
+            结果列表。
         """
         return list(self._workflows.keys())
 
@@ -185,18 +144,15 @@ class WorkflowEngine:
         current_agent: str,
         agent_result: dict[str, Any],
     ) -> str | None:
-        """根据当前 Agent 的输出结果决定下一个 Agent。
-
-        遍历 on_complete 条件列表，第一个匹配的条件决定下一步。
-        如果没有条件匹配，返回 None（工作流异常终止）。
+        """获取下一个智能体。
 
         Args:
-            workflow: 工作流定义。
-            current_agent: 当前 Agent 名称。
-            agent_result: 当前 Agent 的输出结果。
+            workflow: 工作流定义或实例。
+            current_agent: 智能体。
+            agent_result: 智能体结果。
 
         Returns:
-            下一个 Agent 名称，"complete" 表示工作流结束，None 表示异常。
+            无结果。
         """
         step = workflow.step_map.get(current_agent)
         if step is None:
@@ -237,21 +193,18 @@ class WorkflowEngine:
         correlation_id: str,
         input_data: dict[str, Any],
     ) -> dict[str, Any]:
-        """执行完整工作流。
-
-        从第一个 step 开始执行，根据条件路由到后续 Agent，
-        直到遇到 "complete" 或达到最大迭代次数。
+        """执行核心处理逻辑并返回结果。
 
         Args:
             workflow_name: 工作流名称。
-            correlation_id: 关联 ID（贯穿 trace 链路）。
-            input_data: 初始输入数据。
+            correlation_id: 用于关联同一业务链路的关联 ID。
+            input_data: 输入数据。
 
         Returns:
-            工作流执行结果，包含每个 Agent 的输出。
+            结构化结果字典。
 
         Raises:
-            ValueError: 工作流未加载或 Agent 未注册时抛出。
+            ValueError: 输入值或业务状态不合法时抛出。
         """
         workflow = self._workflows.get(workflow_name)
         if workflow is None:
@@ -324,19 +277,19 @@ class WorkflowEngine:
         correlation_id: str,
         context_snapshot: dict[str, Any],
     ) -> dict[str, Any]:
-        """执行单个 Agent。
-
-        根据 Agent 类型选择合适的调用方式。
-        支持事件驱动的 Agent（V3 Agent 基类）和普通可调用对象。
+        """执行智能体。
 
         Args:
-            agent: Agent 实例。
-            agent_name: Agent 名称。
-            correlation_id: 关联 ID。
+            agent: 智能体。
+            agent_name: 智能体名称。
+            correlation_id: 用于关联同一业务链路的关联 ID。
             context_snapshot: 上下文快照。
 
         Returns:
-            Agent 输出结果字典。
+            结构化结果字典。
+
+        Raises:
+            ValueError: 输入值或业务状态不合法时抛出。
         """
         from agentforge.core.event_types import AgentEvent, EventType
 

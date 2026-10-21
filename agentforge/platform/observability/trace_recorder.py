@@ -1,13 +1,4 @@
-"""AgentForge 平台可观测性层：trace_recorder。
-
-本模块负责 trace_recorder 相关的平台能力，是 平台可观测性层 的组成部分。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：TraceRecord、TraceRecorder。
-"""
+"""链路记录器模块。"""
 
 from __future__ import annotations
 
@@ -17,27 +8,20 @@ from dataclasses import dataclass, field
 
 @dataclass
 class TraceRecord:
-    """TraceRecord。
+    """链路记录持久化模型。
 
-    TraceRecord 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - trace_id: str。
-    - tenant_id: str。
-    - model: str。
-    - provider: str。
-    - input_tokens: int。
-    - output_tokens: int。
-    - cost_amount: float。
-    - latency_ms: float。
-    - status: str。
-    - created_at: float。
-    - error: str。
-    - 方法 to_dict()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        trace_id: 链路ID。
+        tenant_id: 租户 ID，用于数据隔离。
+        model: 模型。
+        provider: 提供方。
+        input_tokens: 输入。
+        output_tokens: 输出。
+        cost_amount: 成本金额。
+        latency_ms: 延迟，单位为毫秒。
+        status: 当前状态。
+        created_at: 创建时间。
+        error: 错误信息。
     """
 
     trace_id: str
@@ -53,10 +37,10 @@ class TraceRecord:
     error: str = ""
 
     def to_dict(self) -> dict:
-        """执行 to_dict 对应的逻辑，并返回处理结果。
+        """处理到字典。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         return {
             "trace_id": self.trace_id,
@@ -74,40 +58,22 @@ class TraceRecord:
 
 
 class TraceRecorder:
-    """TraceRecorder。
-
-    TraceRecorder 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - 方法 record()。
-    - 方法 list_recent()。
-    - 方法 summary()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """链路记录器相关组件。"""
 
     def __init__(self, max_records: int = 5000) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 TraceRecorder。
 
         Args:
-            max_records: int，调用方传入的 max_records 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            max_records: 最大记录。
         """
         self._records: list[TraceRecord] = []
         self._max_records = max_records
 
     def record(self, record: TraceRecord) -> None:
-        """执行 record 对应的逻辑，并返回处理结果。
+        """记录链路记录器。
 
         Args:
-            record: TraceRecord，调用方传入的 record 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            record: 待处理的领域记录。
         """
         self._records.append(record)
         if len(self._records) > self._max_records:
@@ -119,14 +85,14 @@ class TraceRecorder:
         tenant_id: str | None = None,
         limit: int = 50,
     ) -> list[TraceRecord]:
-        """查询并返回列表结果，并返回调用方需要的结果。
+        """查询最近。
 
         Args:
-            tenant_id: str | None，调用方传入的 tenant_id 参数。
-            limit: int，调用方传入的 limit 参数。
+            tenant_id: 租户 ID，用于数据隔离。
+            limit: 返回记录的最大数量。
 
         Returns:
-            list[TraceRecord]，函数执行后的结果。
+            结果列表。
         """
         records = self._records
         if tenant_id:
@@ -136,13 +102,13 @@ class TraceRecorder:
         return records[:limit]
 
     async def summary(self, tenant_id: str | None = None) -> dict:
-        """执行 summary 对应的逻辑，并返回处理结果。
+        """处理摘要。
 
         Args:
-            tenant_id: str | None，调用方传入的 tenant_id 参数。
+            tenant_id: 租户 ID，用于数据隔离。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         records = self._records
         if tenant_id:
