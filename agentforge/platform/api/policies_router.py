@@ -1,13 +1,4 @@
-"""AgentForge 平台 API 层：policies_router。
-
-本模块定义 policies_ 相关 HTTP 接口，负责请求解析、鉴权校验、调用应用服务并组织响应。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要函数：create_policies_router。
-"""
+"""策略路由模块。"""
 
 from __future__ import annotations
 
@@ -23,31 +14,28 @@ logger = logging.getLogger(__name__)
 
 
 def create_policies_router(policy_engine: PolicyEngine | None = None) -> APIRouter:
-    """创建新的业务对象，并返回调用方需要的结果。
+    """创建策略路由。
 
     Args:
-        policy_engine: PolicyEngine | None，调用方传入的 policy_engine 参数。
+        policy_engine: 策略引擎。
 
     Returns:
-        APIRouter，函数执行后的结果。
-
-    Raises:
-        HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+        处理结果对象。
     """
     router = APIRouter(prefix="/v1/policies", tags=["policies"])
 
     @router.get("")
     async def list_policies(tenant_id: str) -> dict[str, Any]:
-        """查询并返回列表结果，并返回调用方需要的结果。
+        """处理 GET 请求，查询策略。
 
         Args:
-            tenant_id: str，调用方传入的 tenant_id 参数。
+            tenant_id: 租户 ID，用于数据隔离。
 
         Returns:
-            dict[str, Any]，函数执行后的结果。
+            结构化结果字典。
 
         Raises:
-            HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+            HTTPException: 请求参数、状态或依赖不满足要求时抛出。
         """
         if policy_engine is None:
             raise HTTPException(status_code=503, detail="policy engine not configured")
@@ -61,13 +49,13 @@ def create_policies_router(policy_engine: PolicyEngine | None = None) -> APIRout
 
     @router.get("/revision")
     async def get_revision() -> dict[str, Any]:
-        """读取并返回指定数据，并返回调用方需要的结果。
+        """获取当前策略修订版本。
 
         Returns:
-            dict[str, Any]，函数执行后的结果。
+            结构化结果字典。
 
         Raises:
-            HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+            HTTPException: 请求参数、状态或依赖不满足要求时抛出。
         """
         if policy_engine is None:
             raise HTTPException(status_code=503, detail="policy engine not configured")
@@ -75,17 +63,17 @@ def create_policies_router(policy_engine: PolicyEngine | None = None) -> APIRout
 
     @router.post("/reload")
     async def reload_policies(request: Request, body: dict[str, Any]) -> dict[str, Any]:
-        """执行 reload_policies 对应的逻辑，并返回处理结果。
+        """处理 POST /reload 请求，重新加载策略。
 
         Args:
-            request: Request，调用方传入的 request 参数。
-            body: dict[str, Any]，调用方传入的 body 参数。
+            request: 当前 HTTP 请求。
+            body: 请求体数据。
 
         Returns:
-            dict[str, Any]，函数执行后的结果。
+            结构化结果字典。
 
         Raises:
-            HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+            HTTPException: 请求参数、状态或依赖不满足要求时抛出。
         """
         if policy_engine is None:
             raise HTTPException(status_code=503, detail="policy engine not configured")

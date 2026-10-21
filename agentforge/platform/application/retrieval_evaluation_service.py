@@ -1,13 +1,4 @@
-"""AgentForge 平台应用服务层：retrieval_evaluation_service。
-
-本模块实现 retrieval_evaluation_service 应用服务，编排多个领域对象和基础设施组件完成业务流程。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：RetrievalEvaluationService。
-"""
+"""检索评估服务模块。"""
 
 from __future__ import annotations
 
@@ -21,39 +12,22 @@ from agentforge.platform.application.retrieval_metrics import (
     recall_at_k,
 )
 from agentforge.platform.domain.knowledge import SearchMode
-from agentforge.platform.domain.retrieval import (
-    GoldenQuery,
-    QueryEvaluation,
-    RetrievalReport,
-)
+from agentforge.platform.domain.retrieval import GoldenQuery, QueryEvaluation, RetrievalReport
 
 
 class RetrievalEvaluationService:
-    """RetrievalEvaluationService。
-
-    RetrievalEvaluationService 编排业务流程，协调仓储、模型、策略和外部连接器完成用例。
-
-    主要成员：
-    - 方法 evaluate()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """检索评估应用服务，编排领域用例及其副作用。"""
 
     def __init__(
         self,
         repository: KnowledgeRepository,
         reranker: Reranker | None = None,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 RetrievalEvaluationService。
 
         Args:
-            repository: KnowledgeRepository，调用方传入的 repository 参数。
-            reranker: Reranker | None，调用方传入的 reranker 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            repository: 数据仓储实现。
+            reranker: 重排器。
         """
         self._repository = repository
         self._reranker = reranker
@@ -65,16 +39,16 @@ class RetrievalEvaluationService:
         rerank: bool = True,
         mode: SearchMode = "hybrid",
     ) -> RetrievalReport:
-        """执行 evaluate 对应的逻辑，并返回处理结果。
+        """评估输入数据并生成结果。
 
         Args:
-            queries: list[GoldenQuery]，调用方传入的 queries 参数。
-            k: int，调用方传入的 k 参数。
-            rerank: bool，调用方传入的 rerank 参数。
-            mode: SearchMode，调用方传入的 mode 参数。
+            queries: 输入参数。
+            k: 返回结果数量上限。
+            rerank: 重排。
+            mode: 运行模式。
 
         Returns:
-            RetrievalReport，函数执行后的结果。
+            检索报告结果。
         """
         evaluations: list[QueryEvaluation] = []
         for golden in queries:

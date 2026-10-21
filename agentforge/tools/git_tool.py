@@ -1,18 +1,4 @@
-"""Git 操作工具 — 代码拉取、diff 获取。
-
-Agent 通过工具注册表调用此工具执行 Git 操作，
-获取代码变更内容用于代码审查。
-
-使用 asyncio.create_subprocess_exec 执行 git 命令，
-支持 clone、pull、diff、log、show、status 六种安全操作。
-
-安全设计：
-- 操作白名单：只允许 clone/pull/diff/log/show/status，拒绝 push/reset 等危险操作
-- 仓库 URL 白名单：初始化时传入 allowed_repo_urls，clone 时校验
-- 本地路径限制：所有本地路径必须在 workspace 目录内，防止路径遍历攻击
-- 参数校验：拼接前校验路径不包含 `..`
-- 命令超时：clone/pull 大仓库或网络阻塞时，超时后 kill 子进程避免永久挂起
-"""
+"""Git工具模块。"""
 
 from __future__ import annotations
 
@@ -28,27 +14,10 @@ logger = logging.getLogger(__name__)
 
 
 class GitTool(BaseTool):
-    """Git 操作工具 — 提供代码拉取和 diff 获取功能。
+    """Git工具相关组件。
 
-    功能：
-    - 克隆仓库到本地 (clone)
-    - 拉取最新代码 (pull)
-    - 获取 PR diff (diff)
-    - 获取提交历史 (log)
-    - 查看特定提交 (show)
-    - 查看工作区状态 (status)
-
-    安全设计：
-    - 不执行 push、force push、reset 等危险操作
-    - 仓库 URL 白名单校验
-    - 本地路径限制在指定工作目录内
-    - 路径遍历攻击防护
-    - subprocess 有超时与超时后 kill，避免网络阻塞造成协程永久挂起
-
-    Args:
-        workspace: 本地工作目录（克隆的仓库存放在此目录下）。
-        allowed_repo_urls: 允许克隆的仓库 URL 白名单。为空则允许所有（开发模式）。
-        command_timeout: 单条 git 命令的超时秒数，超时后 kill 子进程。
+    Attributes:
+        ALLOWED_OPS: 允许。
     """
 
     # 允许的 Git 操作（白名单）
@@ -60,15 +29,12 @@ class GitTool(BaseTool):
         allowed_repo_urls: set[str] | None = None,
         command_timeout: float = 60.0,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 GitTool。
 
         Args:
-            workspace: str，调用方传入的 workspace 参数。
-            allowed_repo_urls: set[str] | None，调用方传入的 allowed_repo_urls 参数。
-            command_timeout: float，调用方传入的 command_timeout 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            workspace: 输入参数。
+            allowed_repo_urls: 允许仓储。
+            command_timeout: 超时。
         """
         self.workspace = workspace
         self.allowed_repo_urls = allowed_repo_urls or set()
@@ -76,14 +42,18 @@ class GitTool(BaseTool):
 
     @property
     def name(self) -> str:
-        """工具唯一标识。"""
+        """工具唯一标识。
+
+        Returns:
+            字符串结果。
+        """
         return "git"
 
     def schema(self) -> dict:
-        """执行 schema 对应的逻辑，并返回处理结果。
+        """返回工具参数的结构定义。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         return {
             "type": "function",
@@ -119,16 +89,14 @@ class GitTool(BaseTool):
     def _validate_local_path(self, local_path: str) -> Path:
         """校验本地路径安全性 — 防止路径遍历攻击。
 
-        确保路径在 workspace 目录内，不包含 `..`。
-
         Args:
-            local_path: 用户指定的本地路径（相对或绝对）。
+            local_path: 本地路径。
 
         Returns:
-            校验后的绝对路径。
+            路径结果。
 
         Raises:
-            ValueError: 路径包含 `..` 或超出 workspace 范围。
+            ValueError: 输入值或业务状态不合法时抛出。
         """
         # 检查路径遍历攻击
         if ".." in local_path:
@@ -154,10 +122,10 @@ class GitTool(BaseTool):
         """校验仓库 URL 是否在白名单中。
 
         Args:
-            repo_url: 仓库 URL。
+            repo_url: 仓储URL。
 
         Raises:
-            ValueError: URL 不在白名单中。
+            ValueError: 输入值或业务状态不合法时抛出。
         """
         if self.allowed_repo_urls and repo_url not in self.allowed_repo_urls:
             raise ValueError(
@@ -166,18 +134,13 @@ class GitTool(BaseTool):
             )
 
     async def _run_git_command(self, args: list[str]) -> ToolResult:
-        """执行 git 命令并返回结果。
-
-        使用 asyncio.create_subprocess_exec 异步执行 git 命令，
-        捕获 stdout 和 stderr。通过 ``asyncio.wait_for`` 对
-        ``communicate()`` 施加超时；超时后 kill 子进程并回收，
-        避免 clone/pull 大仓库或网络阻塞时协程永久挂起。
+        """运行 Git 命令并返回执行结果。
 
         Args:
-            args: git 命令参数列表（不含 "git" 前缀）。
+            args: 位置参数。
 
         Returns:
-            工具执行结果。退出码非 0 时 success=False，超时同样 success=False。
+            工具结果结果。
         """
         cmd = ["git"] + args
         logger.info("Executing git command: %s", " ".join(cmd))
@@ -250,13 +213,10 @@ class GitTool(BaseTool):
         )
 
     async def _kill_process(self, process: asyncio.subprocess.Process) -> None:
-        """执行 _kill_process 对应的逻辑，并返回处理结果。
+        """处理。
 
         Args:
-            process: asyncio.subprocess.Process，调用方传入的 process 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            process: 处理。
         """
         try:
             process.kill()
@@ -270,22 +230,13 @@ class GitTool(BaseTool):
             logger.debug("failed to reap process after kill", exc_info=True)
 
     async def execute(self, **kwargs: Any) -> ToolResult:
-        """执行 Git 操作。
-
-        根据 operation 参数分派到具体的 git 子命令。
-        所有操作都经过安全校验（白名单、路径限制、URL 校验）。
+        """执行核心处理逻辑并返回结果。
 
         Args:
-            operation: Git 操作类型（clone/pull/diff/log/show/status）。
-            repo_url: 仓库 URL（clone 操作时需要）。
-            local_path: 本地路径（仓库在 workspace 中的位置）。
-            branch: 分支名称（clone 时可指定分支）。
-            commit_range: 提交范围（diff 操作时使用，如 main...feature）。
-            limit: 日志条数（log 操作时使用，默认 20）。
-            commit: 提交哈希（show 操作时使用）。
+            kwargs: 关键字参数。
 
         Returns:
-            Git 操作结果。
+            工具结果结果。
         """
         operation = kwargs.get("operation", "")
 
@@ -320,13 +271,13 @@ class GitTool(BaseTool):
         return ToolResult(success=False, output="", error=f"Unknown operation: {operation}")
 
     async def _do_clone(self, kwargs: dict[str, Any]) -> ToolResult:
-        """执行 _do_clone 对应的逻辑，并返回处理结果。
+        """执行克隆。
 
         Args:
-            kwargs: dict[str, Any]，调用方传入的 kwargs 参数。
+            kwargs: 关键字参数。
 
         Returns:
-            ToolResult，函数执行后的结果。
+            工具结果结果。
         """
         repo_url = kwargs.get("repo_url", "")
         local_path = kwargs.get("local_path", "")
@@ -357,13 +308,13 @@ class GitTool(BaseTool):
         return result
 
     async def _do_pull(self, kwargs: dict[str, Any]) -> ToolResult:
-        """执行 _do_pull 对应的逻辑，并返回处理结果。
+        """执行拉取。
 
         Args:
-            kwargs: dict[str, Any]，调用方传入的 kwargs 参数。
+            kwargs: 关键字参数。
 
         Returns:
-            ToolResult，函数执行后的结果。
+            工具结果结果。
         """
         local_path = kwargs.get("local_path", "")
         if not local_path:
@@ -379,13 +330,13 @@ class GitTool(BaseTool):
         return result
 
     async def _do_diff(self, kwargs: dict[str, Any]) -> ToolResult:
-        """执行 _do_diff 对应的逻辑，并返回处理结果。
+        """执行差异。
 
         Args:
-            kwargs: dict[str, Any]，调用方传入的 kwargs 参数。
+            kwargs: 关键字参数。
 
         Returns:
-            ToolResult，函数执行后的结果。
+            工具结果结果。
         """
         local_path = kwargs.get("local_path", "")
         commit_range = kwargs.get("commit_range", kwargs.get("branch", ""))
@@ -412,13 +363,13 @@ class GitTool(BaseTool):
         return result
 
     async def _do_log(self, kwargs: dict[str, Any]) -> ToolResult:
-        """执行 git log。
+        """执行日志。
 
         Args:
-            kwargs: 包含 local_path, limit（默认 20）。
+            kwargs: 关键字参数。
 
         Returns:
-            日志结果。
+            工具结果结果。
         """
         local_path = kwargs.get("local_path", "")
         limit = kwargs.get("limit", 20)
@@ -445,13 +396,13 @@ class GitTool(BaseTool):
         return result
 
     async def _do_show(self, kwargs: dict[str, Any]) -> ToolResult:
-        """执行 _do_show 对应的逻辑，并返回处理结果。
+        """执行显示。
 
         Args:
-            kwargs: dict[str, Any]，调用方传入的 kwargs 参数。
+            kwargs: 关键字参数。
 
         Returns:
-            ToolResult，函数执行后的结果。
+            工具结果结果。
         """
         local_path = kwargs.get("local_path", "")
         commit = kwargs.get("commit", "")
@@ -480,13 +431,13 @@ class GitTool(BaseTool):
         return result
 
     async def _do_status(self, kwargs: dict[str, Any]) -> ToolResult:
-        """执行 _do_status 对应的逻辑，并返回处理结果。
+        """执行状态。
 
         Args:
-            kwargs: dict[str, Any]，调用方传入的 kwargs 参数。
+            kwargs: 关键字参数。
 
         Returns:
-            ToolResult，函数执行后的结果。
+            工具结果结果。
         """
         local_path = kwargs.get("local_path", "")
         if not local_path:

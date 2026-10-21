@@ -1,4 +1,4 @@
-"""GitTool 单元测试 — 真实 subprocess 调用 + 安全校验。
+"""Git工具测试模块。
 
 测试要点：
 - 各操作（clone/pull/diff/log/show/status）的命令构建
@@ -15,9 +15,7 @@ import pytest
 
 from agentforge.tools.git_tool import GitTool
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 辅助函数 — mock asyncio.create_subprocess_exec
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 def _make_mock_process(
@@ -25,15 +23,15 @@ def _make_mock_process(
     stderr: bytes = b"",
     returncode: int = 0,
 ):
-    """创建 mock 的 asyncio 子进程对象。
+    """构造模拟处理。
 
     Args:
-        stdout: 标准输出内容。
-        stderr: 标准错误内容。
-        returncode: 退出码。
+        stdout: 输入参数。
+        stderr: 输入参数。
+        returncode: 输入参数。
 
     Returns:
-        MagicMock 模拟的 Process 对象。
+        处理结果。
     """
     process = AsyncMock()
     process.communicate = AsyncMock(return_value=(stdout, stderr))
@@ -41,29 +39,19 @@ def _make_mock_process(
     return process
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 基础测试
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestGitToolBasic:
     """GitTool 基础属性测试。"""
 
     def test_name(self) -> None:
-        """验证 name 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证名称对应的测试场景。"""
         tool = GitTool()
         assert tool.name == "git"
 
     def test_schema(self) -> None:
-        """验证 schema 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证结构对应的测试场景。"""
         tool = GitTool()
         schema = tool.schema()
         assert schema["type"] == "function"
@@ -80,21 +68,13 @@ class TestGitToolBasic:
         assert "reset" not in schema["function"]["parameters"]["properties"]["operation"]["enum"]
 
     def test_init_defaults(self) -> None:
-        """验证 init_defaults 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证初始化默认项对应的测试场景。"""
         tool = GitTool()
         assert tool.workspace == "/tmp/agentforge-workspace"
         assert tool.allowed_repo_urls == set()
 
     def test_init_with_allowed_urls(self) -> None:
-        """验证 init_with_allowed_urls 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证初始化使用允许对应的测试场景。"""
         tool = GitTool(
             workspace="/custom/workspace",
             allowed_repo_urls={"https://github.com/org/repo.git"},
@@ -103,9 +83,7 @@ class TestGitToolBasic:
         assert "https://github.com/org/repo.git" in tool.allowed_repo_urls
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 操作白名单测试
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestGitToolOperationWhitelist:
@@ -121,7 +99,7 @@ class TestGitToolOperationWhitelist:
 
     @pytest.mark.asyncio
     async def test_reset_rejected(self) -> None:
-        """reset 操作被拒绝。"""
+        """验证重置拒绝对应的测试场景。"""
         tool = GitTool()
         result = await tool.execute(operation="reset", local_path="repo")
         assert result.success is False
@@ -129,15 +107,13 @@ class TestGitToolOperationWhitelist:
 
     @pytest.mark.asyncio
     async def test_force_push_rejected(self) -> None:
-        """force-push 操作被拒绝。"""
+        """验证拒绝对应的测试场景。"""
         tool = GitTool()
         result = await tool.execute(operation="force-push", local_path="repo")
         assert result.success is False
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 安全校验测试
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestGitToolSecurity:
@@ -153,7 +129,7 @@ class TestGitToolSecurity:
 
     @pytest.mark.asyncio
     async def test_path_outside_workspace_rejected(self) -> None:
-        """绝对路径超出 workspace 被拒绝。"""
+        """验证路径拒绝对应的测试场景。"""
         tool = GitTool(workspace="/tmp/ws")
         result = await tool.execute(operation="pull", local_path="/etc/passwd")
         assert result.success is False
@@ -176,7 +152,7 @@ class TestGitToolSecurity:
 
     @pytest.mark.asyncio
     async def test_repo_url_in_whitelist_passes(self) -> None:
-        """白名单内的 URL 通过校验（但 git 命令可能因不存在而失败）。"""
+        """验证仓储URL在通过对应的测试场景。"""
         tool = GitTool(
             workspace="/tmp/ws",
             allowed_repo_urls={"https://github.com/allowed/repo.git"},
@@ -208,7 +184,7 @@ class TestGitToolSecurity:
 
     @pytest.mark.asyncio
     async def test_invalid_commit_hash_rejected(self) -> None:
-        """show 操作的 commit 参数包含非法字符被拒绝。"""
+        """验证无效提交哈希拒绝对应的测试场景。"""
         tool = GitTool(workspace="/tmp/ws")
         result = await tool.execute(
             operation="show",
@@ -219,17 +195,15 @@ class TestGitToolSecurity:
         assert "invalid" in result.error.lower()
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # Clone 操作测试
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestGitToolClone:
-    """GitTool clone 操作测试。"""
+    """验证测试Git工具克隆行为的测试集合。"""
 
     @pytest.mark.asyncio
     async def test_clone_success(self) -> None:
-        """成功 clone 仓库。"""
+        """验证克隆成功对应的测试场景。"""
         tool = GitTool(workspace="/tmp/ws")
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = _make_mock_process(
@@ -252,7 +226,7 @@ class TestGitToolClone:
 
     @pytest.mark.asyncio
     async def test_clone_with_branch(self) -> None:
-        """clone 指定分支。"""
+        """验证克隆使用对应的测试场景。"""
         tool = GitTool(workspace="/tmp/ws")
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = _make_mock_process(returncode=0)
@@ -270,7 +244,7 @@ class TestGitToolClone:
 
     @pytest.mark.asyncio
     async def test_clone_missing_repo_url(self) -> None:
-        """clone 缺少 repo_url 返回错误。"""
+        """验证克隆缺失仓储URL对应的测试场景。"""
         tool = GitTool(workspace="/tmp/ws")
         result = await tool.execute(operation="clone", local_path="repo")
         assert result.success is False
@@ -278,7 +252,7 @@ class TestGitToolClone:
 
     @pytest.mark.asyncio
     async def test_clone_missing_local_path(self) -> None:
-        """clone 缺少 local_path 返回错误。"""
+        """验证克隆缺失本地路径对应的测试场景。"""
         tool = GitTool(workspace="/tmp/ws")
         result = await tool.execute(operation="clone", repo_url="https://x.com/r.git")
         assert result.success is False
@@ -286,7 +260,7 @@ class TestGitToolClone:
 
     @pytest.mark.asyncio
     async def test_clone_failure(self) -> None:
-        """clone 失败（git 退出码非 0）。"""
+        """验证克隆失败对应的测试场景。"""
         tool = GitTool(workspace="/tmp/ws")
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = _make_mock_process(
@@ -303,17 +277,15 @@ class TestGitToolClone:
         assert "repository not found" in result.error
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # Pull 操作测试
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestGitToolPull:
-    """GitTool pull 操作测试。"""
+    """验证测试Git工具拉取行为的测试集合。"""
 
     @pytest.mark.asyncio
     async def test_pull_success(self) -> None:
-        """成功 pull。"""
+        """验证拉取成功对应的测试场景。"""
         tool = GitTool(workspace="/tmp/ws")
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = _make_mock_process(
@@ -331,24 +303,22 @@ class TestGitToolPull:
 
     @pytest.mark.asyncio
     async def test_pull_missing_local_path(self) -> None:
-        """pull 缺少 local_path 返回错误。"""
+        """验证拉取缺失本地路径对应的测试场景。"""
         tool = GitTool(workspace="/tmp/ws")
         result = await tool.execute(operation="pull")
         assert result.success is False
         assert "local_path" in result.error
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # Diff 操作测试
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestGitToolDiff:
-    """GitTool diff 操作测试。"""
+    """验证测试Git工具差异行为的测试集合。"""
 
     @pytest.mark.asyncio
     async def test_diff_without_range(self) -> None:
-        """无 commit_range 的 diff（工作区变更）。"""
+        """验证差异不包含对应的测试场景。"""
         tool = GitTool(workspace="/tmp/ws")
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = _make_mock_process(
@@ -363,11 +333,7 @@ class TestGitToolDiff:
 
     @pytest.mark.asyncio
     async def test_diff_with_commit_range(self) -> None:
-        """验证 diff_with_commit_range 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证差异使用提交对应的测试场景。"""
         tool = GitTool(workspace="/tmp/ws")
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = _make_mock_process(
@@ -386,24 +352,22 @@ class TestGitToolDiff:
 
     @pytest.mark.asyncio
     async def test_diff_missing_local_path(self) -> None:
-        """diff 缺少 local_path 返回错误。"""
+        """验证差异缺失本地路径对应的测试场景。"""
         tool = GitTool(workspace="/tmp/ws")
         result = await tool.execute(operation="diff")
         assert result.success is False
         assert "local_path" in result.error
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # Log 操作测试
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestGitToolLog:
-    """GitTool log 操作测试。"""
+    """验证测试Git工具日志行为的测试集合。"""
 
     @pytest.mark.asyncio
     async def test_log_default_limit(self) -> None:
-        """log 默认限制 20 条。"""
+        """验证日志默认限制对应的测试场景。"""
         tool = GitTool(workspace="/tmp/ws")
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = _make_mock_process(
@@ -420,7 +384,7 @@ class TestGitToolLog:
 
     @pytest.mark.asyncio
     async def test_log_custom_limit(self) -> None:
-        """log 自定义条数。"""
+        """验证日志自定义限制对应的测试场景。"""
         tool = GitTool(workspace="/tmp/ws")
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = _make_mock_process(
@@ -435,7 +399,7 @@ class TestGitToolLog:
 
     @pytest.mark.asyncio
     async def test_log_invalid_limit_fallback(self) -> None:
-        """limit 非法时使用默认值 20。"""
+        """验证日志无效限制对应的测试场景。"""
         tool = GitTool(workspace="/tmp/ws")
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = _make_mock_process(returncode=0)
@@ -445,21 +409,15 @@ class TestGitToolLog:
         assert "-n20" in args
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # Show 操作测试
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestGitToolShow:
-    """GitTool show 操作测试。"""
+    """验证测试Git工具显示行为的测试集合。"""
 
     @pytest.mark.asyncio
     async def test_show_success(self) -> None:
-        """验证 show_success 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证显示成功对应的测试场景。"""
         tool = GitTool(workspace="/tmp/ws")
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = _make_mock_process(
@@ -480,24 +438,22 @@ class TestGitToolShow:
 
     @pytest.mark.asyncio
     async def test_show_missing_commit(self) -> None:
-        """show 缺少 commit 返回错误。"""
+        """验证显示缺失提交对应的测试场景。"""
         tool = GitTool(workspace="/tmp/ws")
         result = await tool.execute(operation="show", local_path="repo")
         assert result.success is False
         assert "commit" in result.error
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # Status 操作测试
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestGitToolStatus:
-    """GitTool status 操作测试。"""
+    """测试Git工具状态枚举。"""
 
     @pytest.mark.asyncio
     async def test_status_success(self) -> None:
-        """成功获取 status。"""
+        """验证状态成功对应的测试场景。"""
         tool = GitTool(workspace="/tmp/ws")
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = _make_mock_process(
@@ -514,16 +470,14 @@ class TestGitToolStatus:
 
     @pytest.mark.asyncio
     async def test_status_missing_local_path(self) -> None:
-        """status 缺少 local_path 返回错误。"""
+        """验证状态缺失本地路径对应的测试场景。"""
         tool = GitTool(workspace="/tmp/ws")
         result = await tool.execute(operation="status")
         assert result.success is False
         assert "local_path" in result.error
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 错误处理测试
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestGitToolErrorHandling:
@@ -531,7 +485,7 @@ class TestGitToolErrorHandling:
 
     @pytest.mark.asyncio
     async def test_git_not_installed(self) -> None:
-        """git 未安装时返回友好错误。"""
+        """验证Git不对应的测试场景。"""
         tool = GitTool(workspace="/tmp/ws")
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
             mock_exec.side_effect = FileNotFoundError("git not found")
@@ -542,7 +496,7 @@ class TestGitToolErrorHandling:
 
     @pytest.mark.asyncio
     async def test_git_nonzero_exit(self) -> None:
-        """git 退出码非 0 返回 stderr。"""
+        """验证Git对应的测试场景。"""
         tool = GitTool(workspace="/tmp/ws")
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = _make_mock_process(

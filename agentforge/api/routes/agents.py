@@ -1,13 +1,4 @@
-"""Agent 管理 REST 接口 — Agent 查询、健康检查。
-
-API 端点：
-    GET    /api/v1/agents          — 查询 Agent 列表
-    GET    /api/v1/agents/{name}   — 查询 Agent 详情
-    GET    /api/v1/agents/health   — 健康检查
-
-注意：平台并未提供 ``POST /api/v1/agents/{name}/register`` 端点；
-Agent 的注册由运行时/框架侧完成，而非通过 HTTP 暴露的 REST 接口。
-"""
+"""智能体模块。"""
 
 from __future__ import annotations
 
@@ -21,30 +12,21 @@ logger = logging.getLogger(__name__)
 
 
 class AgentRoutes:
-    """Agent 管理路由处理器。
-
-    封装 Agent 相关的 HTTP 请求处理逻辑。
-
-    Args:
-        registry: Agent 注册表。
-    """
+    """智能体路由相关组件。"""
 
     def __init__(self, registry: AgentRegistry) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 AgentRoutes。
 
         Args:
-            registry: AgentRegistry，调用方传入的 registry 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            registry: 注册表实例。
         """
         self.registry = registry
 
     async def list_agents(self) -> dict[str, Any]:
-        """查询所有已注册的 Agent。
+        """查询智能体。
 
         Returns:
-            Agent 列表信息。
+            结构化结果字典。
         """
         agents = self.registry.list_agents()
         return {
@@ -53,16 +35,16 @@ class AgentRoutes:
         }
 
     async def get_agent(self, name: str) -> dict[str, Any]:
-        """查询单个 Agent 详情。
+        """读取智能体。
 
         Args:
-            name: Agent 名称。
+            name: 资源或对象名称。
 
         Returns:
-            Agent 信息。
+            结构化结果字典。
 
         Raises:
-            APIError: Agent 不存在时抛出 NOT_FOUND。
+            NOT_FOUND: 操作无法完成时抛出。
         """
         if not self.registry.has(name):
             raise NOT_FOUND
@@ -86,12 +68,10 @@ class AgentRoutes:
         return agent_info
 
     async def health_check(self) -> dict[str, Any]:
-        """Agent 健康检查。
-
-        检查所有已注册 Agent 的健康状态。
+        """检查组件健康状态并返回诊断结果。
 
         Returns:
-            健康检查结果。
+            结构化结果字典。
         """
         agents = self.registry.list_names()
         healthy: list[str] = []

@@ -18,7 +18,7 @@ services:
       - '9092:9092'
 
   postgres:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:0.8.1-pg17
     environment:
       POSTGRES_USER: agentforge
       POSTGRES_PASSWORD: agentforge
@@ -42,7 +42,7 @@ services:
       - agentforge-valkey:/data
 
   temporal:
-    image: temporalio/auto-setup:1.32.0
+    image: temporalio/auto-setup:latest
     depends_on:
       postgres:
         condition: service_healthy
@@ -58,7 +58,7 @@ services:
       - '7233:7233'
 
   temporal-ui:
-    image: temporalio/ui:2.42.0
+    image: temporalio/ui:2.56.0
     depends_on:
       - temporal
     environment:
@@ -68,16 +68,16 @@ services:
       - '8080:8080'
 
   minio:
-    image: minio/minio:latest
-    command: server /data --console-address ':9001'
+    image: bitnamilegacy/minio:latest
     environment:
       MINIO_ROOT_USER: agentforge
       MINIO_ROOT_PASSWORD: agentforge
+      MINIO_DEFAULT_BUCKETS: agentforge-infra-test
     ports:
       - '9000:9000'
       - '9001:9001'
     volumes:
-      - agentforge-minio:/data
+      - agentforge-minio:/bitnami/minio/data
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.138.0
@@ -111,6 +111,9 @@ services:
       AGENTFORGE_TEMPORAL_NAMESPACE: default
       AGENTFORGE_VALKEY_URL: redis://valkey:6379/0
       AGENTFORGE_OBJECT_STORE_ENDPOINT: http://minio:9000
+      AGENTFORGE_OBJECT_STORE_ACCESS_KEY: ${AGENTFORGE_OBJECT_STORE_ACCESS_KEY:-agentforge}
+      AGENTFORGE_OBJECT_STORE_SECRET_KEY: ${AGENTFORGE_OBJECT_STORE_SECRET_KEY:-agentforge}
+      AGENTFORGE_OBJECT_STORE_BUCKET: ${AGENTFORGE_OBJECT_STORE_BUCKET:-agentforge}
       AGENTFORGE_OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       AGENTFORGE_MONTHLY_MODEL_BUDGET: ${AGENTFORGE_MONTHLY_MODEL_BUDGET:-100}
       AGENTFORGE_FEISHU_ENCRYPT_KEY: ${AGENTFORGE_FEISHU_ENCRYPT_KEY:-}
@@ -146,6 +149,9 @@ services:
       AGENTFORGE_TEMPORAL_NAMESPACE: default
       AGENTFORGE_VALKEY_URL: redis://valkey:6379/0
       AGENTFORGE_OBJECT_STORE_ENDPOINT: http://minio:9000
+      AGENTFORGE_OBJECT_STORE_ACCESS_KEY: ${AGENTFORGE_OBJECT_STORE_ACCESS_KEY:-agentforge}
+      AGENTFORGE_OBJECT_STORE_SECRET_KEY: ${AGENTFORGE_OBJECT_STORE_SECRET_KEY:-agentforge}
+      AGENTFORGE_OBJECT_STORE_BUCKET: ${AGENTFORGE_OBJECT_STORE_BUCKET:-agentforge}
       AGENTFORGE_OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       AGENTFORGE_MONTHLY_MODEL_BUDGET: ${AGENTFORGE_MONTHLY_MODEL_BUDGET:-100}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}

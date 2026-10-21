@@ -1,14 +1,4 @@
-"""Agent 注册表 — Agent 名称→Agent 实例的映射，支持动态注册。
-
-工作流引擎通过 AgentRegistry 查找 Agent 实例。
-支持动态注册和注销 Agent，无需重启服务。
-
-设计理念：
-- Agent 名称全局唯一
-- 注册时检查名称冲突
-- 支持批量注册
-- 线程安全（通过 asyncio.Lock 保护并发写入）
-"""
+"""注册表模块。"""
 
 from __future__ import annotations
 
@@ -19,31 +9,10 @@ logger = logging.getLogger(__name__)
 
 
 class AgentRegistry:
-    """AgentRegistry。
-
-    AgentRegistry 是核心运行时组件，负责状态管理、调度和跨模块协作。
-
-    主要成员：
-    - 方法 register()。
-    - 方法 register_many()。
-    - 方法 unregister()。
-    - 方法 get()。
-    - 方法 has()。
-    - 方法 list_agents()。
-    - 方法 list_names()。
-    - 方法 clear()。
-
-    设计约束：
-    - 保持接口稳定，避免调用方依赖内部实现细节。
-    - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-    """
+    """智能体注册表。"""
 
     def __init__(self) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """初始化 AgentRegistry。"""
         self._agents: dict[str, Any] = {}
         self._metadata: dict[str, dict[str, Any]] = {}
 
@@ -53,15 +22,15 @@ class AgentRegistry:
         agent: Any,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        """注册 Agent 到注册表。
+        """注册智能体。
 
         Args:
-            name: Agent 名称（全局唯一）。
-            agent: Agent 实例。
-            metadata: Agent 元数据（如版本、描述等）。
+            name: 资源或对象名称。
+            agent: 智能体。
+            metadata: 附加元数据。
 
         Raises:
-            ValueError: Agent 名称已存在时抛出。
+            ValueError: 输入值或业务状态不合法时抛出。
         """
         if name in self._agents:
             raise ValueError(f"Agent '{name}' is already registered")
@@ -76,23 +45,23 @@ class AgentRegistry:
         )
 
     def register_many(self, agents: dict[str, Any]) -> None:
-        """批量注册 Agent。
+        """注册智能体。
 
         Args:
-            agents: Agent 名称到实例的映射字典。
+            agents: 智能体。
         """
         for name, agent in agents.items():
             if name not in self._agents:
                 self.register(name, agent)
 
     def unregister(self, name: str) -> Any | None:
-        """从注册表中注销 Agent。
+        """注销智能体。
 
         Args:
-            name: Agent 名称。
+            name: 资源或对象名称。
 
         Returns:
-            被注销的 Agent 实例，不存在则返回 None。
+            无结果。
         """
         agent = self._agents.pop(name, None)
         self._metadata.pop(name, None)
@@ -103,40 +72,40 @@ class AgentRegistry:
         return agent
 
     def get(self, name: str) -> Any | None:
-        """根据名称获取 Agent 实例。
+        """读取智能体。
 
         Args:
-            name: Agent 名称。
+            name: 资源或对象名称。
 
         Returns:
-            Agent 实例，不存在则返回 None。
+            无结果。
         """
         return self._agents.get(name)
 
     def has(self, name: str) -> bool:
-        """检查 Agent 是否已注册。
+        """判断指定键或名称是否存在。
 
         Args:
-            name: Agent 名称。
+            name: 资源或对象名称。
 
         Returns:
-            是否已注册。
+            操作是否成功。
         """
         return name in self._agents
 
     def list_agents(self) -> list[dict[str, Any]]:
-        """列出所有已注册的 Agent。
+        """查询智能体。
 
         Returns:
-            Agent 信息列表，每个元素包含 name 和 metadata。
+            结果列表。
         """
         return [{"name": name, "metadata": self._metadata[name]} for name in self._agents]
 
     def list_names(self) -> list[str]:
-        """列出所有已注册的 Agent 名称。
+        """查询名称。
 
         Returns:
-            Agent 名称列表。
+            结果列表。
         """
         return list(self._agents.keys())
 

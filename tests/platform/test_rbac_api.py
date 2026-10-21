@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_rbac_api。
+"""RBACAPI测试模块。
 
 本测试模块验证 test_rbac_api 覆盖的业务路径、边界条件和回归场景。
 
@@ -7,7 +7,8 @@
 - 所有租户相关数据都必须携带 tenant_id 并保持隔离。
 - 关键执行路径应保留日志、审计或链路追踪信息。
 -
-主要函数：test_create_role_and_list、test_set_permissions_and_assign、test_assign_unknown_role_404、test_authorize_endpoint。
+主要函数：test_create_role_and_list、test_set_permissions_and_assign、test_assign_unknown_role_404、test
+    _authorize_endpoint。
 """
 
 from __future__ import annotations
@@ -19,10 +20,10 @@ from agentforge.platform.runtime import build_memory_container
 
 
 def _client() -> TestClient:
-    """执行 _client 对应的逻辑，并返回处理结果。
+    """处理客户端。
 
     Returns:
-        TestClient，函数执行后的结果。
+        测试客户端结果。
     """
     container = build_memory_container()
     app = create_platform_app(container)
@@ -30,11 +31,7 @@ def _client() -> TestClient:
 
 
 def test_create_role_and_list() -> None:
-    """验证 create_role_and_list 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证创建角色及查询对应的测试场景。"""
     client = _client()
     r = client.post("/v1/rbac/roles", params={"tenant_id": "t1", "name": "support_admin"})
     assert r.status_code == 200
@@ -48,11 +45,7 @@ def test_create_role_and_list() -> None:
 
 
 def test_set_permissions_and_assign() -> None:
-    """验证 set_permissions_and_assign 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证设置权限及分配对应的测试场景。"""
     client = _client()
     role = client.post("/v1/rbac/roles", params={"tenant_id": "t1", "name": "support_agent"}).json()
     role_id = role["role_id"]
@@ -79,11 +72,7 @@ def test_set_permissions_and_assign() -> None:
 
 
 def test_assign_unknown_role_404() -> None:
-    """验证 assign_unknown_role_404 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证分配未知角色资源不存在对应的测试场景。"""
     client = _client()
     r = client.post(
         "/v1/rbac/assignments",
@@ -93,11 +82,7 @@ def test_assign_unknown_role_404() -> None:
 
 
 def test_authorize_endpoint() -> None:
-    """验证 authorize_endpoint 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证授权端点对应的测试场景。"""
     client = _client()
     role = client.post("/v1/rbac/roles", params={"tenant_id": "t1", "name": "support_admin"}).json()
     role_id = role["role_id"]

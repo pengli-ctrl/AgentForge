@@ -1,4 +1,4 @@
-"""AgentForge 数据库迁移层：20260918_0007_knowledge_hybrid。
+"""数据库迁移版本 0007_knowledge_hybrid。
 
 本模块负责 20260918_0007_knowledge_hybrid 相关能力，是 数据库迁移层 的组成部分。
 
@@ -23,11 +23,8 @@ depends_on = None
 
 def upgrade() -> None:
     # 1. 为 chunk 增加向量列与 embedding 版本字段
-    """执行 upgrade 对应的逻辑，并返回处理结果。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """应用当前数据库迁移版本。"""
+    op.execute("CREATE EXTENSION IF NOT EXISTS vector")
     op.add_column(
         "knowledge_chunks",
         sa.Column("embedding", Vector(EMBEDDING_DIM), nullable=True),
@@ -42,26 +39,26 @@ def upgrade() -> None:
     )
 
     # 2. PostgreSQL FTS 全文索引（GIN，基于 content 的计算列）
-    op.execute("""
+    op.execute(
+        """
         CREATE INDEX ix_knowledge_chunks_fts_content
         ON knowledge_chunks
         USING gin (to_tsvector('english', content))
-        """)
+        """
+    )
 
     # 3. pgvector 向量索引（HNSW，适用于高维近似最近邻）
-    op.execute("""
+    op.execute(
+        """
         CREATE INDEX ix_knowledge_chunks_embedding_hnsw
         ON knowledge_chunks
         USING hnsw (embedding vector_cosine_ops)
-        """)
+        """
+    )
 
 
 def downgrade() -> None:
-    """执行 downgrade 对应的逻辑，并返回处理结果。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """回滚当前数据库迁移版本。"""
     op.execute("DROP INDEX IF EXISTS ix_knowledge_chunks_embedding_hnsw")
     op.execute("DROP INDEX IF EXISTS ix_knowledge_chunks_fts_content")
     op.drop_column("knowledge_chunks", "embedding_version")

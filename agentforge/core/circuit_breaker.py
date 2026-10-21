@@ -1,39 +1,4 @@
-"""
-熔断器 — Agent 调用的自动故障隔离（博客 06 Layer 1）。
-
-当某个 Agent 连续失败时，熔断器自动切断对该 Agent 的调用，
-防止故障扩散到整个系统。
-
-状态机（三态）：
-    CLOSED ──(连续失败 N 次)──> OPEN
-    OPEN ──(等待 T 秒)──> HALF_OPEN
-    HALF_OPEN ──(试探成功)──> CLOSED
-    HALF_OPEN ──(试探失败)──> OPEN（重置计时器）
-
-    CLOSED: 正常状态，所有请求放行
-    OPEN: 熔断状态，所有请求被拒绝（快速失败）
-    HALF_OPEN: 半开状态，允许一次试探请求
-        - 试探成功 → 恢复到 CLOSED
-        - 试探失败 → 重新回到 OPEN
-
-设计参数：
-- failure_threshold = 5: 连续 5 次失败触发熔断
-- recovery_timeout = 60s: 熔断后等待 60 秒再尝试恢复
-- half_open_max_calls = 1: 半开状态只允许 1 次试探
-
-使用方式：
-    breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=60)
-
-    if breaker.can_execute():
-        try:
-            result = await agent.execute(event)
-            breaker.record_success()
-        except Exception:
-            breaker.record_failure()
-    else:
-        # 熔断中，走降级逻辑
-        result = fallback_handler()
-"""
+"""熔断器模块。"""
 
 from __future__ import annotations
 
@@ -46,13 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class CircuitState(enum.Enum):
-    """熔断器状态枚举。
-
-    Attributes:
-        CLOSED: 正常状态，请求放行。
-        OPEN: 熔断状态，请求被拒绝。
-        HALF_OPEN: 半开状态，允许一次试探请求。
-    """
+    """熔断器状态枚举。"""
 
     CLOSED = "CLOSED"
     OPEN = "OPEN"
@@ -60,22 +19,7 @@ class CircuitState(enum.Enum):
 
 
 class CircuitBreaker:
-    """熔断器 — Agent 调用的自动故障隔离。
-
-    通过状态机管理 Agent 的调用权限：
-    - CLOSED 状态下正常放行请求
-    - 连续失败达到阈值后切换到 OPEN 状态
-    - OPEN 状态下经过恢复时间后切换到 HALF_OPEN
-    - HALF_OPEN 状态下试探请求的结果决定恢复或重新熔断
-
-    线程安全说明：本实现非线程安全，适用于单线程异步场景
-    （Agent 执行是串行的，不需要锁）。
-
-    Args:
-        failure_threshold: 连续失败多少次后触发熔断（默认 5）。
-        recovery_timeout: 熔断后等待多少秒才尝试恢复（默认 60）。
-        half_open_max_calls: 半开状态下允许的试探次数（默认 1）。
-    """
+    """熔断器领域组件。"""
 
     def __init__(
         self,
@@ -84,16 +28,13 @@ class CircuitBreaker:
         half_open_max_calls: int = 1,
         clock: Callable[[], float] | None = None,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 CircuitBreaker。
 
         Args:
-            failure_threshold: int，调用方传入的 failure_threshold 参数。
-            recovery_timeout: float，调用方传入的 recovery_timeout 参数。
-            half_open_max_calls: int，调用方传入的 half_open_max_calls 参数。
-            clock: Callable[[], float] | None，调用方传入的 clock 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            failure_threshold: 失败阈值。
+            recovery_timeout: 超时。
+            half_open_max_calls: 一半打开最大调用。
+            clock: 输入参数。
         """
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
@@ -110,10 +51,8 @@ class CircuitBreaker:
     def state(self) -> CircuitState:
         """当前熔断器状态。
 
-        如果当前是 OPEN 状态且已超过恢复时间，自动切换到 HALF_OPEN。
-
         Returns:
-            当前 CircuitState 枚举值。
+            熔断状态结果。
         """
         if self._state == CircuitState.OPEN:
             if self._clock() - self._last_failure_time >= self.recovery_timeout:
@@ -126,13 +65,8 @@ class CircuitBreaker:
     def can_execute(self) -> bool:
         """判断是否允许执行请求。
 
-        状态逻辑：
-        - CLOSED: 始终允许
-        - OPEN: 拒绝（但会检查是否已过恢复时间，如果过了则切换到 HALF_OPEN）
-        - HALF_OPEN: 只允许 half_open_max_calls 次试探
-
         Returns:
-            是否允许执行。
+            操作是否成功。
         """
         current = self.state  # 触发 OPEN -> HALF_OPEN 的自动转换
 
@@ -152,13 +86,7 @@ class CircuitBreaker:
         return False
 
     def record_success(self) -> None:
-        """记录一次成功调用。
-
-        状态转换：
-        - CLOSED: 重置失败计数
-        - HALF_OPEN: 恢复到 CLOSED（试探成功，恢复正常）
-        - OPEN: 不应该收到 success（can_execute 返回 False）
-        """
+        """记录一次成功调用。"""
         if self._state == CircuitState.HALF_OPEN:
             self._success_count += 1
             logger.info("Circuit breaker HALF_OPEN -> CLOSED " "(trial request succeeded)")
@@ -168,13 +96,7 @@ class CircuitBreaker:
             self._failure_count = 0
 
     def record_failure(self) -> None:
-        """记录一次失败调用。
-
-        状态转换：
-        - CLOSED: 增加失败计数，达到阈值后切换到 OPEN
-        - HALF_OPEN: 切换回 OPEN（试探失败，重新熔断）
-        - OPEN: 更新最后失败时间（重置计时器）
-        """
+        """记录一次失败调用。"""
         if self._state == CircuitState.CLOSED:
             self._failure_count += 1
             self._last_failure_time = self._clock()
@@ -198,10 +120,7 @@ class CircuitBreaker:
             self._last_failure_time = self._clock()
 
     def reset(self) -> None:
-        """重置熔断器到初始状态（CLOSED）。
-
-        用于手动恢复或测试场景。
-        """
+        """重置当前状态。"""
         self._transition_to(CircuitState.CLOSED)
         logger.info("Circuit breaker manually reset to CLOSED")
 
@@ -209,7 +128,7 @@ class CircuitBreaker:
         """执行状态转换，重置相关计数器。
 
         Args:
-            new_state: 目标状态。
+            new_state: 状态。
         """
         old_state = self._state
         self._state = new_state
@@ -230,14 +149,18 @@ class CircuitBreaker:
 
     @property
     def failure_count(self) -> int:
-        """当前连续失败次数。"""
+        """当前连续失败次数。
+
+        Returns:
+            整数结果。
+        """
         return self._failure_count
 
     def __repr__(self) -> str:
-        """执行 __repr__ 对应的逻辑，并返回处理结果。
+        """返回 CircuitBreaker 的调试字符串表示。
 
         Returns:
-            str，函数执行后的结果。
+            字符串结果。
         """
         return (
             f"CircuitBreaker(state={self._state.value}, "

@@ -1,21 +1,4 @@
-"""
-端到端组装示例 — EventBus + Agent + WorkflowEngine + CircuitBreaker 协同工作。
-
-本示例展示 AgentForge V3 架构的三个核心组件如何组装成一个完整的
-代码审查流水线，并展示 CircuitBreaker 熔断器如何保护 Agent 调用。
-
-运行方式：
-    python examples/e2e_assembly.py
-
-流程概览：
-    1. 创建 EventBus（内存模式）— Agent 间通信的枢纽
-    2. 创建 AgentRegistry — 注册 CodeReviewAgent 和 TestExecutionAgent
-    3. 创建 WorkflowEngine — 加载 code-review-pipeline 工作流
-    4. 通过 EventBus 发布 TASK_SUBMITTED 事件触发流水线
-    5. CodeReviewAgent 订阅事件并执行（ReAct 循环）
-    6. 展示 Context Snapshot 状态隔离效果
-    7. 展示 CircuitBreaker 熔断器保护机制
-"""
+"""端到端装配模块。"""
 
 from __future__ import annotations
 
@@ -30,16 +13,16 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from agentforge.core.event_bus import EventBus
-from agentforge.core.event_types import AgentEvent, EventType
-from agentforge.core.context_snapshot import ContextSnapshotManager
-from agentforge.core.circuit_breaker import CircuitBreaker, CircuitState
-from agentforge.agents.code_review_agent import CodeReviewAgent
-from agentforge.agents.test_execution_agent import TestExecutionAgent
-from agentforge.agents.doc_generator_agent import DocGeneratorAgent
-from agentforge.llm.gateway import LLMGateway, LLMResponse
-from agentforge.workflow.engine import WorkflowEngine
-from agentforge.workflow.registry import AgentRegistry
+from agentforge.agents.code_review_agent import CodeReviewAgent  # noqa: E402
+from agentforge.agents.doc_generator_agent import DocGeneratorAgent  # noqa: E402
+from agentforge.agents.test_execution_agent import TestExecutionAgent  # noqa: E402
+from agentforge.core.circuit_breaker import CircuitBreaker, CircuitState  # noqa: E402
+from agentforge.core.context_snapshot import ContextSnapshotManager  # noqa: E402
+from agentforge.core.event_bus import EventBus  # noqa: E402
+from agentforge.core.event_types import AgentEvent, EventType  # noqa: E402
+from agentforge.llm.gateway import LLMGateway, LLMResponse  # noqa: E402
+from agentforge.workflow.engine import WorkflowEngine  # noqa: E402
+from agentforge.workflow.registry import AgentRegistry  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -48,23 +31,14 @@ logging.basicConfig(
 logger = logging.getLogger("e2e_assembly")
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # Mock LLM Gateway — 模拟 LLM 推理服务（生产环境替换为 VLLMGateway）
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
+
 
 class MockLLMGateway(LLMGateway):
-    """Mock LLM Gateway — 返回预设的审查结果。
-
-    生产环境中替换为 VLLMGateway，连接真实的 vLLM 推理服务。
-    此 Mock 用于演示和测试，不依赖外部服务。
-    """
+    """提供确定性响应的模拟 LLM 网关。"""
 
     def __init__(self) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
-        
-        Returns:
-            None，函数执行后的结果。
-        """
+        """初始化 MockLLMGateway。"""
         super().__init__(model="mock-llm-v1")
         self._call_count = 0
 
@@ -75,25 +49,28 @@ class MockLLMGateway(LLMGateway):
         max_tokens: int | None = None,
         temperature: float | None = None,
     ) -> LLMResponse:
-        """执行 chat 对应的逻辑，并返回处理结果。
-        
+        """发送模拟LLM 网关。
+
         Args:
-            messages: list[dict[str, str]] | str，调用方传入的 messages 参数。
-            tools: list[dict] | None，调用方传入的 tools 参数。
-            max_tokens: int | None，调用方传入的 max_tokens 参数。
-            temperature: float | None，调用方传入的 temperature 参数。
-        
+            messages: 消息列表。
+            tools: 可供模型调用的工具定义。
+            max_tokens: 生成结果允许使用的最大 Token 数。
+            temperature: 模型采样温度。
+
         Returns:
-            LLMResponse，函数执行后的结果。
+            处理结果对象。
         """
         self._call_count += 1
         # 模拟 LLM 返回结构化的审查结果
         return LLMResponse(
-            content=json.dumps({
-                "summary": "代码质量良好，未发现严重问题",
-                "severity": "info",
-                "items": [],
-            }, ensure_ascii=False),
+            content=json.dumps(
+                {
+                    "summary": "代码质量良好，未发现严重问题",
+                    "severity": "info",
+                    "items": [],
+                },
+                ensure_ascii=False,
+            ),
             model="mock-llm-v1",
             usage={
                 "prompt_tokens": 150,
@@ -103,19 +80,11 @@ class MockLLMGateway(LLMGateway):
         )
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 示例 1：EventBus + Agent 协同 — 事件驱动的 Agent 间通信
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
+
 
 async def demo_event_bus_agent_communication() -> None:
-    """演示 EventBus 驱动的 Agent 间通信。
-
-    流程：
-    1. 创建 EventBus（内存后端）
-    2. 创建 CodeReviewAgent，订阅 TASK_SUBMITTED 事件
-    3. 发布任务事件，Agent 自动处理
-    4. Agent 执行完成后发布 AGENT_COMPLETED 事件
-    """
+    """演示事件总线智能体通信。"""
     logger.info("=" * 70)
     logger.info("示例 1: EventBus + Agent 事件驱动通信")
     logger.info("=" * 70)
@@ -132,18 +101,25 @@ async def demo_event_bus_agent_communication() -> None:
     completed_events: list[AgentEvent] = []
 
     async def on_agent_completed(event: AgentEvent) -> None:
-        """AGENT_COMPLETED 事件回调 — 接收 Agent 执行结果。"""
+        """处理智能体完成。
+
+        Args:
+            event: 待处理事件。
+        """
         completed_events.append(event)
         logger.info(
-            "  ✓ 收到 AGENT_COMPLETED 事件 "
-            "(source=%s, correlation_id=%s)",
+            "  ✓ 收到 AGENT_COMPLETED 事件 " "(source=%s, correlation_id=%s)",
             event.source_agent,
             event.correlation_id,
         )
 
     # CodeReviewAgent 的事件处理函数
     async def on_task_submitted(event: AgentEvent) -> None:
-        """TASK_SUBMITTED 事件回调 — 触发 CodeReviewAgent 执行。"""
+        """处理任务提交。
+
+        Args:
+            event: 待处理事件。
+        """
         logger.info("  → CodeReviewAgent 收到任务，开始执行...")
         result = await code_review.execute(event)
         logger.info("  ← CodeReviewAgent 执行完成，发布结果事件")
@@ -193,19 +169,11 @@ async def demo_event_bus_agent_communication() -> None:
     logger.info("")
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 示例 2：WorkflowEngine — 完整工作流编排
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
+
 
 async def demo_workflow_engine() -> None:
-    """演示 WorkflowEngine 编排多 Agent 工作流。
-
-    流程：
-    1. 创建 AgentRegistry，注册 3 个 Agent
-    2. 创建 WorkflowEngine，加载 code-review-pipeline 工作流
-    3. 执行工作流：code-review → test-execution → doc-generator
-    4. 展示条件路由：根据审查结果决定下一步
-    """
+    """处理工作流引擎。"""
     logger.info("=" * 70)
     logger.info("示例 2: WorkflowEngine 工作流编排")
     logger.info("=" * 70)
@@ -250,21 +218,11 @@ async def demo_workflow_engine() -> None:
     logger.info("")
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 示例 3：Context Snapshot 状态隔离
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
+
 
 async def demo_context_snapshot_isolation() -> None:
-    """演示 Context Snapshot 状态隔离机制。
-
-    每个 Agent 只从 context_snapshot 中提取自己需要的上下文，
-    不接收全量数据。这是 V3 架构解决 V2 context 无限膨胀的核心设计。
-
-    展示：
-    - CodeReviewAgent 只看到 code_content 和 review_config
-    - TestExecutionAgent 只看到 code_path 和 test_config
-    - 两个 Agent 看到的上下文互不干扰
-    """
+    """演示上下文快照隔离。"""
     logger.info("=" * 70)
     logger.info("示例 3: Context Snapshot 状态隔离")
     logger.info("=" * 70)
@@ -306,22 +264,11 @@ async def demo_context_snapshot_isolation() -> None:
     logger.info("")
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 示例 4：CircuitBreaker 熔断保护
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
+
 
 async def demo_circuit_breaker() -> None:
-    """演示 CircuitBreaker 熔断器保护 Agent 调用。
-
-    当 Agent 连续失败时，熔断器自动切断调用，防止故障扩散。
-    展示三态状态机：CLOSED → OPEN → HALF_OPEN → CLOSED
-
-    场景：
-    1. 模拟 Agent 连续失败 3 次 → 熔断器 OPEN
-    2. 熔断状态下请求被快速拒绝（不调用 Agent）
-    3. 恢复时间后 → HALF_OPEN，允许一次试探
-    4. 试探成功 → CLOSED，恢复正常
-    """
+    """演示熔断器。"""
     logger.info("=" * 70)
     logger.info("示例 4: CircuitBreaker 熔断保护")
     logger.info("=" * 70)
@@ -373,38 +320,34 @@ async def demo_circuit_breaker() -> None:
     logger.info("")
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 示例 5：CircuitBreaker 保护 Agent 调用（完整场景）
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
+
 
 class FailingAgent:
-    """模拟一个会失败的 Agent，用于演示熔断器保护。"""
+    """失败的智能体领域组件。"""
 
     def __init__(self, name: str, fail_times: int) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
-        
+        """初始化 FailingAgent。
+
         Args:
-            name: str，调用方传入的 name 参数。
-            fail_times: int，调用方传入的 fail_times 参数。
-        
-        Returns:
-            None，函数执行后的结果。
+            name: 资源或对象名称。
+            fail_times: 失败。
         """
         self.name = name
         self._fail_times = fail_times
         self._call_count = 0
 
     async def execute(self, event: AgentEvent) -> AgentEvent:
-        """执行 execute 对应的逻辑，并返回处理结果。
-        
+        """执行核心处理逻辑并返回结果。
+
         Args:
-            event: AgentEvent，调用方传入的 event 参数。
-        
+            event: 待处理事件。
+
         Returns:
-            AgentEvent，函数执行后的结果。
-        
+            智能体事件结果。
+
         Raises:
-            RuntimeError: 当输入、状态或外部依赖不满足要求时抛出。
+            RuntimeError: 运行时依赖或状态不满足要求时抛出。
         """
         self._call_count += 1
         if self._call_count <= self._fail_times:
@@ -419,10 +362,7 @@ class FailingAgent:
 
 
 async def demo_circuit_breaker_protecting_agent() -> None:
-    """演示 CircuitBreaker 保护 Agent 调用的完整场景。
-
-    展示熔断器如何包裹 Agent.execute()，在故障时快速降级。
-    """
+    """处理熔断智能体。"""
     logger.info("=" * 70)
     logger.info("示例 5: CircuitBreaker 保护 Agent 调用（完整场景）")
     logger.info("=" * 70)
@@ -431,9 +371,13 @@ async def demo_circuit_breaker_protecting_agent() -> None:
     agent = FailingAgent(name="flaky-agent", fail_times=3)
 
     async def call_agent_with_breaker(event: AgentEvent) -> AgentEvent:
-        """通过熔断器保护调用 Agent。
+        """调用智能体及器。
 
-        熔断器 OPEN 时快速返回降级结果，不调用 Agent。
+        Args:
+            event: 待处理事件。
+
+        Returns:
+            智能体事件结果。
         """
         if not breaker.can_execute():
             logger.info("    [熔断器] 请求被拒绝 — 返回降级结果")
@@ -451,7 +395,9 @@ async def demo_circuit_breaker_protecting_agent() -> None:
             return result
         except Exception as e:
             breaker.record_failure()
-            logger.warning("    [熔断器] Agent 调用失败: %s (failures=%d)", e, breaker.failure_count)
+            logger.warning(
+                "    [熔断器] Agent 调用失败: %s (failures=%d)", e, breaker.failure_count
+            )
             return AgentEvent(
                 event_type=EventType.AGENT_FAILED,
                 source_agent="circuit-breaker",
@@ -470,7 +416,12 @@ async def demo_circuit_breaker_protecting_agent() -> None:
     logger.info("  → 阶段 1: Agent 连续失败，熔断器逐渐打开")
     for i in range(3):
         result = await call_agent_with_breaker(test_event)
-        logger.info("    调用 %d 结果: %s, 熔断器状态: %s", i + 1, result.event_type.value, breaker.state.value)
+        logger.info(
+            "    调用 %d 结果: %s, 熔断器状态: %s",
+            i + 1,
+            result.event_type.value,
+            breaker.state.value,
+        )
 
     # 第 4 次调用：熔断器 OPEN，快速降级
     logger.info("  → 阶段 2: 熔断器 OPEN，快速降级")
@@ -491,9 +442,8 @@ async def demo_circuit_breaker_protecting_agent() -> None:
     logger.info("")
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 主入口
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
+
 
 async def main() -> None:
     """运行所有端到端组装示例。"""

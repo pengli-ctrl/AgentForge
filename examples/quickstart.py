@@ -1,30 +1,13 @@
-"""
-AgentForge 快速开始示例 — 演示事件驱动多 Agent 编排的基本用法。
-
-运行方式：
-    python examples/quickstart.py
-
-前置条件：
-    1. 安装依赖：pip install -r requirements.txt
-    2. 启动 Redis：redis-server
-    3. 启动 vLLM 推理服务（或使用 Mock LLM）
-
-本示例演示：
-    1. 初始化事件总线
-    2. 创建 Agent 并注册到事件总线
-    3. 发布任务事件
-    4. Agent 自动处理事件并产出结果
-"""
+"""快速开始模块。"""
 
 import asyncio
 import logging
 
-from agentforge.core.event_bus import EventBus
-from agentforge.core.event_types import AgentEvent, EventType
-from agentforge.core.context_snapshot import ContextSnapshotManager
 from agentforge.agents.code_review_agent import CodeReviewAgent
 from agentforge.agents.test_execution_agent import TestExecutionAgent
-from agentforge.agents.doc_generator_agent import DocGeneratorAgent
+from agentforge.core.context_snapshot import ContextSnapshotManager
+from agentforge.core.event_bus import EventBus
+from agentforge.core.event_types import AgentEvent, EventType
 from agentforge.llm.gateway import LLMGateway, LLMResponse
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
@@ -32,19 +15,19 @@ logger = logging.getLogger(__name__)
 
 
 class MockLLMGateway(LLMGateway):
-    """Mock LLM Gateway — 用于示例演示，返回预设响应。"""
+    """提供确定性响应的模拟 LLM 网关。"""
 
     async def chat(self, messages, tools=None, max_tokens=None, temperature=None):
-        """执行 chat 对应的逻辑，并返回处理结果。
-        
+        """发送模拟LLM 网关。
+
         Args:
-            messages: Any，调用方传入的 messages 参数。
-            tools: Any，调用方传入的 tools 参数。
-            max_tokens: Any，调用方传入的 max_tokens 参数。
-            temperature: Any，调用方传入的 temperature 参数。
-        
+            messages: 消息列表。
+            tools: 可供模型调用的工具定义。
+            max_tokens: 生成结果允许使用的最大 Token 数。
+            temperature: 模型采样温度。
+
         Returns:
-            None，函数执行后的结果。
+            处理结果。
         """
         return LLMResponse(
             content="Mock LLM response: code review completed successfully.",
@@ -65,7 +48,6 @@ async def main():
     llm = MockLLMGateway(model="mock-model")
     code_review = CodeReviewAgent(llm_gateway=llm)
     test_agent = TestExecutionAgent(llm_gateway=llm)
-    doc_agent = DocGeneratorAgent(llm_gateway=llm)
 
     # 3. 注册 Agent 到事件总线
     bus.subscribe(EventType.TASK_SUBMITTED, code_review.execute)

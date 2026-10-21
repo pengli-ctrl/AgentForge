@@ -1,4 +1,4 @@
-"""AgentForge 数据库迁移层：20260917_0003_cost。
+"""数据库迁移版本 0003_cost。
 
 本模块负责 20260917_0003_cost 相关能力，是 数据库迁移层 的组成部分。
 
@@ -20,11 +20,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    """执行 upgrade 对应的逻辑，并返回处理结果。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """应用当前数据库迁移版本。"""
     op.create_table(
         "cost_records",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
@@ -40,9 +36,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """执行 downgrade 对应的逻辑，并返回处理结果。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """回滚当前数据库迁移版本。"""
     op.drop_table("cost_records")

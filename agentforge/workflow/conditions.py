@@ -1,31 +1,4 @@
-"""条件表达式解析器 — 解析工作流 YAML 中的条件路由表达式。
-
-解析形如以下的条件表达式：
-    "result.severity == 'critical'"
-    "result.pass_rate < 0.8"
-    "result.has_vulnerabilities"
-    "default"
-
-支持的操作符：
-- == : 等于
-- != : 不等于
-- >  : 大于
-- <  : 小于
-- >= : 大于等于
-- <= : 小于等于
-- in : 包含在列表中
-
-支持的数据类型：
-- 字符串（单引号或双引号）
-- 数字（整数和浮点数）
-- 布尔值（true/false）
-- None/null
-
-设计原则：
-- 安全性：不使用 eval()，通过正则解析 + 受限求值
-- 可扩展：支持自定义操作符和函数
-- 可调试：解析错误时提供清晰的错误信息
-"""
+"""条件模块。"""
 
 from __future__ import annotations
 
@@ -39,17 +12,8 @@ logger = logging.getLogger(__name__)
 class ConditionParser:
     """条件表达式解析器 — 解析和求值工作流路由条件。
 
-    将条件字符串解析为 AST，然后对 Agent 输出结果求值。
-    不使用 eval()，通过正则解析确保安全性。
-
-    Example:
-        >>> parser = ConditionParser()
-        >>> parser.evaluate("result.severity == 'critical'",
-        ...                 {"result": {"severity": "critical"}})
-        True
-        >>> parser.evaluate("result.pass_rate < 0.8",
-        ...                 {"result": {"pass_rate": 0.6}})
-        True
+    Attributes:
+        _OPERATORS: 字段值。
     """
 
     # 操作符正则（按优先级排列，先匹配长操作符）
@@ -70,14 +34,14 @@ class ConditionParser:
         """解析并求值条件表达式。
 
         Args:
-            condition: 条件字符串（如 "result.severity == 'critical'"）。
-            context: 求值上下文（Agent 输出结果）。
+            condition: 输入参数。
+            context: 执行上下文。
 
         Returns:
-            条件是否满足。
+            操作是否成功。
 
         Raises:
-            ValueError: 条件表达式格式错误时抛出。
+            ValueError: 输入值或业务状态不合法时抛出。
         """
         condition = condition.strip()
 
@@ -127,14 +91,12 @@ class ConditionParser:
     def _resolve_path(self, path: str, context: dict[str, Any]) -> Any:
         """解析点分隔的属性路径。
 
-        如 "result.severity" 从 context 中解析为 context["result"]["severity"]。
-
         Args:
-            path: 点分隔的属性路径。
-            context: 求值上下文。
+            path: 文件或资源路径。
+            context: 执行上下文。
 
         Returns:
-            解析出的值，路径不存在则返回 None。
+            处理结果对象。
         """
         parts = path.split(".")
         current: Any = context
@@ -156,19 +118,12 @@ class ConditionParser:
     def _parse_literal(self, literal: str, context: dict[str, Any]) -> Any:
         """解析字面量值。
 
-        支持的类型：
-        - 字符串（单引号或双引号包裹）
-        - 数字（整数和浮点数）
-        - 布尔值（true/false）
-        - None/null
-        - 属性路径（如 result.severity）
-
         Args:
-            literal: 字面量字符串。
-            context: 求值上下文。
+            literal: 输入参数。
+            context: 执行上下文。
 
         Returns:
-            解析出的值。
+            处理结果对象。
         """
         literal = literal.strip()
 
@@ -184,7 +139,6 @@ class ConditionParser:
         if literal.lower() == "false":
             return False
 
-        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         if literal.lower() in ("none", "null"):
             return None
 

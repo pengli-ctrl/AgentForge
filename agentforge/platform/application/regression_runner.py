@@ -1,14 +1,4 @@
-"""AgentForge 平台应用服务层：regression_runner。
-
-本模块实现 regression_runner 质量评估逻辑，用于度量、回归和控制上线风险。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：RegressionRunner。
-- 主要函数：generate_run_id。
-"""
+"""回归模块。"""
 
 from __future__ import annotations
 
@@ -22,9 +12,7 @@ from agentforge.platform.application.quality_gate_service import (
     QualityGateService,
     QualityGateVerdict,
 )
-from agentforge.platform.application.retrieval_evaluation_service import (
-    RetrievalEvaluationService,
-)
+from agentforge.platform.application.retrieval_evaluation_service import RetrievalEvaluationService
 from agentforge.platform.domain.quality import ClassificationGoldenItem, ReleaseCandidate
 from agentforge.platform.domain.regression import (
     GoldenItem,
@@ -36,35 +24,24 @@ from agentforge.platform.domain.retrieval import GoldenQuery
 
 
 class RegressionRunner:
-    """离线回归运行器。
-
-    加载租户的 Golden Dataset 样本，对每一条 GoldenItem 同时执行召回评估与
-    分类评估，聚合指标后交给质量门禁判定，并把一次回归的结果以
-    RegressionRun + QualityReport 持久化，便于后续对比回归。
-
-    回归可以完全离线进行：数据中心由注入的 RetrievalEvaluationService 与
-    ClassificationEvaluationService 决定（测试时注入内存实现）。
-    """
+    """离线回归运行器。"""
 
     def __init__(
         self,
         regression_repository: RegressionRepository,
         retrieval_evaluation_service: RetrievalEvaluationService,
-        classification_evaluation_service: ClassificationEvaluationService,
+        classification_evaluation_service: ClassificationEvaluationService | None,
         quality_gate_service: QualityGateService | None = None,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 RegressionRunner。
 
         Args:
-            regression_repository: RegressionRepository，调用方传入的 regression_repository 参数。
-            retrieval_evaluation_service: RetrievalEvaluationService，调用方传入的
-                retrieval_evaluation_service 参数。
-            classification_evaluation_service: ClassificationEvaluationService，调用方传入的
-                classification_evaluation_service 参数。
-            quality_gate_service: QualityGateService | None，调用方传入的 quality_gate_service 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            regression_repository: 回归仓储。
+            retrieval_evaluation_service: 检索评估服务。
+                evaluation service。
+            classification_evaluation_service: 分类评估服务。
+                classification evaluation service。
+            quality_gate_service: 质量门禁服务。
         """
         self._repository = regression_repository
         self._retrieval_eval = retrieval_evaluation_service
@@ -78,16 +55,16 @@ class RegressionRunner:
         k: int = 5,
         rerank: bool = True,
     ) -> QualityReport:
-        """执行 run 对应的逻辑，并返回处理结果。
+        """运行回归。
 
         Args:
-            tenant_id: str，调用方传入的 tenant_id 参数。
-            candidate: ReleaseCandidate，调用方传入的 candidate 参数。
-            k: int，调用方传入的 k 参数。
-            rerank: bool，调用方传入的 rerank 参数。
+            tenant_id: 租户 ID，用于数据隔离。
+            candidate: 候选结果。
+            k: 返回结果数量上限。
+            rerank: 重排。
 
         Returns:
-            QualityReport，函数执行后的结果。
+            质量报告结果。
         """
         golden = await self._repository.list_golden(tenant_id)
 
@@ -105,7 +82,7 @@ class RegressionRunner:
         # 组装分类评估样本列表（仅取声明了期望分类的 Golden 项）。
         classification_items = [item for item in golden if item.expected_intent]
         classification_report = None
-        if classification_items:
+        if classification_items and self._classification_eval is not None:
             classification_samples = [
                 ClassificationGoldenItem(
                     tenant_id=item.tenant_id,
@@ -174,13 +151,13 @@ class RegressionRunner:
 
     @staticmethod
     def _to_golden_queries(items: list[GoldenItem]) -> list[GoldenQuery]:
-        """执行 _to_golden_queries 对应的逻辑，并返回处理结果。
+        """处理到基准。
 
         Args:
-            items: list[GoldenItem]，调用方传入的 items 参数。
+            items: 待处理条目列表。
 
         Returns:
-            list[GoldenQuery]，函数执行后的结果。
+            结果列表。
         """
         return [
             GoldenQuery(
@@ -193,45 +170,45 @@ class RegressionRunner:
         ]
 
     async def get_run(self, run_id: str) -> RegressionRun | None:
-        """读取并返回指定数据，并返回调用方需要的结果。
+        """获取运行。
 
         Args:
-            run_id: str，调用方传入的 run_id 参数。
+            run_id: 运行记录 ID。
 
         Returns:
-            RegressionRun | None，函数执行后的结果。
+            回归运行无结果。
         """
         return await self._repository.get_run(run_id)
 
     async def list_runs(self, tenant_id: str, limit: int = 100) -> list[RegressionRun]:
-        """查询并返回列表结果，并返回调用方需要的结果。
+        """查询运行记录。
 
         Args:
-            tenant_id: str，调用方传入的 tenant_id 参数。
-            limit: int，调用方传入的 limit 参数。
+            tenant_id: 租户 ID，用于数据隔离。
+            limit: 返回记录的最大数量。
 
         Returns:
-            list[RegressionRun]，函数执行后的结果。
+            结果列表。
         """
         return await self._repository.list_runs(tenant_id, limit=limit)
 
     async def load_golden(self, tenant_id: str, limit: int = 100) -> list[GoldenItem]:
-        """加载配置或资源，并返回调用方需要的结果。
+        """加载基准。
 
         Args:
-            tenant_id: str，调用方传入的 tenant_id 参数。
-            limit: int，调用方传入的 limit 参数。
+            tenant_id: 租户 ID，用于数据隔离。
+            limit: 返回记录的最大数量。
 
         Returns:
-            list[GoldenItem]，函数执行后的结果。
+            结果列表。
         """
         return await self._repository.list_golden(tenant_id, limit=limit)
 
 
 def generate_run_id() -> str:
-    """执行 generate_run_id 对应的逻辑，并返回处理结果。
+    """生成运行ID。
 
     Returns:
-        str，函数执行后的结果。
+        字符串结果。
     """
     return f"run-{uuid.uuid4().hex[:12]}"

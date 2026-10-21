@@ -1,4 +1,4 @@
-"""pytest fixtures — EventBus mock, LLM mock, 测试用 Agent。
+"""共享测试夹具测试模块。
 
 提供测试中常用的 fixture，避免每个测试文件重复定义 Mock 对象。
 
@@ -29,13 +29,10 @@ class MockLLMGateway(LLMGateway):
     """
 
     def __init__(self, responses: list[LLMResponse] | None = None) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化模拟LLM 网关。
 
         Args:
-            responses: list[LLMResponse] | None，调用方传入的 responses 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            responses: 响应。
         """
         super().__init__(model="mock-model")
         self._responses = responses or []
@@ -49,16 +46,16 @@ class MockLLMGateway(LLMGateway):
         max_tokens: int | None = None,
         temperature: float | None = None,
     ) -> LLMResponse:
-        """执行 chat 对应的逻辑，并返回处理结果。
+        """发送模拟LLM 网关。
 
         Args:
-            messages: list[dict[str, str]] | str，调用方传入的 messages 参数。
-            tools: list[dict] | None，调用方传入的 tools 参数。
-            max_tokens: int | None，调用方传入的 max_tokens 参数。
-            temperature: float | None，调用方传入的 temperature 参数。
+            messages: 消息列表。
+            tools: 可供模型调用的工具定义。
+            max_tokens: 生成结果允许使用的最大 Token 数。
+            temperature: 模型采样温度。
 
         Returns:
-            LLMResponse，函数执行后的结果。
+            处理结果对象。
         """
         self.call_count += 1
 
@@ -82,13 +79,10 @@ class ScriptedLLMGateway(LLMGateway):
     """
 
     def __init__(self, scripts: dict[str, list[str]]) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化脚本化LLM 网关。
 
         Args:
-            scripts: dict[str, list[str]]，调用方传入的 scripts 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            scripts: 输入参数。
         """
         super().__init__(model="scripted-model")
         self._scripts = scripts
@@ -102,16 +96,16 @@ class ScriptedLLMGateway(LLMGateway):
         temperature: float | None = None,
     ) -> LLMResponse:
         # 尝试从消息中推断 Agent 名称
-        """执行 chat 对应的逻辑，并返回处理结果。
+        """发送脚本化LLM 网关。
 
         Args:
-            messages: list[dict[str, str]] | str，调用方传入的 messages 参数。
-            tools: list[dict] | None，调用方传入的 tools 参数。
-            max_tokens: int | None，调用方传入的 max_tokens 参数。
-            temperature: float | None，调用方传入的 temperature 参数。
+            messages: 消息列表。
+            tools: 可供模型调用的工具定义。
+            max_tokens: 生成结果允许使用的最大 Token 数。
+            temperature: 模型采样温度。
 
         Returns:
-            LLMResponse，函数执行后的结果。
+            处理结果对象。
         """
         agent_name = "default"
         if isinstance(messages, list) and messages:
@@ -136,29 +130,41 @@ class ScriptedLLMGateway(LLMGateway):
 
 @pytest.fixture
 def event_bus() -> EventBus:
-    """提供内存后端的事件总线。"""
+    """提供内存后端的事件总线。
+
+    Returns:
+        事件结果。
+    """
     return EventBus(backend="memory")
 
 
 @pytest.fixture
 def snapshot_manager() -> ContextSnapshotManager:
-    """提供上下文快照管理器。"""
+    """提供上下文快照管理器。
+
+    Returns:
+        上下文快照管理器结果。
+    """
     return ContextSnapshotManager()
 
 
 @pytest.fixture
 def mock_llm() -> MockLLMGateway:
-    """执行 mock_llm 对应的逻辑，并返回处理结果。
+    """处理模拟LLM。
 
     Returns:
-        MockLLMGateway，函数执行后的结果。
+        模拟LLM 网关结果。
     """
     return MockLLMGateway()
 
 
 @pytest.fixture
 def scripted_llm() -> ScriptedLLMGateway:
-    """提供脚本化 LLM Gateway。"""
+    """提供脚本化 LLM Gateway。
+
+    Returns:
+        脚本化LLM 网关结果。
+    """
     return ScriptedLLMGateway(
         scripts={
             "code-review": ["建议拆分函数降低复杂度"],
@@ -169,7 +175,11 @@ def scripted_llm() -> ScriptedLLMGateway:
 
 @pytest.fixture
 def sample_event() -> AgentEvent:
-    """提供测试用的事件。"""
+    """提供测试用的事件。
+
+    Returns:
+        智能体事件结果。
+    """
     return AgentEvent(
         event_type=EventType.TASK_SUBMITTED,
         source_agent="test-source",
@@ -184,7 +194,11 @@ def sample_event() -> AgentEvent:
 
 @pytest.fixture
 def sample_context() -> dict[str, Any]:
-    """提供测试用的上下文数据。"""
+    """提供测试用的上下文数据。
+
+    Returns:
+        结构化结果字典。
+    """
     return {
         "code_content": "def add(a, b): return a + b",
         "review_config": {"types": ["security", "logic", "style"]},
@@ -195,7 +209,11 @@ def sample_context() -> dict[str, Any]:
 
 @pytest.fixture
 def event_loop():
-    """提供事件循环。"""
+    """提供事件循环。
+
+    Yields:
+        逐次生成的结果。
+    """
     loop = asyncio.new_event_loop()
     yield loop
     loop.close()

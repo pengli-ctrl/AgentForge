@@ -18,21 +18,13 @@ class TestRouterInit:
     """初始化测试。"""
 
     def test_default_agent(self) -> None:
-        """验证 default_agent 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证默认智能体对应的测试场景。"""
         llm = MockLLMGateway()
         router = LLMRouter(llm_gateway=llm)
         assert router.default_agent == "code-review"
 
     def test_custom_default_agent(self) -> None:
-        """验证 custom_default_agent 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证自定义默认智能体对应的测试场景。"""
         llm = MockLLMGateway()
         router = LLMRouter(llm_gateway=llm, default_agent="security-scan")
         assert router.default_agent == "security-scan"
@@ -50,21 +42,13 @@ class TestRouteDecision:
     """RouteDecision 数据类测试。"""
 
     def test_create_decision(self) -> None:
-        """验证 create_decision 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证创建决策对应的测试场景。"""
         decision = RouteDecision(agent_name="security-scan", reason="critical issue")
         assert decision.agent_name == "security-scan"
         assert decision.reason == "critical issue"
 
     def test_to_dict(self) -> None:
-        """验证 to_dict 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证到字典对应的测试场景。"""
         decision = RouteDecision(agent_name="test-execution", reason="tests needed")
         d = decision.to_dict()
         assert d["agent_name"] == "test-execution"
@@ -72,11 +56,11 @@ class TestRouteDecision:
 
 
 class TestRoute:
-    """route 方法测试。"""
+    """验证测试路由行为的测试集合。"""
 
     @pytest.mark.asyncio
     async def test_route_returns_dict_with_agent_and_reason(self) -> None:
-        """route 应返回包含 agent_name 和 reason 的字典。"""
+        """验证路由返回字典使用智能体及原因对应的测试场景。"""
         response = json.dumps(
             {
                 "agent_name": "security-scan",
@@ -97,7 +81,7 @@ class TestRoute:
 
     @pytest.mark.asyncio
     async def test_route_calls_llm_once(self) -> None:
-        """route 应只调用 LLM 一次。"""
+        """验证路由调用LLM一次对应的测试场景。"""
         response = json.dumps({"agent_name": "test-execution", "reason": "need tests"})
         llm = MockLLMGateway(responses=[LLMResponse(content=response)])
         router = LLMRouter(llm_gateway=llm)
@@ -111,7 +95,7 @@ class TestRoute:
 
     @pytest.mark.asyncio
     async def test_route_empty_available_agents_uses_default(self) -> None:
-        """没有可选 Agent 时使用 default_agent。"""
+        """验证路由空可用智能体使用默认对应的测试场景。"""
         llm = MockLLMGateway()
         router = LLMRouter(llm_gateway=llm, default_agent="code-review")
 
@@ -136,7 +120,7 @@ class TestRoute:
 
     @pytest.mark.asyncio
     async def test_route_invalid_agent_uses_default(self) -> None:
-        """LLM 返回不存在的 Agent 名称时应使用 default_agent。"""
+        """验证路由无效智能体使用默认对应的测试场景。"""
         response = json.dumps(
             {
                 "agent_name": "non-existent-agent",
@@ -156,7 +140,7 @@ class TestRoute:
 
     @pytest.mark.asyncio
     async def test_route_invalid_json_falls_back(self) -> None:
-        """LLM 返回无效 JSON 时应降级为 default_agent。"""
+        """验证路由无效JSON回退返回对应的测试场景。"""
         llm = MockLLMGateway(responses=[LLMResponse(content="This is not JSON")])
         router = LLMRouter(llm_gateway=llm, default_agent="code-review")
 
@@ -170,7 +154,7 @@ class TestRoute:
 
     @pytest.mark.asyncio
     async def test_route_markdown_wrapped_json(self) -> None:
-        """LLM 返回 markdown 包裹的 JSON 时应正确解析。"""
+        """验证路由MarkdownJSON对应的测试场景。"""
         response = (
             "```json\n"
             + json.dumps(
@@ -194,33 +178,23 @@ class TestRoute:
 
     @pytest.mark.asyncio
     async def test_route_preserves_agent_outputs_in_prompt(self) -> None:
-        """route 应在 prompt 中包含已完成的 Agent 输出。"""
+        """验证路由智能体在提示词对应的测试场景。"""
         captured_messages: list = []
 
         class _CapturingLLM(MockLLMGateway):
-            """_CapturingLLM。
-
-            _CapturingLLM 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-            主要成员：
-            - 方法 chat()。
-
-            设计约束：
-            - 保持接口稳定，避免调用方依赖内部实现细节。
-            - 涉及隔离、审批、审计、成本或失败恢复的逻辑必须显式处理。
-            """
+            """捕获LLM相关组件。"""
 
             async def chat(self, messages, tools=None, max_tokens=None, temperature=None):
-                """执行 chat 对应的逻辑，并返回处理结果。
+                """发送捕获LLM。
 
                 Args:
-                    messages: Any，调用方传入的 messages 参数。
-                    tools: Any，调用方传入的 tools 参数。
-                    max_tokens: Any，调用方传入的 max_tokens 参数。
-                    temperature: Any，调用方传入的 temperature 参数。
+                    messages: 消息列表。
+                    tools: 可供模型调用的工具定义。
+                    max_tokens: 生成结果允许使用的最大 Token 数。
+                    temperature: 模型采样温度。
 
                 Returns:
-                    None，函数执行后的结果。
+                    处理结果。
                 """
                 captured_messages.extend(messages)
                 return LLMResponse(
@@ -270,11 +244,7 @@ class TestParseRoute:
     """_parse_route 方法测试。"""
 
     def test_parse_valid_json(self) -> None:
-        """验证 parse_valid_json 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证解析有效JSON对应的测试场景。"""
         llm = MockLLMGateway()
         router = LLMRouter(llm_gateway=llm)
         content = json.dumps({"agent_name": "test-execution", "reason": "need tests"})
@@ -284,11 +254,7 @@ class TestParseRoute:
         assert decision.reason == "need tests"
 
     def test_parse_missing_reason(self) -> None:
-        """验证 parse_missing_reason 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证解析缺失原因对应的测试场景。"""
         llm = MockLLMGateway()
         router = LLMRouter(llm_gateway=llm)
         content = json.dumps({"agent_name": "test-execution"})
@@ -298,11 +264,7 @@ class TestParseRoute:
         assert decision.reason == ""
 
     def test_parse_no_json_returns_default(self) -> None:
-        """验证 parse_no_json_returns_default 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证解析无JSON返回默认对应的测试场景。"""
         llm = MockLLMGateway()
         router = LLMRouter(llm_gateway=llm, default_agent="code-review")
 

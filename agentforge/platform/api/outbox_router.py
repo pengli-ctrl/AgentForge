@@ -1,13 +1,4 @@
-"""AgentForge 平台 API 层：outbox_router。
-
-本模块定义 outbox_ 相关 HTTP 接口，负责请求解析、鉴权校验、调用应用服务并组织响应。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要函数：create_outbox_router。
-"""
+"""Outbox路由模块。"""
 
 from __future__ import annotations
 
@@ -17,32 +8,29 @@ from agentforge.platform.runtime import ServiceContainer
 
 
 def create_outbox_router(container: ServiceContainer) -> APIRouter:
-    """创建新的业务对象，并返回调用方需要的结果。
+    """创建Outboxrouter。
 
     Args:
-        container: ServiceContainer，调用方传入的 container 参数。
+        container: 服务容器。
 
     Returns:
-        APIRouter，函数执行后的结果。
-
-    Raises:
-        HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+        处理结果对象。
     """
     router = APIRouter(prefix="/v1/outbox", tags=["outbox"])
 
     @router.get("/failed")
     async def list_failed(request: Request, limit: int = 100) -> dict:
-        """查询并返回列表结果，并返回调用方需要的结果。
+        """处理 GET /failed 请求，查询失败。
 
         Args:
-            request: Request，调用方传入的 request 参数。
-            limit: int，调用方传入的 limit 参数。
+            request: 当前 HTTP 请求。
+            limit: 返回记录的最大数量。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
 
         Raises:
-            HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+            HTTPException: 请求参数、状态或依赖不满足要求时抛出。
         """
         container.authenticator.authorize_admin(request)
         if container.outbox_store is None:
@@ -52,17 +40,17 @@ def create_outbox_router(container: ServiceContainer) -> APIRouter:
 
     @router.get("/events/count")
     async def count_events(request: Request, tenant_id: str | None = None) -> dict:
-        """执行 count_events 对应的逻辑，并返回处理结果。
+        """处理 GET /events/count 请求，统计事件。
 
         Args:
-            request: Request，调用方传入的 request 参数。
-            tenant_id: str | None，调用方传入的 tenant_id 参数。
+            request: 当前 HTTP 请求。
+            tenant_id: 租户 ID，用于数据隔离。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
 
         Raises:
-            HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+            HTTPException: 请求参数、状态或依赖不满足要求时抛出。
         """
         container.authenticator.authorize_admin(request)
         if container.outbox_store is None:
@@ -76,19 +64,19 @@ def create_outbox_router(container: ServiceContainer) -> APIRouter:
         limit: int = 100,
         cursor: str | None = None,
     ) -> dict:
-        """查询并返回列表结果，并返回调用方需要的结果。
+        """处理 GET /events 请求，查询事件。
 
         Args:
-            request: Request，调用方传入的 request 参数。
-            status: str | None，调用方传入的 status 参数。
-            limit: int，调用方传入的 limit 参数。
-            cursor: str | None，调用方传入的 cursor 参数。
+            request: 当前 HTTP 请求。
+            status: 目标状态。
+            limit: 返回记录的最大数量。
+            cursor: 分页游标。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
 
         Raises:
-            HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+            HTTPException: 请求参数、状态或依赖不满足要求时抛出。
         """
         container.authenticator.authorize_admin(request)
         if container.outbox_store is None:
@@ -102,17 +90,17 @@ def create_outbox_router(container: ServiceContainer) -> APIRouter:
 
     @router.get("/events/{event_id}")
     async def event_detail(request: Request, event_id: str) -> dict:
-        """执行 event_detail 对应的逻辑，并返回处理结果。
+        """处理 GET /events/{event_id} 请求，查询事件详情。
 
         Args:
-            request: Request，调用方传入的 request 参数。
-            event_id: str，调用方传入的 event_id 参数。
+            request: 当前 HTTP 请求。
+            event_id: 事件 ID。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
 
         Raises:
-            HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+            HTTPException: 请求参数、状态或依赖不满足要求时抛出。
         """
         container.authenticator.authorize_admin(request)
         if container.outbox_store is None:
@@ -124,17 +112,17 @@ def create_outbox_router(container: ServiceContainer) -> APIRouter:
 
     @router.post("/{event_id}/replay")
     async def replay(request: Request, event_id: str) -> dict:
-        """执行 replay 对应的逻辑，并返回处理结果。
+        """重放指定事件。
 
         Args:
-            request: Request，调用方传入的 request 参数。
-            event_id: str，调用方传入的 event_id 参数。
+            request: 当前 HTTP 请求。
+            event_id: 事件 ID。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
 
         Raises:
-            HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+            HTTPException: 请求参数、状态或依赖不满足要求时抛出。
         """
         container.authenticator.authorize_admin(request)
         if container.outbox_store is None:
@@ -145,17 +133,17 @@ def create_outbox_router(container: ServiceContainer) -> APIRouter:
 
     @router.post("/{event_id}/discard")
     async def discard(request: Request, event_id: str) -> dict:
-        """执行 discard 对应的逻辑，并返回处理结果。
+        """处理 POST /{event_id}/discard 请求，提交丢弃。
 
         Args:
-            request: Request，调用方传入的 request 参数。
-            event_id: str，调用方传入的 event_id 参数。
+            request: 当前 HTTP 请求。
+            event_id: 事件 ID。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
 
         Raises:
-            HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+            HTTPException: 请求参数、状态或依赖不满足要求时抛出。
         """
         container.authenticator.authorize_admin(request)
         if container.outbox_store is None:
@@ -166,17 +154,17 @@ def create_outbox_router(container: ServiceContainer) -> APIRouter:
 
     @router.post("/replay-failed")
     async def replay_failed(request: Request, limit: int = 100) -> dict:
-        """执行 replay_failed 对应的逻辑，并返回处理结果。
+        """处理 POST /replay-failed 请求，重放失败。
 
         Args:
-            request: Request，调用方传入的 request 参数。
-            limit: int，调用方传入的 limit 参数。
+            request: 当前 HTTP 请求。
+            limit: 返回记录的最大数量。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
 
         Raises:
-            HTTPException: 当输入、状态或外部依赖不满足要求时抛出。
+            HTTPException: 请求参数、状态或依赖不满足要求时抛出。
         """
         container.authenticator.authorize_admin(request)
         if container.outbox_store is None:

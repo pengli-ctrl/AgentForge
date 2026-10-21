@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_outbox_api。
+"""OutboxAPI测试模块。
 
 本测试模块验证 test_outbox_api 覆盖的业务路径、边界条件和回归场景。
 
@@ -14,54 +14,37 @@ from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from agentforge.platform.api.app import create_platform_app
 from agentforge.platform.infrastructure.db.base import Base
 from agentforge.platform.infrastructure.outbox_dispatcher import OutboxDispatcher
 from agentforge.platform.infrastructure.outbox_store import SQLAlchemyOutboxStore
 from agentforge.platform.runtime import build_sqlalchemy_container
+from tests.platform.support_fixtures import configure_sqlalchemy_support, create_app_with_support
 
 
 class FailingPublisher:
-    """FailingPublisher。
-
-    FailingPublisher 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - 方法 publish()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """失败发布器相关组件。"""
 
     async def publish(self, event):
-        """执行 publish 对应的核心操作，并保持调用契约稳定。
+        """发布失败发布器。
 
         Args:
-            event: Any，调用方传入的 event 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            event: 待处理事件。
 
         Raises:
-            RuntimeError: 当输入、状态或外部依赖不满足要求时抛出。
+            RuntimeError: 运行时依赖或状态不满足要求时抛出。
         """
         raise RuntimeError("kafka unavailable")
 
 
 def test_outbox_admin_list_and_replay() -> None:
-    """验证 outbox_admin_list_and_replay 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证Outbox管理查询及对应的测试场景。"""
     import asyncio
 
     async def setup():
-        """执行 setup 对应的逻辑，并返回处理结果。
+        """装配测试环境。
 
         Returns:
-            None，函数执行后的结果。
+            处理结果。
         """
         engine = create_async_engine(
             "sqlite+aiosqlite://",
@@ -72,7 +55,8 @@ def test_outbox_admin_list_and_replay() -> None:
             await connection.run_sync(Base.metadata.create_all)
         session_factory = async_sessionmaker(engine, expire_on_commit=False)
         container = build_sqlalchemy_container(session_factory)
-        await container.ticket_service.create_from_event(
+        support = configure_sqlalchemy_support(container, session_factory)
+        await support.ticket_service.create_from_event(
             {
                 "tenant_id": "tenant-1",
                 "source": "feishu",
@@ -83,10 +67,10 @@ def test_outbox_admin_list_and_replay() -> None:
         store = SQLAlchemyOutboxStore(session_factory, max_attempts=1)
         dispatcher = OutboxDispatcher(store, FailingPublisher())
         await dispatcher.dispatch_once()
-        return engine, container
+        return engine, container, support
 
-    engine, container = asyncio.run(setup())
-    client = TestClient(create_platform_app(container))
+    engine, container, support = asyncio.run(setup())
+    client = TestClient(create_app_with_support(container, support))
     failed = client.get("/v1/outbox/failed").json()["events"]
     assert len(failed) == 1
     response = client.post(f"/v1/outbox/{failed[0]['event_id']}/replay")

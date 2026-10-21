@@ -18,45 +18,41 @@ import pytest
 
 from agentforge.tools.code_review_tool import CodeReviewTool
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 辅助函数
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 def _find_by_rule(
     findings: list[dict[str, Any]],
     rule: str,
 ) -> dict[str, Any] | None:
-    """从 findings 列表中查找指定规则的结果。"""
+    """查找由规则。
+
+    Args:
+        findings: 输入参数。
+        rule: 规则。
+
+    Returns:
+        结构化结果字典。
+    """
     for f in findings:
         if f["rule"] == rule:
             return f
     return None
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 基础测试
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestCodeReviewToolBasic:
     """CodeReviewTool 基础属性测试。"""
 
     def test_name(self) -> None:
-        """验证 name 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证名称对应的测试场景。"""
         tool = CodeReviewTool()
         assert tool.name == "code_review"
 
     def test_schema(self) -> None:
-        """验证 schema 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证结构对应的测试场景。"""
         tool = CodeReviewTool()
         schema = tool.schema()
         assert schema["type"] == "function"
@@ -69,39 +65,25 @@ class TestCodeReviewToolBasic:
         assert "file_path" in required
 
     def test_init_defaults(self) -> None:
-        """验证 init_defaults 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证初始化默认项对应的测试场景。"""
         tool = CodeReviewTool()
         assert tool.rules_path is None
         assert tool.max_file_size == 1024 * 1024
 
     def test_init_custom(self) -> None:
-        """验证 init_custom 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证初始化自定义对应的测试场景。"""
         tool = CodeReviewTool(rules_path="/custom/rules", max_file_size=2048)
         assert tool.rules_path == "/custom/rules"
         assert tool.max_file_size == 2048
 
     def test_thresholds(self) -> None:
-        """验证 thresholds 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证阈值对应的测试场景。"""
         assert CodeReviewTool.MAX_COMPLEXITY == 10
         assert CodeReviewTool.MAX_FUNCTION_LENGTH == 50
         assert CodeReviewTool.MAX_NESTING_DEPTH == 4
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 正常代码分析（无问题）
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestCodeReviewCleanCode:
@@ -142,7 +124,7 @@ class TestCodeReviewCleanCode:
 
     @pytest.mark.asyncio
     async def test_moderate_complexity_no_warning(self) -> None:
-        """复杂度刚好等于阈值（10）不应触发 warning。"""
+        """验证复杂度无警告对应的测试场景。"""
         # 复杂度 = 1（基础） + 9（分支） = 10，不超过 10
         code = (
             "def func(x):\n"
@@ -188,9 +170,7 @@ class TestCodeReviewCleanCode:
         assert "0 issues" in result.output
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 高复杂度函数检测
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestCodeReviewHighComplexity:
@@ -240,7 +220,7 @@ class TestCodeReviewHighComplexity:
 
     @pytest.mark.asyncio
     async def test_complexity_with_loops_and_boolops(self) -> None:
-        """for/while/and/or 也应计入复杂度。"""
+        """验证复杂度使用及布尔运算对应的测试场景。"""
         code = (
             "def func(data):\n"
             "    for item in data:\n"
@@ -266,7 +246,7 @@ class TestCodeReviewHighComplexity:
 
     @pytest.mark.asyncio
     async def test_complexity_with_many_boolops(self) -> None:
-        """多个 and/or 表达式应增加复杂度。"""
+        """验证复杂度使用布尔运算对应的测试场景。"""
         code = (
             "def func(a, b, c, d, e, f, g, h, i, j, k):\n"
             "    if a and b or c and d or e and f or g and h or i and j or k:\n"
@@ -284,7 +264,7 @@ class TestCodeReviewHighComplexity:
 
     @pytest.mark.asyncio
     async def test_severity_is_warning_for_high_complexity(self) -> None:
-        """高复杂度问题 severity 应为 warning。"""
+        """验证严重性是否警告用于高复杂度对应的测试场景。"""
         code = (
             "def f():\n"
             "    if 1:\n"
@@ -319,9 +299,7 @@ class TestCodeReviewHighComplexity:
         assert result.metadata["warning_count"] > 0
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 长函数检测
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestCodeReviewLongFunction:
@@ -383,9 +361,7 @@ class TestCodeReviewLongFunction:
         assert finding is None
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 深嵌套检测
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestCodeReviewDeepNesting:
@@ -435,7 +411,7 @@ class TestCodeReviewDeepNesting:
 
     @pytest.mark.asyncio
     async def test_nesting_with_mixed_structures(self) -> None:
-        """混合结构（if/for/while）的嵌套应正确计算。"""
+        """验证使用对应的测试场景。"""
         code = (
             "def mixed_func():\n"
             "    if a:\n"
@@ -455,9 +431,7 @@ class TestCodeReviewDeepNesting:
         assert "nesting depth of 5" in finding["description"]
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 语法错误处理
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestCodeReviewSyntaxError:
@@ -465,7 +439,7 @@ class TestCodeReviewSyntaxError:
 
     @pytest.mark.asyncio
     async def test_syntax_error_returns_failure(self) -> None:
-        """语法错误应返回 success=False。"""
+        """验证语法错误返回失败对应的测试场景。"""
         code = "def broken_func(\n    # missing closing paren\n"
         tool = CodeReviewTool()
         result = await tool.execute(
@@ -478,7 +452,7 @@ class TestCodeReviewSyntaxError:
 
     @pytest.mark.asyncio
     async def test_syntax_error_metadata(self) -> None:
-        """语法错误应包含 syntax_error 元数据。"""
+        """验证语法错误元数据对应的测试场景。"""
         code = "def broken(:\n    pass\n"
         tool = CodeReviewTool()
         result = await tool.execute(
@@ -501,9 +475,7 @@ class TestCodeReviewSyntaxError:
         assert "syntax error" in result.output.lower()
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 空代码处理
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestCodeReviewEmptyCode:
@@ -511,7 +483,7 @@ class TestCodeReviewEmptyCode:
 
     @pytest.mark.asyncio
     async def test_empty_code(self) -> None:
-        """空字符串应返回 success=True 且无 findings。"""
+        """验证空代码对应的测试场景。"""
         tool = CodeReviewTool()
         result = await tool.execute(
             file_path="test.py",
@@ -533,16 +505,14 @@ class TestCodeReviewEmptyCode:
 
     @pytest.mark.asyncio
     async def test_no_code_content_provided(self) -> None:
-        """未提供 code_content 时应视为空。"""
+        """验证无代码内容对应的测试场景。"""
         tool = CodeReviewTool()
         result = await tool.execute(file_path="test.py")
         assert result.success is True
         assert result.metadata["findings"] == []
 
 
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 # 综合测试
-# 说明：该步骤用于实现上述逻辑并保证行为稳定。
 
 
 class TestCodeReviewComprehensive:
@@ -592,7 +562,7 @@ class TestCodeReviewComprehensive:
 
     @pytest.mark.asyncio
     async def test_async_function_analyzed(self) -> None:
-        """async 函数也应被分析。"""
+        """验证异步函数对应的测试场景。"""
         code = (
             "async def async_func():\n"
             "    for i in range(100):\n"
@@ -639,7 +609,7 @@ class TestCodeReviewComprehensive:
 
     @pytest.mark.asyncio
     async def test_review_types_in_metadata(self) -> None:
-        """review_types 应保存在 metadata 中。"""
+        """验证审核在元数据对应的测试场景。"""
         tool = CodeReviewTool()
         result = await tool.execute(
             file_path="test.py",
@@ -650,11 +620,7 @@ class TestCodeReviewComprehensive:
 
     @pytest.mark.asyncio
     async def test_finding_has_all_fields(self) -> None:
-        """验证 finding_has_all_fields 对应的业务行为、边界条件和回归场景。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """验证具有全部字段对应的测试场景。"""
         code = (
             "def f():\n"
             "    if 1:\n"

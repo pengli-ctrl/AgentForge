@@ -1,13 +1,4 @@
-"""AgentForge 平台基础设施层：sqlalchemy_knowledge_repository。
-
-本模块提供 sqlalchemy_knowledge_repository 的数据库持久化实现，负责事务、查询、租户隔离和一致性约束。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：SQLAlchemyKnowledgeRepository。
-"""
+"""SQLAlchemy知识仓储模块。"""
 
 from __future__ import annotations
 
@@ -29,28 +20,18 @@ from agentforge.platform.infrastructure.hybrid_scores import fuse_scores, merge_
 
 
 class SQLAlchemyKnowledgeRepository:
-    """PostgreSQL FTS + pgvector 混合检索仓储。
-
-    方言分支：
-    - postgresql：使用 `to_tsvector @@ plainto_tsquery` + `ts_rank`（FTS）与
-      `embedding <=> query` 余弦距离（pgvector），关键词与向量相似度可合并排序。
-    - 其他方言（例如 sqlite 测试库）：回退为 ILIKE 子串匹配 + Python 余弦，
-      保持接口与单元测试等价，真实集成路径需在占位了 PostgreSQL 后验证。
-    """
+    """知识仓储，负责持久化读写。"""
 
     def __init__(
         self,
         session_factory: async_sessionmaker[AsyncSession],
         embedder: Embedder | None = None,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 SQLAlchemyKnowledgeRepository。
 
         Args:
-            session_factory: async_sessionmaker[AsyncSession]，调用方传入的 session_factory 参数。
-            embedder: Embedder | None，调用方传入的 embedder 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            session_factory: 数据库会话工厂。
+            embedder: 向量化器。
         """
         self._session_factory = session_factory
         self._embedder = embedder or HashEmbedder()
@@ -60,14 +41,11 @@ class SQLAlchemyKnowledgeRepository:
         document: KnowledgeDocument,
         chunks: list[KnowledgeChunk],
     ) -> None:
-        """保存业务数据，并返回调用方需要的结果。
+        """保存文档。
 
         Args:
-            document: KnowledgeDocument，调用方传入的 document 参数。
-            chunks: list[KnowledgeChunk]，调用方传入的 chunks 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            document: 文档。
+            chunks: 文本分片列表。
         """
         async with self._session_factory() as session:
             async with session.begin():
@@ -101,13 +79,13 @@ class SQLAlchemyKnowledgeRepository:
                     )
 
     async def backfill_embeddings(self, tenant_id: str | None = None) -> int:
-        """回填缺失数据，并返回调用方需要的结果。
+        """回填向量。
 
         Args:
-            tenant_id: str | None，调用方传入的 tenant_id 参数。
+            tenant_id: 租户 ID，用于数据隔离。
 
         Returns:
-            int，函数执行后的结果。
+            整数结果。
         """
         backfilled = 0
         async with self._session_factory() as session:
@@ -136,18 +114,18 @@ class SQLAlchemyKnowledgeRepository:
         fts_weight: float = 0.5,
         vector_weight: float = 0.5,
     ) -> list[RetrievedChunk]:
-        """执行 search 对应的核心操作，并保持调用契约稳定。
+        """搜索知识。
 
         Args:
-            tenant_id: str，调用方传入的 tenant_id 参数。
-            query: str，调用方传入的 query 参数。
-            limit: int，调用方传入的 limit 参数。
-            mode: str，调用方传入的 mode 参数。
-            fts_weight: float，调用方传入的 fts_weight 参数。
-            vector_weight: float，调用方传入的 vector_weight 参数。
+            tenant_id: 租户 ID，用于数据隔离。
+            query: 检索或筛选查询。
+            limit: 返回记录的最大数量。
+            mode: 运行模式。
+            fts_weight: 输入参数。
+            vector_weight: 输入参数。
 
         Returns:
-            list[RetrievedChunk]，函数执行后的结果。
+            结果列表。
         """
         query_vector = self._embedder.embed(query)
         async with self._session_factory() as session:
@@ -179,16 +157,16 @@ class SQLAlchemyKnowledgeRepository:
         query_vector: list[float],
     ) -> tuple[dict[str, float], dict[str, float], dict[str, RetrievedChunk]]:
         # 路径 1：PostgreSQL FTS rank
-        """执行 _search_postgres 对应的逻辑，并返回处理结果。
+        """搜索知识。
 
         Args:
-            session: AsyncSession，调用方传入的 session 参数。
-            tenant_id: str，调用方传入的 tenant_id 参数。
-            query: str，调用方传入的 query 参数。
-            query_vector: list[float]，调用方传入的 query_vector 参数。
+            session: 当前会话。
+            tenant_id: 租户 ID，用于数据隔离。
+            query: 检索或筛选查询。
+            query_vector: 查询。
 
         Returns:
-            tuple[dict[str, float], dict[str, float], dict[str, RetrievedChunk]]，函数执行后的结果。
+            结果元组。
         """
         fts_doc = func.to_tsvector("english", KnowledgeChunkRecord.content)
         fts_query = func.plainto_tsquery("english", query)
@@ -233,16 +211,16 @@ class SQLAlchemyKnowledgeRepository:
         query: str,
         query_vector: list[float],
     ) -> tuple[dict[str, float], dict[str, float], dict[str, RetrievedChunk]]:
-        """执行 _search_backport 对应的逻辑，并返回处理结果。
+        """搜索知识。
 
         Args:
-            session: AsyncSession，调用方传入的 session 参数。
-            tenant_id: str，调用方传入的 tenant_id 参数。
-            query: str，调用方传入的 query 参数。
-            query_vector: list[float]，调用方传入的 query_vector 参数。
+            session: 当前会话。
+            tenant_id: 租户 ID，用于数据隔离。
+            query: 检索或筛选查询。
+            query_vector: 查询。
 
         Returns:
-            tuple[dict[str, float], dict[str, float], dict[str, RetrievedChunk]]，函数执行后的结果。
+            结果元组。
         """
         from agentforge.platform.application.knowledge_embedder import cosine_similarity
 
@@ -289,6 +267,7 @@ class SQLAlchemyKnowledgeRepository:
                 source_uri=document.source_uri,
                 fts_score=kw_score,
                 vector_score=vec_score,
+                metadata=dict(chunk.payload or {}),
             )
         return keyword_scores, vector_scores, chunks_by_id
 
@@ -298,15 +277,15 @@ class SQLAlchemyKnowledgeRepository:
         tenant_id: str,
         chunk_ids: set[str],
     ) -> dict[str, RetrievedChunk]:
-        """执行 _load_candidates 对应的逻辑，并返回处理结果。
+        """加载知识。
 
         Args:
-            session: AsyncSession，调用方传入的 session 参数。
-            tenant_id: str，调用方传入的 tenant_id 参数。
-            chunk_ids: set[str]，调用方传入的 chunk_ids 参数。
+            session: 当前会话。
+            tenant_id: 租户 ID，用于数据隔离。
+            chunk_ids: 分块 ID 列表。
 
         Returns:
-            dict[str, RetrievedChunk]，函数执行后的结果。
+            结构化结果字典。
         """
         if not chunk_ids:
             return {}
@@ -331,5 +310,6 @@ class SQLAlchemyKnowledgeRepository:
                 content=chunk.content,
                 score=0.0,
                 source_uri=document.source_uri,
+                metadata=dict(chunk.payload or {}),
             )
         return chunks_by_id

@@ -1,4 +1,4 @@
-"""AgentForge Agent 模块 — 预置的 Agent 实现。"""
+"""包公共导出。"""
 
 from agentforge.agents.code_review_agent import CodeReviewAgent
 from agentforge.agents.deploy_agent import DeployAgent

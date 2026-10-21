@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_temporal_client。
+"""Temporal客户端测试模块。
 
 本测试模块验证 test_temporal_client 覆盖的业务路径、边界条件和回归场景。
 
@@ -10,90 +10,70 @@
 - 主要函数：test_temporal_client_starts_and_signals_workflow。
 """
 
+from datetime import timedelta
+
 import pytest
 
 from agentforge.platform.infrastructure.temporal.client import TemporalWorkflowClient
+from agentforge.platform.modules.expense.workflows.invoice_gate_sweep import (
+    ExpenseInvoiceGateSweepWorkflow,
+)
 
 
 class FakeWorkflowHandle:
-    """FakeWorkflowHandle。
-
-    FakeWorkflowHandle 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - 方法 signal()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """用于测试的模拟处理。"""
 
     def __init__(self) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """初始化模拟处理。"""
         self.signals: list[tuple[str, dict]] = []
 
     async def signal(self, name: str, payload: dict) -> None:
-        """执行 signal 对应的逻辑，并返回处理结果。
+        """发送信号模拟处理。
 
         Args:
-            name: str，调用方传入的 name 参数。
-            payload: dict，调用方传入的 payload 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            name: 资源或对象名称。
+            payload: 事件、工作流或请求载荷。
         """
         self.signals.append((name, payload))
 
 
 class FakeTemporalClient:
-    """FakeTemporalClient。
-
-    FakeTemporalClient 封装外部系统或基础设施协议，向上提供稳定、可测试的接口。
-
-    主要成员：
-    - 方法 start_workflow()。
-    - 方法 get_workflow_handle()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """用于测试的模拟Temporal。"""
 
     def __init__(self) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """初始化模拟Temporal。"""
         self.started: list[dict] = []
         self.handles: dict[str, FakeWorkflowHandle] = {}
+        self.schedules: dict[str, object] = {}
 
     async def start_workflow(self, workflow, event, id, task_queue):
-        """执行 start_workflow 对应的逻辑，并返回处理结果。
+        """启动工作流。
 
         Args:
-            workflow: Any，调用方传入的 workflow 参数。
-            event: Any，调用方传入的 event 参数。
-            id: Any，调用方传入的 id 参数。
-            task_queue: Any，调用方传入的 task_queue 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            workflow: 工作流定义或实例。
+            event: 待处理事件。
+            id: ID。
+            task_queue: 任务队列。
         """
         self.started.append({"event": event, "id": id, "task_queue": task_queue})
 
-    def get_workflow_handle(self, workflow_id: str) -> FakeWorkflowHandle:
-        """读取并返回指定数据，并返回调用方需要的结果。
+    async def create_schedule(self, schedule_id: str, schedule: object) -> None:
+        """创建调度。
 
         Args:
-            workflow_id: str，调用方传入的 workflow_id 参数。
+            schedule_id: 调度 ID。
+            schedule: 调度。
+        """
+        self.schedules[schedule_id] = schedule
+
+    def get_workflow_handle(self, workflow_id: str) -> FakeWorkflowHandle:
+        """获取工作流处理。
+
+        Args:
+            workflow_id: 工作流 ID。
 
         Returns:
-            FakeWorkflowHandle，函数执行后的结果。
+            模拟工作流处理结果。
         """
         handle = self.handles.setdefault(workflow_id, FakeWorkflowHandle())
         return handle
@@ -101,22 +81,18 @@ class FakeTemporalClient:
 
 @pytest.mark.asyncio
 async def test_temporal_client_starts_and_signals_workflow() -> None:
-    """验证 temporal_client_starts_and_signals_workflow 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证Temporal客户端开始及工作流对应的测试场景。"""
     fake = FakeTemporalClient()
 
     async def factory(address, namespace):
-        """执行 factory 对应的逻辑，并返回处理结果。
+        """处理工厂。
 
         Args:
-            address: Any，调用方传入的 address 参数。
-            namespace: Any，调用方传入的 namespace 参数。
+            address: 输入参数。
+            namespace: 输入参数。
 
         Returns:
-            None，函数执行后的结果。
+            处理结果。
         """
         return fake
 
@@ -126,8 +102,77 @@ async def test_temporal_client_starts_and_signals_workflow() -> None:
         task_queue="queue-1",
         client_factory=factory,
     )
-    workflow_id = await client.start_support_workflow({"tenant_id": "tenant-1"}, workflow_id="wf-1")
-    await client.signal_approval("wf-1", "approve", "supervisor-1")
+
+    async def workflow_run(event):
+        """处理工作流运行。
+
+        Args:
+            event: 待处理事件。
+
+        Returns:
+            处理结果。
+        """
+        return event
+
+    async def workflow_approve(payload):
+        """处理工作流批准。
+
+        Args:
+            payload: 事件、工作流或请求载荷。
+
+        Returns:
+            处理结果。
+        """
+        return payload
+
+    workflow_id = await client.start_workflow(
+        workflow_run,
+        {"tenant_id": "tenant-1"},
+        workflow_id="wf-1",
+    )
+    await client.signal_workflow(
+        "wf-1",
+        workflow_approve,
+        {"decision": "approve", "decided_by": "supervisor-1"},
+    )
     assert workflow_id == "wf-1"
     assert fake.started[0]["task_queue"] == "queue-1"
     assert fake.handles["wf-1"].signals[0][1]["decision"] == "approve"
+
+
+@pytest.mark.asyncio
+async def test_temporal_client_creates_skipping_interval_schedule() -> None:
+    """验证Temporal客户端创建调度对应的测试场景。"""
+    fake = FakeTemporalClient()
+
+    async def factory(address, namespace):
+        """处理工厂。
+
+        Args:
+            address: 输入参数。
+            namespace: 输入参数。
+
+        Returns:
+            处理结果。
+        """
+        return fake
+
+    client = TemporalWorkflowClient(
+        address="temporal:7233",
+        namespace="default",
+        task_queue="expense-copilot",
+        client_factory=factory,
+    )
+
+    schedule_id = await client.ensure_schedule(
+        ExpenseInvoiceGateSweepWorkflow,
+        {},
+        schedule_id="expense-invoice-gate-sweep",
+        interval_seconds=900,
+        workflow_id="expense-invoice-gate-sweep-run",
+    )
+
+    schedule = fake.schedules[schedule_id]
+    assert schedule.spec.intervals[0].every == timedelta(minutes=15)
+    assert schedule.action.task_queue == "expense-copilot"
+    assert schedule.action.id == "expense-invoice-gate-sweep-run"

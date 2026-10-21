@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_model_routing。
+"""模型路由测试模块。
 
 本测试模块验证 test_model_routing 覆盖的业务路径、边界条件和回归场景。
 
@@ -20,11 +20,7 @@ from agentforge.platform.infrastructure.memory_cost_repository import MemoryCost
 
 
 def test_model_router_selects_expected_profiles() -> None:
-    """验证 model_router_selects_expected_profiles 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证模型路由对应的测试场景。"""
     router = ModelRouter(
         [
             ModelProfile(
@@ -53,11 +49,7 @@ def test_model_router_selects_expected_profiles() -> None:
 
 @pytest.mark.asyncio
 async def test_quota_gateway_rejects_over_budget() -> None:
-    """验证 quota_gateway_rejects_over_budget 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证配额网关拒绝预算对应的测试场景。"""
     cost_repository = MemoryCostRepository()
     await cost_repository.save(
         CostRecord(

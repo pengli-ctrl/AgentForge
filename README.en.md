@@ -3,343 +3,401 @@
 ![CI](https://img.shields.io/badge/CI-passing-brightgreen)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
-![Tests](https://img.shields.io/badge/Tests-728%20passed-brightgreen)
-![Code Style](https://img.shields.io/badge/code%20style-black-000000)
+![Tests](https://img.shields.io/badge/Tests-884%20passed-brightgreen)
+![Version](https://img.shields.io/badge/version-3.1.0-blue)
 
-> An **AI Agent orchestration + enterprise governance platform** for SMEs — a one-stop AI platform infrastructure spanning multi-agent orchestration, intelligent routing, cost control, and an end-to-end multi-tenant customer-support ticket workflow (retrieve → generate → approve → write back).
+> **Move AI from demos into real business workflows without giving up governance, reliability, or delivery control.**
 
-AgentForge is an integrated platform for AI Agent orchestration and enterprise governance. On top sits a **multi-agent orchestration engine** with a three-layer architecture (orchestration / runtime / gateway): a built-in DAG task engine (up to 50 nodes), 5-model intelligent routing, semantic caching, three-tier memory, and end-to-end tracing. Below it is an **enterprise AI platform layer** (first landing: customer-support and after-sales ticket processing): multi-tenancy, RBAC + a declarative policy engine, tenant quotas and cost governance, full-process auditing, Temporal workflows + Outbox reliable delivery, retrieval evaluation and offline regression, and connectors with ticket write-back. Open source — **all 728 automated tests pass** (including 262 platform-layer tests), with black / isort / flake8 / mypy all green.
+AgentForge is an enterprise AI platform built around a **shared kernel, composable business modules, and SaaS/private-delivery packaging**. It brings model access, agent orchestration, RAG, policy, approval, audit, quotas and cost, durable workflows, and connectors into one foundation. Business teams implement only their domain module and get a governed, measurable, operable, and deliverable AI product.
 
----
+Current version: `3.1.0`. Implemented modules: **Support**, **Expense**, and **Demo Asset**.
 
-## Architecture Overview
+### At a glance
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Orchestration Layer                          │
-│  DAG task engine (50 nodes) · Planner · LoopBlock · ContextStore │
-│  Static orchestration (Kahn topo sort) · dynamic · runtime re-   │
-├─────────────────────────────────────────────────────────────────┤
-│                         Runtime Layer                            │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
-│  │ CodeReview│  │  Test   │  │   Doc   │  │ Security │  ...×5   │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘           │
-│  Unified Agent base class (abc + 5 interfaces) · 3-tier Memory · │
-│  Tool framework (Function Calling)                               │
-├─────────────────────────────────────────────────────────────────┤
-│                       AI Gateway Layer                           │
-│  5-model routing · semantic cache (38% hit) · token cost control │
-│  · full-chain tracing · Qwen3-Pro · GLM-5 · Kimi · MiniMax ·     │
-├─────────────────────────────────────────────────────────────────┤
-│                     Enterprise AI Platform Layer                 │
-│  Multi-tenant · RBAC + policy engine · quotas/cost · audit ·     │
-│  ticket workflow · Temporal · Outbox/DLQ · retrieval eval ·      │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-| Layer | Responsibility | Core Components |
-|---|---|---|
-| **Orchestration** | Task decomposition, node scheduling, data flow | DAG engine (Kahn topo sort + parallel scheduling), Planner (auto-decomposition), LoopBlock (loop control), ContextStore (cross-node data flow) |
-| **Runtime** | Agent execution, memory management, tool invocation | Unified Agent base class (abc + 5 standard interfaces), 5 registered agent types, 3-tier memory (working/short/long), tool framework (Function Calling) |
-| **Gateway** | Model routing, caching, cost control, observability | 5-model routing (capability/cost/latency 3-D scoring), semantic cache (Embedding > 0.92), token-level cost stats + P0–P3 budget alerts, full-chain Trace/Span (5 span types) |
-| **Platform** | Enterprise governance + business loop closure | Multi-tenant isolation, RBAC + declarative policy engine, tenant quotas & cost dashboard, full-process audit, ticket workflow (retrieve→generate→approve→write back), Temporal, Outbox/DLQ, retrieval evaluation & offline regression, connectors & webhook |
-
----
-
-## Core Design
-
-### DAG Task Engine
-
-- Directed acyclic graphs of up to **50 nodes**
-- **Kahn's algorithm** topological sort O(V+E); independent nodes execute in parallel
-- **Three orchestration modes**: static (developer-defined DAG), dynamic (auto-generated by Planner Agent), and runtime re-orchestration (insert/replace nodes during execution)
-- **ContextStore** for cross-node data flow with read/write locks protecting parallel nodes
-- **LoopBlock**: embedded subgraph + loop controller, hard cap of 5 iterations, configurable exit conditions
-
-### 5-Model Intelligent Routing
-
-- Five models: **Qwen3-Pro, GLM-5, Kimi, MiniMax, DeepSeek-V3**
-- A Classifier Agent assesses task type and complexity
-- **3-D scoring matrix**: capability (0.5), cost (0.3), latency (0.2) weighted sum
-- Simple tasks → MiniMax (1/10 cost); complex tasks → Qwen3-Pro
-
-### Semantic Cache
-
-- Embedding similarity **> 0.92** threshold (experimentally tuned Pareto-optimal point)
-- Hit rate **38%**, accuracy **98%+**
-- LRU + TTL 24h eviction
-
-### Three-Tier Timeout System
-
-| Tier | Timeout | Notes |
-|---|---|---|
-| LLM call | 10s | tuned on P95 of 15,000+ requests |
-| Agent execution | 30s | `asyncio.wait_for` |
-| DAG global | 300s | `cancel` + `partial_success` |
-
-### Four-Tier Degradation Strategy
-
-| Tier | Strategy |
+| Problem | What AgentForge provides |
 |---|---|
-| **L1 Model** | primary → fallback → lightest → canned reply |
-| **L2 Node** | retry 2× → fallback default → degraded marker |
-| **L3 DAG** | terminate early if failed nodes > 30% |
-| **L4 System** | global degradation + P0 alert |
+| Put AI into real workflows | DAG orchestration, agents, tools, RAG, model routing, and semantic cache |
+| Make AI enterprise-safe | Multi-tenancy, RBAC, policy, approval, audit, secret references, and fail-closed defaults |
+| Share one platform across businesses | `ModuleManifest`, `ModuleRuntime`, SDK ports, and `ModuleRegistry` |
+| Control usage and cost | Quotas, token cost, plans, metering, overage policies, alerts, and invoices |
+| Survive long-running failures | Temporal, schedules, task queues, Outbox, DLQ, replay, and idempotent handlers |
 
-### Request Amplification Control
+### Who is it for?
 
-Three limits prevent cascading failure:
-- DAG size ≤ 50 nodes
-- LLM calls per request ≤ 100
-- Concurrent DAGs ≤ 10 × parallel nodes ≤ 5
+- **AI platform and architecture teams** building a shared foundation for models, agents, RAG, governance, and cost.
+- **Enterprise SaaS product teams** turning support, finance, or operations workflows into AI-powered products.
+- **Solution and private-delivery teams** shipping the same code as SaaS or customer-hosted deployments.
+- **Backend and agent engineers** adding modules through the SDK while reusing tools, memory, Temporal, Outbox, and connectors.
+- **Security and operations teams** applying fail-closed auth, audit, policy, quotas, DLQ, hardened containers, and production checks.
 
-### Three-Tier Memory
+> AgentForge is intentionally heavier than a one-off prompt demo. It is for teams turning AI into a reusable, governed, and commercially deliverable platform.
 
-| Type | Analogy | Notes |
+### What can you build?
+
+- **Support copilot**: intake → classification → retrieval → reply draft → human review → write-back → SLA and notification.
+- **Expense automation**: OCR → field confirmation → policy checks → approval → invoice gates → ledger → finance write-back.
+- **Custom industry modules**: inventory, contracts, procurement, logistics, or other domains through the module SDK.
+- **Multi-tenant SaaS**: plan-based module enablement, usage metering, alerts, and invoices.
+- **Private delivery**: Helm deployment of API, workers, Outbox worker, and migrations against customer infrastructure.
+
+---
+
+## Core capabilities
+
+| Domain | Capabilities | Value |
 |---|---|---|
-| **Working** | CPU register | current conversation context |
-| **Short-term** | RAM | session-level cache |
-| **Long-term** | disk | persistent knowledge base, RAG-based |
+| **Agent runtime and orchestration** | Agents, three-tier memory, tools, context, DAG, Planner, LoopBlock, timeout, degradation, and guards | Complex AI flows with controlled concurrency, failure, and cost |
+| **Model and knowledge gateway** | Routing, semantic cache, token cost, tracing, hybrid retrieval, reranking, and hallucination guards | One cost-aware interface for models and knowledge |
+| **Enterprise governance** | Tenancy, RBAC, policy, approval, audit, redaction, retention, and PII lifecycle | AI inside enterprise permission and accountability boundaries |
+| **Reliable workflows** | Temporal, schedules, task queues, Outbox, Kafka, receipts, DLQ, connectors, and webhook HMAC | Durable, auditable, retryable, and compensatable side effects |
+| **Business module platform** | Manifest, SDK ports, entry points, dual repositories, tenant config, contract tests, and versioning | One kernel, multiple independently deliverable businesses |
+| **SaaS and private delivery** | Tenant lifecycle, plans, metering, billing, operations, Helm, secrets, and migrations | A commercial delivery baseline from day one |
 
-### Full-Chain Observability
+## Architecture
 
-- **Five span types**: `CacheSpan`, `RouteSpan`, `InferenceSpan`, `AgentSpan`, `LoopSpan`
-- Token-level cost tracking + **P0–P3** four-tier budget alerts
-- Full-chain tracing per request → agent → model → token
-
----
-
-## AI Platform Layer (First Scenario: Customer-Support Ticket Processing)
-
-An enterprise AI platform for SME customer-support / after-sales scenarios that uses **governance boundaries** to keep AI automation within enterprise control: AI may classify, retrieve, summarize, and draft — **but every customer-facing and high-risk action must be approved by a human before execution**.
-
-### Governance & Security Boundaries
-
-- **Multi-tenant isolation**: all domain models (tickets, knowledge, RBAC, quotas, audit, connectors) are tenant-scoped
-- **RBAC + declarative policy engine**: role/permission + `ActionPolicy` (fail-closed, risk level, approval requirement, allow-list) combined evaluation yielding `allowed` / `denied` / `requires_approval`; optional OpenFGA-style relationship checks
-- **High-risk action audit loop**: `HighRiskActionAuthorizer` enforces a mandatory human-approval boundary on high-risk actions such as "write back to the ticketing system" (ticket not `READY_TO_PUBLISH` / not approved → DENIED), and records every authorization (allow/deny) as an audit event answering "who executed it, why it was allowed"
-- **Tenant-level quota governance**: monthly budget / alert threshold / hard cap, enforced per tenant by `QuotaAwareModelGateway`
-- **Full-process audit**: audit events, operator, `trace_id`, cost aggregation for compliance tracing
-
-### End-to-End Ticket Workflow
-
-```
-Feishu/Webhook → signature check + idempotency → ticket create/state machine → intent + risk classification
-  → knowledge retrieval (pgvector + FTS hybrid) → reply draft generation + citation check
-  → risk assessment → low-risk to human review / high-risk to approval → approved → write back to business system
-  → feedback collected as evaluation samples → cost / audit / Trace recorded throughout
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│ Access: REST / Webhook / Feishu / OpenAPI Connector / CLI / SDK     │
+├─────────────────────────────────────────────────────────────────────┤
+│ Business modules: Support / Expense / Demo Asset / Custom modules   │
+│ Layers: api · application · domain · infrastructure · workflows     │
+├─────────────────────────────────────────────────────────────────────┤
+│ Governance: Tenant · RBAC · Policy · Approval · Audit · Quota       │
+│             SaaS · Module Config · Connector · Secret              │
+├──────────────────────────────────┬──────────────────────────────────┤
+│ Agent runtime and orchestration  │ Model and knowledge gateway      │
+│ Agent / Memory / Tool / Context  │ Router / Cache / RAG / Cost      │
+│ DAG / Planner / LoopBlock        │ Trace / Reranker / Guard         │
+├──────────────────────────────────┴──────────────────────────────────┤
+│ Reliable delivery: Temporal · Outbox/Kafka · DLQ · Schedule         │
+├─────────────────────────────────────────────────────────────────────┤
+│ Data and observability: PostgreSQL/pgvector · S3 · Valkey · OTel    │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Ticket lifecycle**: creation, idempotency key, state machine, risk classification, priority
-- **Temporal workflows**: approval Signal, Outbox, failure retry, DLQ replay
-- **Human review**: accept / edit / reject / escalate; reviewed replies are published
-- **Connectors & write-back**: `Connector` ABC + Registry, webhook generalization (HMAC verification), `OpenAPIAdapter` (idempotency-key header + bounded retry + token-bucket rate limiting + audit), CRM / ticketing-system write-back loop
+### Request path
 
-### Retrieval, Evaluation & Version Governance
-
-- **Hybrid retrieval**: PostgreSQL FTS + pgvector (HNSW/GIN indexes), `KnowledgeRepository.search`, dual Memory & SQLAlchemy implementations
-- **Retrieval re-ranking & recall evaluation**: deterministic `HybridReranker`, Recall@K / Precision@K / MRR / citation accuracy, online `RetrievalEvaluationService` (GoldenQuery → QueryEvaluation → RetrievalReport)
-- **Structured classification quality gates**: classification accuracy / priority accuracy / structural validity rate / high-risk miss rate; versioned `PromptRegistry` and `ModelVersionRegistry`; release quality gates (PASS / HOLD / BLOCK, high-risk miss is a veto)
-- **Offline regression + Golden Dataset**: `RegressionRunner` (load Golden → recall + classification evaluation → quality gate → persisted report)
-
-### Platform API Overview
-
-| Route prefix | Capability |
-|---|---|
-| `/v1/tickets` | Ticket detail, approval (approve/reject), review, reply, write-back |
-| `/v1/console` | Support workbench, approval inbox, admin console aggregate overview, multi-tenant cost |
-| `/v1/rbac` | Role CRUD, permission assignment, user-role assignment, `/v1/authorize` checks |
-| `/v1/quotas` | Tenant quota management |
-| `/v1/audit` | Audit event query |
-| `/v1/costs` | Cost & model distribution |
-| `/v1/knowledge` | Knowledge ingestion & hybrid retrieval (with re-ranking) |
-| `/v1/evaluations` | Retrieval / classification quality evaluation |
-| `/v1/regression` | Golden maintenance + regression trigger & records |
-| `/v1/connectors` | Connector registration & management |
-| `/v1/outbox` | Outbox event management, DLQ query & replay |
-
----
-
-## Quantified Outcomes
-
-| Metric | Value | Notes |
-|---|---|---|
-| LLM cost reduction | **68%** | 38% from cache + 30% from routing |
-| End-to-end latency reduction | **38%** | cache skips inference + routing favors low-latency models |
-| Task completion rate | **97%** | across 15,000+ requests |
-| Cascade failure rate | **< 0.3%** | structured output + cross-validation + safe defaults |
-| Cache hit rate | **38%** | Embedding similarity > 0.92 |
-| Automated tests | **728** | all pass, green CI (unit + integration + platform) |
-| Agent types | **5** | code review / test execution / doc generation / security scan / deploy |
-| Max DAG size | **50 nodes** | Kahn topo sort + parallel scheduling |
-| Platform tests | **262** | dedicated enterprise AI platform layer tests |
-
-> Data from benchmark runs (2,000 labeled queries) and daily usage (3 weeks, 15,000+ requests total); not a commercial production environment.
-
----
-
-## Tech Stack
-
-| Category | Choices |
-|---|---|
-| Language | Python 3.10+ |
-| Backend | FastAPI + async SQLAlchemy |
-| LLM inference | vLLM (private deployment) + 5 API models (Qwen3-Pro / GLM-5 / Kimi / MiniMax / DeepSeek-V3) |
-| Orchestration | DAG engine (Kahn topo sort + parallel scheduling) + Planner Agent |
-| Workflows | Temporal Python SDK |
-| Event delivery | Outbox pattern + Redis Pub/Sub → Kafka (with DLQ replay) |
-| State storage | Redis / Valkey |
-| Database | PostgreSQL (FTS + pgvector hybrid retrieval) + Alembic migrations |
-| Vector search | FAISS / pgvector |
-| Keyword search | BM25 (rank_bm25) / PostgreSQL FTS |
-| Code parsing | tree-sitter |
-| Containerization | Docker / Docker Compose |
-| Observability | OpenTelemetry + Prometheus + Grafana |
-| Tool protocols | Function Calling |
-| Connectors | Feishu, Webhook (HMAC verification), OpenAPI (idempotency + rate limit + audit) |
-
----
-
-## Project Structure
-
+```text
+User / external system
+  -> authentication, tenant state, module enablement
+  -> module API and domain use case
+  -> orchestration, RAG, model gateway, tools, and connectors
+  -> policy and approval for high-risk actions
+  -> audit, Outbox, Temporal, cost, and usage records
+  -> response plus durable asynchronous work
 ```
+
+### Design principles
+
+- **Govern once**: tenancy, authorization, audit, quota, cost, and observability live in the shared kernel.
+- **Isolate domains**: platform core does not import concrete modules.
+- **Reliability by design**: business writes, Outbox, Temporal, idempotency, and DLQ are designed together.
+- **One codebase, two deliveries**: SaaS and private Helm packaging share the same platform code.
+- **Secure by default**: fail-closed auth, secret references, and approval for high-risk actions.
+
+## Project status
+
+AgentForge `3.1.0` is a **runnable, testable, extensible, and privately deliverable commercial baseline**:
+
+- shared kernel, module SDK, tenant module configuration, and three business modules;
+- SaaS lifecycle, plans, metering, invoices, and operations control plane;
+- Temporal, Outbox, DLQ, object storage, Valkey, and real infrastructure tests;
+- security baseline, audit redaction, PII lifecycle, Helm, and runbooks;
+- offline baseline: **884 passed, 7 skipped**, including **418 platform tests**.
+
+Production rollout still requires environment-specific validation of IdP/SSO, Vault/KMS, WAF/DLP, highly available data services, image CVE/SBOM scanning, and Kubernetes install, upgrade, rollback, and disaster-recovery drills.
+
+---
+## Repository layout
+
+```text
 AgentForge/
 ├── agentforge/
-│   ├── core/                     # Runtime layer
-│   │   ├── agent.py              # Unified Agent ABC (abc + 5 interfaces)
-│   │   ├── memory.py             # Three-tier memory (working/short/long)
-│   │   ├── base_tool.py          # Tool framework (Function Calling)
-│   │   ├── agent_registry.py     # Agent registry
-│   │   └── context_store.py      # Cross-node data flow
-│   ├── orchestration/            # Orchestration layer
-│   │   ├── dag_engine.py         # DAG task engine (Kahn topo sort + parallel)
-│   │   ├── planner.py            # Planner Agent (auto decomposition)
-│   │   ├── loop_block.py         # LoopBlock loop controller
-│   │   ├── timeout.py            # Three-tier timeout system
-│   │   ├── degradation.py        # Four-tier degradation strategy
-│   │   └── request_guard.py      # Request amplification control
-│   ├── gateway/                  # Gateway layer
-│   │   ├── router.py             # 5-model intelligent routing
-│   │   ├── semantic_cache.py     # Semantic cache (Embedding > 0.92)
-│   │   ├── cost_tracker.py       # Token-level cost tracking + budget alerts
-│   │   └── model_registry.py     # Model registry
-│   ├── observability/            # Observability
-│   │   ├── tracing.py            # Trace/Span (five types)
-│   │   ├── metrics.py            # Prometheus metrics
-│   │   └── logger.py             # Structured logging
-│   ├── rag/                      # RAG engineering
-│   │   ├── ast_chunker.py        # AST-aware chunking
-│   │   ├── hybrid_retriever.py   # BM25 + FAISS hybrid retrieval
-│   │   ├── reranker.py           # LLM re-ranking
-│   │   └── hallucination_guard.py # Hallucination guard
-│   ├── safety/                   # Safety
-│   │   ├── trust_boundary.py     # Deterministic validation
-│   │   ├── pulse_shaper.py       # Request shaping
-│   │   ├── aimd_controller.py    # AIMD rate limiting
-│   │   └── conflict_arbiter.py   # Conflict arbitration
-│   ├── tools/                    # Tool implementations
-│   ├── agents/                   # Agent implementations (5 types)
-│   ├── api/                      # Orchestration FastAPI entry
-│   └── platform/                 # Enterprise AI platform layer
-│       ├── api/                  # Platform REST API (tickets/console/RBAC/quota/audit/...)
-│       ├── application/          # Application services (policy engine/quota/eval/quality gate/connectors...)
-│       ├── domain/               # Domain models (tickets/RBAC/quota/audit/policy/events...)
-│       ├── infrastructure/       # Infrastructure (dual Memory/SQLAlchemy, Outbox, Kafka, Temporal)
-│       ├── workflows/            # Temporal workflows (support tickets)
-│       ├── connectors/           # Connectors (Feishu)
-│       └── runtime.py            # Assembly (ServiceContainer)
+│   ├── agents/
+│   ├── api/
+│   ├── cli/
+│   ├── core/
+│   ├── gateway/
+│   ├── llm/
+│   ├── observability/
+│   ├── orchestration/
+│   ├── prompts/
+│   ├── rag/
+│   ├── safety/
+│   ├── sdk/
+│   ├── storage/
+│   ├── tools/
+│   ├── workflow/
+│   └── platform/
+│       ├── api/
+│       ├── application/
+│       ├── cli/
+│       ├── connectors/
+│       ├── core/
+│       ├── domain/
+│       ├── infrastructure/
+│       ├── modules/
+│       │   ├── support/
+│       │   │   ├── api/
+│       │   │   ├── application/
+│       │   │   ├── connectors/
+│       │   │   ├── domain/
+│       │   │   ├── infrastructure/
+│       │   │   ├── workflows/
+│       │   │   ├── config.py
+│       │   │   ├── module.py
+│       │   │   ├── ports.py
+│       │   │   ├── runtime.py
+│       │   │   └── README.md
+│       │   ├── expense/
+│       │   │   ├── api/
+│       │   │   ├── application/
+│       │   │   ├── domain/
+│       │   │   ├── infrastructure/
+│       │   │   ├── workflows/
+│       │   │   ├── config.py
+│       │   │   ├── module.py
+│       │   │   ├── ports.py
+│       │   │   ├── runtime.py
+│       │   │   └── README.md
+│       │   └── demo_asset/
+│       │       ├── api/
+│       │       ├── application/
+│       │       ├── domain/
+│       │       ├── infrastructure/
+│       │       ├── workflows/
+│       │       ├── config.py
+│       │       ├── module.py
+│       │       ├── ports.py
+│       │       └── README.md
+│       ├── observability/
+│       ├── sdk/
+│       ├── security/
+│       ├── workflows/
+│       └── runtime.py
+├── bench/
 ├── configs/
-│   ├── workflows/                # DAG workflow configs
-│   ├── dev/ · prod/              # Runtime environment configs
-│   └── logging.yaml              # Logging config
-├── tests/                        # 728 tests (unit + integration + platform)
-├── docs/                         # Architecture / ADR / overview docs
-├── alembic/                      # Database migrations
-├── deploy/                       # Deployment configs
-└── ...
+│   ├── dev/
+│   ├── prod/
+│   ├── workflows/
+│   └── logging.yaml
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   ├── platform/
+│   └── infra/
+├── docs/
+│   ├── architecture.md
+│   ├── commercial/
+│   ├── infrastructure/
+│   ├── modules/
+│   ├── release/
+│   └── security/
+├── alembic/
+│   └── versions/
+├── deploy/
+│   ├── grafana/
+│   ├── helm/agentforge/
+│   │   ├── templates/
+│   │   ├── Chart.yaml
+│   │   └── values.yaml
+│   └── platform/
+├── templates/module-template/
+├── examples/
+├── migrations/
+├── scripts/
+├── requirements/
+├── .github/
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── README.md
+├── README.en.md
+├── SECURITY.md
+├── Makefile
+├── pyproject.toml
+├── Dockerfile
+└── docker-compose.yml
 ```
 
 ---
 
-## Quick Start
+## Quick start
 
-### Orchestration Quick Start
+Install:
 
-```python
-from agentforge.gateway import SmartRouter
-from agentforge.orchestration import DAGEngine, DAGNode
-
-# Initialize AI Gateway (5-model routing + semantic cache + cost control)
-router = SmartRouter()
-
-# Route: model is chosen by task type and complexity (simple → MiniMax, complex → Qwen3-Pro)
-decision = await router.route(
-    task_type="code_gen",
-    complexity=0.9,
-    input_text="implement a paginated REST API",
-)
-print(f"selected={decision.selected_model}, scores={decision.scores_per_model}")
-
-# Define a DAG workflow
-dag = DAGEngine(max_nodes=50, global_timeout=300)
-dag.add_node(DAGNode("code_scan", agent="security-scan",
-                     input_mapping={"code": "$input.code"}))
-dag.add_node(DAGNode("code_review", agent="code-review",
-                     input_mapping={"code": "$ctx.code_scan.output"}))
-dag.add_edge("code_scan", "code_review")
-
-# Execute
-result = await dag.execute("task-001", input_data={"code": open("main.py").read()})
-print(f"cost: ¥{result.total_cost:.4f}, latency: {result.total_latency:.1f}s, success rate: {result.success_rate}")
+```bash
+python -m venv .venv
+source .venv/bin/activate       # Linux/macOS
+# .venv\Scripts\activate        # Windows
+pip install -r requirements-dev.txt
+pip install -e .
 ```
 
-### Platform Quick Start (RBAC Authorization Check)
+Start the complete platform stack:
 
-```python
-from agentforge.platform.runtime import build_memory_container
-
-container = build_memory_container()
-# Assign a role to the user and run an authorization decision
-decision = await container.policy_engine.authorize(
-    tenant_id="tenant-a",
-    principal="user-1",
-    action="ticket.writeback",
-    resource={"ticket_id": "t-1", "status": "READY_TO_PUBLISH"},
-)
-print(decision.outcome)  # allowed / denied / requires_approval
+```bash
+make platform-up
 ```
 
+The API listens on `http://localhost:8000` and exposes `/health/live` and `/health/ready`. These are process-level probes; dependency health must be checked through service logs and infrastructure monitoring.
+
+Start local dependencies only:
+
+```bash
+make platform-lite-up
+```
+
+This is equivalent to:
+
+```bash
+docker compose -f deploy/platform/docker-compose.lite.yml up -d
+```
+
+The complete Compose profile includes PostgreSQL, Valkey, Temporal, MinIO, Kafka, OTel Collector, API, Worker, and Outbox Worker. See [deploy/platform/README.md](deploy/platform/README.md).
+
+Authentication is fail-closed by default. In production, configure keys before startup:
+
+```bash
+export AGENTFORGE_ADMIN_API_KEY='replace-with-a-strong-secret'
+export AGENTFORGE_API_KEYS='{"replace-with-tenant-key":"tenant-a"}'
+```
+
+`AGENTFORGE_ALLOW_NO_AUTH=true` exists only for explicit local development and must never be used for publicly exposed environments.
+
+Module enablement:
+
+```bash
+AGENTFORGE_ENABLED_MODULES=support
+AGENTFORGE_ENABLED_MODULES=expense
+AGENTFORGE_ENABLED_MODULES=support,expense
+```
+
+The default is `support,expense`. The `asset` reference module is enabled through plugin or test assembly.
+
+Private deployment:
+
+```bash
+kubectl create namespace agentforge
+helm upgrade --install agentforge deploy/helm/agentforge \
+  -n agentforge \
+  --set image.repository=registry.example.com/agentforge \
+  --set image.tag=3.1.0 \
+  --set existingSecret=agentforge-secrets
+```
+
+See the [private deployment runbook](docs/security/PRIVATE_DEPLOYMENT_RUNBOOK.md) for production installation, backup, restore, upgrade, and rollback.
+
 ---
 
-## Engineering Guarantees
+## Platform APIs
 
-- **Tests**: 728 automated tests (unit + integration + platform), all green locally
-- **Static checks**: black / isort / flake8 (max-line-length=100) / mypy — **zero errors** across 206 source files
-- **CI**: GitHub Actions full test suite (Python 3.10 / 3.11 / 3.12), no `continue-on-error` to mask failures
-- **Type safety**: strict mypy coverage across the repo
+| Prefix | Capability |
+|---|---|
+| `/v1/support` | Support tickets and compatibility routes |
+| `/v1/expense` | Claims, OCR, attachments, approval, ledger, invoice gates |
+| `/v1/assets` | Demo Asset reference module (manifest prefix) |
+| `/v1/console` | Operations console and approval inbox |
+| `/v1/rbac` | Roles, permissions, and assignments |
+| `/v1/authorize` | Declarative authorization decisions |
+| `/v1/policies` | Declarative policy inspection and reload |
+| `/v1/quotas` | Tenant quota management |
+| `/v1/audit` | Audit query, export, and retention |
+| `/v1/costs` | Cost and model distribution |
+| `/v1/knowledge` | Knowledge ingestion and hybrid retrieval |
+| `/v1/evaluations` | Retrieval and classification evaluation |
+| `/v1/regression` | Golden datasets and offline regression |
+| `/v1/release` | Prompt/model version release and quality gates |
+| `/v1/connectors` | Connector registry and management |
+| `/v1/outbox` | Outbox, DLQ, replay, and discard |
+| `/v1/admin/*` | Tenant lifecycle, plans, usage, invoices, operations |
+
+See [SaaS control plane](docs/commercial/SAAS_CONTROL_PLANE.md) for tenant and billing APIs.
 
 ---
 
-## Technical Articles
+## Development and tests
 
-| Article | Topic | Link |
-|---|---|---|
-| Three-layer architecture design | Philosophy behind orchestration/runtime/gateway layers | [Read](https://pengli-ctrl.github.io/blog/posts/04-agentforge-architecture-evolution) |
-| DAG orchestration engine | From static orchestration to Planner dynamic decomposition | [Read](https://pengli-ctrl.github.io/blog/posts/05-orchestration-engine-evolution) |
-| AI Gateway | 5-model routing + semantic cache + token-level cost control | [Read](https://pengli-ctrl.github.io/blog/posts/06-ai-gateway-design) |
-| Reliability design | Three-tier timeout / four-tier degradation / request amplification control | [Read](https://pengli-ctrl.github.io/blog/posts/07-production-reliability) |
-| RAG engineering | Five-layer guard reducing hallucination rate from 46% to 16.2% | [Read](https://pengli-ctrl.github.io/blog/posts/01-rag-engineering-hallucination-prevention) |
+```bash
+make format
+make lint
+make type-check
+make test
+make test-unit
+make test-integration
+python -m pytest tests/platform -q
+```
+
+Run real infrastructure tests:
+
+```bash
+make test-infra
+# Windows PowerShell
+./scripts/run_infra_tests.ps1
+```
+
+The infrastructure runner starts `docker-compose.lite.yml`, creates test databases, runs `tests/infra`, and executes a migration drill. Tests skip real services unless `AGENTFORGE_RUN_INFRA_TESTS=1` is set.
+
+Release validation:
+
+```bash
+make release-check
+python scripts/security_scan.py
+```
+
+See [production infrastructure integration](docs/infrastructure/PRODUCTION_INTEGRATION.md) for details.
 
 ---
 
-## About the Author
+## Documentation
 
-**Li Peng** — 8 years of backend engineering, 3 years of team leadership, focused on AI Agent architecture and enterprise AI platforms.
+| Document | Purpose |
+|---|---|
+| [Architecture](docs/architecture.md) | Current layers, module boundaries, data paths, and deployment modes |
+| [Module integration](docs/modules/MODULE_INTEGRATION_GUIDE.md) | Module contract, tenant isolation, and acceptance |
+| [Versioning and deprecation](docs/modules/VERSIONING_AND_DEPRECATION.md) | Compatibility and release policy |
+| [Support module](agentforge/platform/modules/support/README.md) | Tickets, SLA, review, notifications, and write-back |
+| [Expense module](agentforge/platform/modules/expense/README.md) | Claims, OCR, approval, invoice gates, and ledger |
+| [Demo Asset module](agentforge/platform/modules/demo_asset/README.md) | Third-party module reference implementation |
+| [Module template](templates/module-template/README.md) | Runnable module template |
+| [SaaS control plane](docs/commercial/SAAS_CONTROL_PLANE.md) | Lifecycle, plans, metering, and billing |
+| [Infrastructure integration](docs/infrastructure/PRODUCTION_INTEGRATION.md) | PostgreSQL, Temporal, MinIO, Valkey, and Outbox |
+| [Private deployment runbook](docs/security/PRIVATE_DEPLOYMENT_RUNBOOK.md) | Helm operations and disaster recovery |
+| [Security checklist](docs/security/SECURITY_CHECKLIST.md) | Implemented controls and field acceptance items |
+| [Migration guide](docs/release/MIGRATION_GUIDE_3.1.0.md) | Upgrade to 3.1.0 |
+| [Release notes](docs/release/RELEASE_NOTES_3.1.0.md) | 3.1.0 capabilities and compatibility |
 
-- 📝 Blog: https://pengli-ctrl.github.io/blog
-- 💻 GitHub: https://github.com/pengli-ctrl
-- 📧 Email: pl2847253@gmail.com
-- 📖 Juejin: https://juejin.cn/user/4140096632135322
+---
+
+## Technology stack
+
+- Python 3.10+, FastAPI, Pydantic 2, async SQLAlchemy 2
+- PostgreSQL 15+, Alembic, pgvector, full-text search
+- Temporal 1.32+, transactional Outbox, Kafka
+- Valkey/Redis 7+, MinIO/S3
+- OpenTelemetry, Prometheus, Grafana
+- Docker Compose and Helm
+- Feishu, HMAC-signed webhooks, and OpenAPI connectors
+
+---
+
+## Security
+
+- Authentication is fail-closed in production.
+- Secret references support `env://`, `vault://`, `kms://`, and `secret://`; plaintext sensitive module configuration is rejected.
+- Audit export recursively redacts bearer tokens, email addresses, phone numbers, and identity-card numbers by default.
+- Attachment download URLs are bounded to 1-3600 seconds and default to 300 seconds.
+- Private containers run as non-root with a read-only root filesystem and all Linux capabilities dropped.
+- Report vulnerabilities according to [SECURITY.md](SECURITY.md).
+
+---
+
+## Known boundaries
+
+- OIDC provides the provider Port, principal model, and tenant/permission checks; customer IdP discovery, JWKS, and group-claim mapping still require deployment-specific integration.
+- Vault/KMS providers and rotation interfaces exist, but production key custody, rotation, and key policy require field acceptance.
+- The Helm chart expects external PostgreSQL, Temporal, MinIO, and Valkey services.
+- Compose is intended for local development, demos, and integration testing, not highly available production.
+- Department/project-level budgets and incremental materialization of invoice-gate metrics are not implemented.
 
 ---
 

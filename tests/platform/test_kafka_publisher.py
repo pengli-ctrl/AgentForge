@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_kafka_publisher。
+"""发布器测试模块。
 
 本测试模块验证 test_kafka_publisher 覆盖的业务路径、边界条件和回归场景。
 
@@ -17,70 +17,40 @@ from agentforge.platform.infrastructure.kafka_publisher import KafkaEventPublish
 
 
 class FakeProducer:
-    """FakeProducer。
-
-    FakeProducer 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - 方法 start()。
-    - 方法 stop()。
-    - 方法 send_and_wait()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """用于测试的模拟 Kafka 生产者。"""
 
     def __init__(self, **kwargs) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化模拟。
 
         Args:
-            **kwargs: Any，调用方传入的 **kwargs 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            kwargs: 关键字参数。
         """
         self.started = False
         self.stopped = False
         self.messages: list[tuple[str, bytes, bytes]] = []
 
     async def start(self) -> None:
-        """执行 start 对应的核心操作，并保持调用契约稳定。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """启动模拟。"""
         self.started = True
 
     async def stop(self) -> None:
-        """执行 stop 对应的核心操作，并保持调用契约稳定。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """停止模拟。"""
         self.stopped = True
 
     async def send_and_wait(self, topic: str, payload: bytes, key: bytes) -> None:
-        """执行 send_and_wait 对应的逻辑，并返回处理结果。
+        """发送及。
 
         Args:
-            topic: str，调用方传入的 topic 参数。
-            payload: bytes，调用方传入的 payload 参数。
-            key: bytes，调用方传入的 key 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            topic: 输入参数。
+            payload: 事件、工作流或请求载荷。
+            key: 缓存或配置键。
         """
         self.messages.append((topic, payload, key))
 
 
 @pytest.mark.asyncio
 async def test_kafka_publisher_serializes_event() -> None:
-    """验证 kafka_publisher_serializes_event 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
+    """验证发布器序列化事件对应的测试场景。"""
     producer = FakeProducer()
     publisher = KafkaEventPublisher(
         bootstrap_servers="kafka:9092",

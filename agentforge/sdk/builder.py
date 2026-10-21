@@ -1,13 +1,4 @@
-"""AgentForge SDK 层：builder。
-
-本模块负责 builder 相关能力，是 SDK 层 的组成部分。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
-- 关键路径应保留日志、指标或链路追踪信息。
-- 主要类：AgentBuilder、_BuiltAgent。
-"""
+"""构建器模块。"""
 
 from __future__ import annotations
 
@@ -22,33 +13,10 @@ logger = logging.getLogger(__name__)
 
 
 class AgentBuilder:
-    """Agent 构建器 — 流式 API 构建 Agent 实例。
-
-    通过链式调用配置 Agent 的各个组件：
-    - LLM 网关
-    - 工具集
-    - Prompt 模板
-    - Agent 名称
-    - 最大迭代次数
-    - Token 预算
-
-    Example:
-        >>> agent = (
-        ...     AgentBuilder()
-        ...     .with_llm(llm_gateway)
-        ...     .with_tool(CodeReviewTool())
-        ...     .with_prompt("code_review")
-        ...     .with_name("my-reviewer")
-        ...     .build()
-        ... )
-    """
+    """智能体相关组件。"""
 
     def __init__(self) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
-
-        Returns:
-            None，函数执行后的结果。
-        """
+        """初始化 AgentBuilder。"""
         self._llm_gateway: Any = None
         self._tools: list[BaseTool] = []
         self._prompt_name: str = ""
@@ -64,7 +32,7 @@ class AgentBuilder:
             llm_gateway: LLM 网关实例。
 
         Returns:
-            self（用于链式调用）。
+            智能体结果。
         """
         self._llm_gateway = llm_gateway
         return self
@@ -72,13 +40,11 @@ class AgentBuilder:
     def with_tool(self, tool: BaseTool) -> AgentBuilder:
         """添加工具。
 
-        可以多次调用以添加多个工具。
-
         Args:
-            tool: 工具实例。
+            tool: 工具。
 
         Returns:
-            self（用于链式调用）。
+            智能体结果。
         """
         self._tools.append(tool)
         return self
@@ -87,36 +53,34 @@ class AgentBuilder:
         """批量添加工具。
 
         Args:
-            tools: 工具实例列表。
+            tools: 可供模型调用的工具定义。
 
         Returns:
-            self（用于链式调用）。
+            智能体结果。
         """
         self._tools.extend(tools)
         return self
 
     def with_prompt(self, prompt_name: str) -> AgentBuilder:
-        """设置 Prompt 模板名称。
-
-        模板从 PromptManager 加载。
+        """处理使用提示词。
 
         Args:
-            prompt_name: Prompt 模板名称。
+            prompt_name: 提示词名称。
 
         Returns:
-            self（用于链式调用）。
+            智能体结果。
         """
         self._prompt_name = prompt_name
         return self
 
     def with_name(self, name: str) -> AgentBuilder:
-        """设置 Agent 名称。
+        """处理使用名称。
 
         Args:
-            name: Agent 名称。
+            name: 资源或对象名称。
 
         Returns:
-            self（用于链式调用）。
+            智能体结果。
         """
         self._name = name
         return self
@@ -125,46 +89,46 @@ class AgentBuilder:
         """设置最大迭代次数。
 
         Args:
-            max_iterations: ReAct 循环最大迭代次数。
+            max_iterations: 最大迭代次数。
 
         Returns:
-            self（用于链式调用）。
+            智能体结果。
         """
         self._max_iterations = max_iterations
         return self
 
     def with_token_budget(self, token_budget: int) -> AgentBuilder:
-        """设置 Token 预算。
+        """处理使用令牌预算。
 
         Args:
-            token_budget: Prompt token 预算。
+            token_budget: 令牌预算。
 
         Returns:
-            self（用于链式调用）。
+            智能体结果。
         """
         self._token_budget = token_budget
         return self
 
     def with_prompt_manager(self, manager: PromptManager) -> AgentBuilder:
-        """设置 Prompt 管理器。
+        """处理使用提示词管理器。
 
         Args:
-            manager: PromptManager 实例。
+            manager: 管理器。
 
         Returns:
-            self（用于链式调用）。
+            智能体结果。
         """
         self._prompt_manager = manager
         return self
 
     def build(self) -> Agent:
-        """构建 Agent 实例。
+        """构建智能体。
 
         Returns:
-            配置好的 Agent 实例。
+            智能体结果。
 
         Raises:
-            ValueError: LLM 网关未设置时抛出。
+            ValueError: 输入值或业务状态不合法时抛出。
         """
         if self._llm_gateway is None:
             raise ValueError("LLM gateway is required. Use .with_llm() to set it.")
@@ -208,19 +172,16 @@ class AgentBuilder:
 
 
 class _BuiltAgent(Agent):
-    """通过 AgentBuilder 构建的 Agent 实例。
-
-    继承 Agent 基类，_build_initial_messages 使用默认实现。
-    """
+    """智能体相关组件。"""
 
     def _build_initial_messages(self, task: str) -> list[dict[str, str]]:
         """构造初始消息列表。
 
         Args:
-            task: 任务描述。
+            task: 任务对象。
 
         Returns:
-            消息列表。
+            结果列表。
         """
         return [
             {"role": "system", "content": self.prompt_template or "You are a helpful assistant."},

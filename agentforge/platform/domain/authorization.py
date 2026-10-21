@@ -1,13 +1,4 @@
-"""AgentForge 平台领域模型层：authorization。
-
-本模块定义 authorization 领域模型，约束业务状态、输入输出结构和跨层数据契约。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：AuthorizationOutcome、AuthorizationDecision。
-"""
+"""授权模块。"""
 
 from __future__ import annotations
 
@@ -18,19 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class AuthorizationOutcome(str, Enum):
-    """AuthorizationOutcome。
-
-    AuthorizationOutcome 是状态或类型枚举，用于约束系统内部取值，避免使用散落的字符串常量。
-
-    主要成员：
-    - ALLOWED: 'allowed'。
-    - DENIED: 'denied'。
-    - REQUIRES_APPROVAL: 'requires_approval'。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """授权决策结果枚举。"""
 
     ALLOWED = "allowed"
     DENIED = "denied"
@@ -38,26 +17,19 @@ class AuthorizationOutcome(str, Enum):
 
 
 class AuthorizationDecision(BaseModel):
-    """AuthorizationDecision。
+    """授权决策领域组件。
 
-    AuthorizationDecision 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - authorization_id: str。
-    - tenant_id: str。
-    - action: str。
-    - resource_type: str。
-    - resource_id: str。
-    - principal: str。
-    - outcome: AuthorizationOutcome。
-    - reasons: list[str]。
-    - approval_ref: str | None。
-    - decided_at: datetime。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        authorization_id: 授权ID。
+        tenant_id: 租户 ID，用于数据隔离。
+        action: 操作。
+        resource_type: 资源类型。
+        resource_id: 资源ID。
+        principal: 字段值。
+        outcome: 结果。
+        reasons: 字段值。
+        approval_ref: 审批引用。
+        decided_at: 于。
     """
 
     model_config = ConfigDict(extra="forbid")

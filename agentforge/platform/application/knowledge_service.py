@@ -1,16 +1,8 @@
-"""AgentForge 平台应用服务层：knowledge_service。
-
-本模块实现 knowledge_service 应用服务，编排多个领域对象和基础设施组件完成业务流程。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：KnowledgeService。
-"""
+"""知识服务模块。"""
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from uuid import uuid4
 
 from agentforge.platform.application.knowledge_embedder import (
@@ -31,19 +23,7 @@ from agentforge.platform.domain.knowledge import (
 
 
 class KnowledgeService:
-    """KnowledgeService。
-
-    KnowledgeService 编排业务流程，协调仓储、模型、策略和外部连接器完成用例。
-
-    主要成员：
-    - 方法 ingest_document()。
-    - 方法 search()。
-    - 方法 backfill_embeddings()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """知识应用服务，编排领域用例及其副作用。"""
 
     def __init__(
         self,
@@ -52,16 +32,13 @@ class KnowledgeService:
         embedder: Embedder | None = None,
         reranker: Reranker | None = None,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 KnowledgeService。
 
         Args:
-            repository: KnowledgeRepository，调用方传入的 repository 参数。
-            chunker: SimpleTextChunker | None，调用方传入的 chunker 参数。
-            embedder: Embedder | None，调用方传入的 embedder 参数。
-            reranker: Reranker | None，调用方传入的 reranker 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            repository: 数据仓储实现。
+            chunker: 分块器。
+            embedder: 向量化器。
+            reranker: 重排器。
         """
         self._repository = repository
         self._chunker = chunker or SimpleTextChunker()
@@ -74,17 +51,19 @@ class KnowledgeService:
         title: str,
         content: str,
         source_uri: str = "",
+        metadata: Mapping[str, object] | None = None,
     ) -> KnowledgeDocument:
-        """执行 ingest_document 对应的逻辑，并返回处理结果。
+        """写入文档。
 
         Args:
-            tenant_id: str，调用方传入的 tenant_id 参数。
-            title: str，调用方传入的 title 参数。
-            content: str，调用方传入的 content 参数。
-            source_uri: str，调用方传入的 source_uri 参数。
+            tenant_id: 租户 ID，用于数据隔离。
+            title: 输入参数。
+            content: 写入内容。
+            source_uri: 来源URI。
+            metadata: 附加元数据。
 
         Returns:
-            KnowledgeDocument，函数执行后的结果。
+            知识文档结果。
         """
         document = KnowledgeDocument(
             document_id=str(uuid4()),
@@ -92,6 +71,7 @@ class KnowledgeService:
             title=title,
             content=content,
             source_uri=source_uri,
+            metadata=dict(metadata or {}),
         )
         chunks = [
             KnowledgeChunk(
@@ -100,7 +80,7 @@ class KnowledgeService:
                 tenant_id=tenant_id,
                 content=text,
                 position=position,
-                metadata={"source_uri": source_uri},
+                metadata={"source_uri": source_uri, **dict(metadata or {})},
                 embedding=self._embedder.embed(f"{title} {text}"),
                 embedding_model=EMBEDDING_MODEL,
                 embedding_version=EMBEDDING_VERSION,
@@ -120,19 +100,19 @@ class KnowledgeService:
         vector_weight: float = 0.5,
         rerank: bool = False,
     ) -> list[RetrievedChunk]:
-        """执行 search 对应的核心操作，并保持调用契约稳定。
+        """搜索知识。
 
         Args:
-            tenant_id: str，调用方传入的 tenant_id 参数。
-            query: str，调用方传入的 query 参数。
-            limit: int，调用方传入的 limit 参数。
-            mode: SearchMode，调用方传入的 mode 参数。
-            fts_weight: float，调用方传入的 fts_weight 参数。
-            vector_weight: float，调用方传入的 vector_weight 参数。
-            rerank: bool，调用方传入的 rerank 参数。
+            tenant_id: 租户 ID，用于数据隔离。
+            query: 检索或筛选查询。
+            limit: 返回记录的最大数量。
+            mode: 运行模式。
+            fts_weight: 输入参数。
+            vector_weight: 输入参数。
+            rerank: 重排。
 
         Returns:
-            list[RetrievedChunk]，函数执行后的结果。
+            结果列表。
         """
         results = await self._repository.search(
             tenant_id,
@@ -147,12 +127,12 @@ class KnowledgeService:
         return results
 
     async def backfill_embeddings(self, tenant_id: str | None = None) -> int:
-        """回填缺失数据，并返回调用方需要的结果。
+        """回填向量。
 
         Args:
-            tenant_id: str | None，调用方传入的 tenant_id 参数。
+            tenant_id: 租户 ID，用于数据隔离。
 
         Returns:
-            int，函数执行后的结果。
+            整数结果。
         """
         return await self._repository.backfill_embeddings(tenant_id)

@@ -1,17 +1,4 @@
-"""Task 数据模型 — 任务生命周期的数据结构定义。
-
-定义了任务的状态枚举、优先级枚举和 Task dataclass。
-任务状态机：PENDING → RUNNING → COMPLETED / FAILED / CANCELLED。
-
-状态转换规则：
-    PENDING → RUNNING（任务开始执行）
-    RUNNING → COMPLETED（任务成功完成）
-    RUNNING → FAILED（任务执行失败）
-    RUNNING → CANCELLED（用户取消任务）
-    PENDING → CANCELLED（任务在排队时被取消）
-
-不允许的状态转换会被 TaskStore 拒绝。
-"""
+"""任务模块。"""
 
 from __future__ import annotations
 
@@ -23,10 +10,7 @@ from typing import Any
 
 
 class TaskStatus(str, Enum):
-    """任务状态枚举 — 定义任务生命周期的所有状态。
-
-    状态流转：PENDING → RUNNING → COMPLETED / FAILED / CANCELLED
-    """
+    """任务状态枚举 — 定义任务生命周期的所有状态。"""
 
     PENDING = "pending"
     RUNNING = "running"
@@ -36,10 +20,7 @@ class TaskStatus(str, Enum):
 
 
 class TaskPriority(str, Enum):
-    """任务优先级枚举 — 对应全局优先级队列的四个级别。
-
-    优先级从高到低：user_sync > task_primary > task_retry > batch。
-    """
+    """任务优先级枚举 — 对应全局优先级队列的四个级别。"""
 
     USER_SYNC = "user_sync"
     TASK_PRIMARY = "task_primary"
@@ -63,24 +44,21 @@ VALID_TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
 
 @dataclass
 class Task:
-    """任务数据模型 — 表示一个提交到 AgentForge 的工作单元。
-
-    每个任务包含输入数据、工作流配置、执行状态和结果。
-    任务通过 correlation_id 与事件总线上流转的事件关联。
+    """任务领域组件。
 
     Attributes:
-        task_id: 任务唯一标识（UUID）。
-        workflow_name: 工作流名称（对应 configs/workflows/ 下的 YAML）。
-        input_data: 任务输入数据（代码内容、文件路径等）。
-        status: 当前任务状态。
-        priority: 任务优先级。
-        correlation_id: 关联 ID，贯穿事件总线的所有事件。
-        result: 任务执行结果（COMPLETED 状态时填充）。
-        error: 任务失败原因（FAILED 状态时填充）。
-        created_at: 任务创建时间戳。
-        started_at: 任务开始执行时间戳。
-        completed_at: 任务完成时间戳。
-        metadata: 额外元数据（如提交者、PR 编号等）。
+        task_id: 任务ID。
+        workflow_name: 工作流名称。
+        input_data: 输入数据。
+        status: 当前状态。
+        priority: 优先级。
+        correlation_id: 用于关联同一业务链路的关联 ID。
+        result: 处理结果。
+        error: 错误信息。
+        created_at: 创建时间。
+        started_at: 于。
+        completed_at: 已完成于。
+        metadata: 附加元数据。
     """
 
     task_id: str = field(default_factory=lambda: str(uuid.uuid4()))
@@ -97,7 +75,7 @@ class Task:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        """确保 correlation_id 非空。"""
+        """校验并补全初始化后的字段。"""
         if not self.correlation_id:
             self.correlation_id = self.task_id
 
@@ -106,19 +84,19 @@ class Task:
         """检查状态转换是否合法。
 
         Args:
-            from_status: 当前状态。
-            to_status: 目标状态。
+            from_status: 从状态。
+            to_status: 到状态。
 
         Returns:
-            是否允许从 from_status 转换到 to_status。
+            操作是否成功。
         """
         return to_status in VALID_TRANSITIONS.get(from_status, set())
 
     def to_dict(self) -> dict[str, Any]:
-        """将 Task 序列化为字典。
+        """处理到字典。
 
         Returns:
-            包含所有字段的字典，枚举值转为字符串。
+            结构化结果字典。
         """
         return {
             "task_id": self.task_id,
@@ -137,13 +115,13 @@ class Task:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Task:
-        """从字典反序列化 Task。
+        """从字典构造当前对象。
 
         Args:
-            data: 包含 Task 字段的字典。
+            data: 待处理数据。
 
         Returns:
-            Task 实例。
+            任务结果。
         """
         return cls(
             task_id=data.get("task_id", str(uuid.uuid4())),

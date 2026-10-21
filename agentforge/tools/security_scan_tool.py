@@ -1,8 +1,4 @@
-"""安全扫描工具 — 检测代码中的安全漏洞。
-
-Agent 通过工具注册表调用此工具执行安全扫描，
-检测 SQL 注入、XSS、硬编码密钥等安全风险。
-"""
+"""安全扫描工具模块。"""
 
 from __future__ import annotations
 
@@ -18,17 +14,8 @@ logger = logging.getLogger(__name__)
 class SecurityScanTool(BaseTool):
     """安全扫描工具 — 检测代码中的安全漏洞。
 
-    功能：
-    - SQL 注入检测（字符串拼接 SQL 语句）
-    - XSS 检测（未转义的用户输入输出）
-    - 硬编码密钥检测（API Key、密码、Token）
-    - 敏感信息泄露检测（日志中的密码、错误信息中的堆栈）
-
-    检测规则基于正则表达式，不依赖 LLM 判断。
-    这是 Trust Boundary 确定性校验的体现。
-
-    Args:
-        rules_path: 自定义规则文件路径（可选）。
+    Attributes:
+        SECURITY_RULES: 安全规则。
     """
 
     # 安全检测规则（正则表达式）
@@ -78,26 +65,27 @@ class SecurityScanTool(BaseTool):
     ]
 
     def __init__(self, rules_path: str | None = None) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 SecurityScanTool。
 
         Args:
-            rules_path: str | None，调用方传入的 rules_path 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            rules_path: 规则路径。
         """
         self.rules_path = rules_path
 
     @property
     def name(self) -> str:
-        """工具唯一标识。"""
+        """工具唯一标识。
+
+        Returns:
+            字符串结果。
+        """
         return "security_scan"
 
     def schema(self) -> dict:
-        """执行 schema 对应的逻辑，并返回处理结果。
+        """返回工具参数的结构定义。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         return {
             "type": "function",
@@ -122,14 +110,13 @@ class SecurityScanTool(BaseTool):
         }
 
     async def execute(self, **kwargs: Any) -> ToolResult:
-        """执行安全扫描。
+        """执行核心处理逻辑并返回结果。
 
         Args:
-            code_content: 要扫描的代码内容。
-            file_path: 文件路径（用于报告）。
+            kwargs: 关键字参数。
 
         Returns:
-            扫描结果，包含发现的安全漏洞列表。
+            工具结果结果。
         """
         code_content = kwargs.get("code_content", "")
         file_path = kwargs.get("file_path", "unknown")

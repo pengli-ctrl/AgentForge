@@ -1,17 +1,4 @@
-"""统一错误处理中间件 — 全局异常捕获和标准化错误响应。
-
-所有未处理的异常被捕获后转换为标准化的 JSON 错误响应，
-避免暴露内部实现细节。
-
-错误响应格式：
-    {
-        "error": {
-            "code": "INTERNAL_ERROR",
-            "message": "An internal error occurred",
-            "detail": "..."  // 仅在 DEBUG 模式下包含
-        }
-    }
-"""
+"""错误处理器模块。"""
 
 from __future__ import annotations
 
@@ -28,10 +15,10 @@ class APIError(Exception):
     """API 错误 — 标准化的错误响应。
 
     Attributes:
-        code: 错误码（如 NOT_FOUND、VALIDATION_ERROR）。
-        message: 用户可见的错误消息。
-        status_code: HTTP 状态码。
-        detail: 详细信息（仅 DEBUG 模式返回给客户端）。
+        code: 业务代码。
+        message: 消息内容。
+        status_code: 状态代码。
+        detail: 详情。
     """
 
     code: str
@@ -43,10 +30,10 @@ class APIError(Exception):
         """转换为字典格式。
 
         Args:
-            include_detail: 是否包含详细错误信息。
+            include_detail: 详情。
 
         Returns:
-            标准化的错误字典。
+            结构化结果字典。
         """
         error_dict: dict[str, Any] = {
             "code": self.code,
@@ -104,11 +91,8 @@ INTERNAL_ERROR = APIError(
 class ErrorHandlerMiddleware:
     """统一错误处理中间件。
 
-    捕获所有未处理的异常，转换为标准化错误响应。
-    在 DEBUG 模式下包含详细的错误堆栈信息。
-
-    Args:
-        debug: 是否启用 DEBUG 模式（包含详细错误信息）。
+    Attributes:
+        EXCEPTION_MAP: 异常。
     """
 
     # 已知异常到 APIError 的映射。
@@ -122,24 +106,21 @@ class ErrorHandlerMiddleware:
     }
 
     def __init__(self, debug: bool = False) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 ErrorHandlerMiddleware。
 
         Args:
-            debug: bool，调用方传入的 debug 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            debug: 调试。
         """
         self.debug = debug
 
     def handle_exception(self, exc: Exception) -> APIError:
-        """处理异常，返回标准化的 APIError。
+        """处理异常。
 
         Args:
-            exc: 捕获的异常。
+            exc: 输入参数。
 
         Returns:
-            标准化的 APIError。
+            处理结果对象。
         """
         # 查找已知异常类型
         for exc_type, api_error in self.EXCEPTION_MAP.items():
@@ -178,13 +159,13 @@ class ErrorHandlerMiddleware:
         return error
 
     def handle_api_error(self, error: APIError) -> APIError:
-        """处理已知的 APIError。
+        """处理API错误。
 
         Args:
-            error: APIError 实例。
+            error: 错误。
 
         Returns:
-            处理后的 APIError（可能附加 detail）。
+            处理结果对象。
         """
         if self.debug and not error.detail:
             error.detail = traceback.format_exc()

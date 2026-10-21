@@ -1,18 +1,4 @@
-"""
-幻觉防护层 — 验证 LLM 输出中的引用是否真实存在。
-
-第四层防护：生成约束 + 后处理验证。
-Prompt 约束是"软限制"，LLM 不一定每次都遵守。
-后处理验证用代码逻辑做硬校验，不信任 LLM 的输出。
-
-核心校验逻辑：
-1. 引用的 chunk_id 是否真实存在于上下文中（fake_reference 检测）
-2. evidence 中的代码是否真的出现在引用的 chunk 中（fabricated_evidence 检测）
-3. 是否提到了上下文中不存在的函数名/类名（phantom_reference 检测）
-
-被标记的审查意见不会直接丢弃，而是标记为"疑似幻觉"，
-在前端展示时降低优先级或加灰色标注。
-"""
+"""幻觉模块。"""
 
 from __future__ import annotations
 
@@ -30,9 +16,9 @@ class HallucinationFlag:
     """幻觉标记 — 标记 LLM 输出中疑似幻觉的部分。
 
     Attributes:
-        type: 幻觉类型（fake_reference / fabricated_evidence / phantom_reference）。
-        detail: 详细描述。
-        item: 触发幻觉的审查意见。
+        type: 资源类型。
+        detail: 详情。
+        item: 条目。
     """
 
     type: str
@@ -45,10 +31,10 @@ class VerificationResult:
     """幻觉验证结果。
 
     Attributes:
-        passed: 验证是否通过（无幻觉标记）。
-        hallucination_count: 检测到的幻觉数量。
-        flags: 幻觉标记列表。
-        cleaned_result: 移除标记项后的清理结果。
+        passed: 通过。
+        hallucination_count: 幻觉数量。
+        flags: 标记。
+        cleaned_result: 结果。
     """
 
     passed: bool
@@ -58,23 +44,7 @@ class VerificationResult:
 
 
 class HallucinationGuard:
-    """幻觉防护层 — 后处理验证 LLM 输出的引用真实性。
-
-    不信任 LLM 的输出，用代码逻辑做硬校验：
-    - 引用了不存在的 chunk？标为幻觉
-    - 引用的代码片段在上下文中找不到？标为幻觉
-    - 编造了上下文中不存在的函数名？标为幻觉
-
-    效果：
-    | 阶段                  | 幻觉率 |
-    |----------------------|--------|
-    | Rerank 后             | 18.5%  |
-    | + 生成约束 + 后处理验证 | 16.8%  |
-
-    这一层单独看只降了不到 2 个百分点，但它的作用不仅仅是降低幻觉率 —
-    它把幻觉"显性化"了。即使有 16.8% 的幻觉，后处理验证也能标记出大部分，
-    用户至少知道哪些结论可能不靠谱。
-    """
+    """幻觉防护层 — 后处理验证 LLM 输出的引用真实性。"""
 
     def verify_generation(
         self,
@@ -83,17 +53,12 @@ class HallucinationGuard:
     ) -> VerificationResult:
         """验证 LLM 输出中的引用是否真实存在。
 
-        校验逻辑：
-        1. 检查引用的 chunk_id 是否真实存在于上下文中
-        2. 检查 evidence 中的代码是否真的出现在引用的 chunk 中
-        3. 检查是否提到了上下文中不存在的函数名/类名
-
         Args:
-            llm_output: LLM 生成的输出（JSON 字符串）。
-            context_chunks: 上下文 chunk 字典 {chunk_id: content}。
+            llm_output: LLM输出。
+            context_chunks: 上下文分片。
 
         Returns:
-            验证结果，包含通过状态和幻觉标记列表。
+            核验结果结果。
         """
         try:
             result = json.loads(llm_output)
@@ -178,15 +143,12 @@ class HallucinationGuard:
     ) -> dict[str, Any]:
         """移除被标记为幻觉的审查意见。
 
-        被标记的审查意见不会直接丢弃，而是标记为"疑似幻觉"，
-        在前端展示时降低优先级或加灰色标注。
-
         Args:
-            result: 原始 LLM 输出结果。
-            flags: 幻觉标记列表。
+            result: 处理结果。
+            flags: 标记。
 
         Returns:
-            清理后的结果。
+            结构化结果字典。
         """
         flagged_items = {flag.item for flag in flags}
         cleaned = dict(result)

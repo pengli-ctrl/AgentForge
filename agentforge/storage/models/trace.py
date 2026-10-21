@@ -1,12 +1,4 @@
-"""Trace 数据模型 — 分布式追踪的数据结构定义。
-
-Trace 数据记录每个事件在事件总线上的完整链路，
-用于全链路可观测性（Layer 4 容错防线）。
-
-每个 Trace 包含多个 TraceEvent，通过 correlation_id 关联。
-每个 TraceEvent 记录单个事件的处理过程。
-TraceSpan 表示一个 Agent 的执行跨度（从 AGENT_STARTED 到 AGENT_COMPLETED）。
-"""
+"""链路模块。"""
 
 from __future__ import annotations
 
@@ -18,24 +10,21 @@ from typing import Any
 
 @dataclass
 class TraceEvent:
-    """Trace 事件 — 记录事件总线上单个事件的处理过程。
-
-    每个事件从发布到被订阅者处理完成，记录为一个 TraceEvent。
-    通过 correlation_id 关联同一工作流的所有事件。
+    """链路事件领域组件。
 
     Attributes:
-        event_id: 事件唯一标识（UUID）。
-        trace_id: Trace ID（同一工作流共享）。
-        span_id: Span ID（同一 Agent 的执行跨度内共享）。
-        parent_span_id: 父 Span ID（用于构建调用树）。
-        event_type: 事件类型（如 agent_completed）。
-        source_agent: 事件来源 Agent 名称。
-        target_agent: 事件目标 Agent 名称。
-        timestamp: 事件时间戳。
-        duration_ms: 事件处理耗时（毫秒）。
-        payload_summary: 事件负载摘要（避免存储完整负载）。
-        status: 事件处理状态（success / error / timeout）。
-        error_message: 错误信息（status 为 error 时填充）。
+        event_id: 事件 ID。
+        trace_id: 链路ID。
+        span_id: 链路片段ID。
+        parent_span_id: 链路片段ID。
+        event_type: 事件。
+        source_agent: 来源智能体。
+        target_agent: 目标智能体。
+        timestamp: 字段值。
+        duration_ms: 持续时间毫秒。
+        payload_summary: 载荷摘要。
+        status: 当前状态。
+        error_message: 错误。
     """
 
     event_id: str = field(default_factory=lambda: str(uuid.uuid4()))
@@ -52,10 +41,10 @@ class TraceEvent:
     error_message: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        """将 TraceEvent 序列化为字典。
+        """处理到字典。
 
         Returns:
-            包含所有字段的字典。
+            结构化结果字典。
         """
         return {
             "event_id": self.event_id,
@@ -75,23 +64,20 @@ class TraceEvent:
 
 @dataclass
 class TraceSpan:
-    """Trace Span — 一个 Agent 的执行跨度。
-
-    从 AGENT_STARTED 到 AGENT_COMPLETED（或 AGENT_FAILED）为一个 Span。
-    Span 包含起止时间、执行耗时、工具调用次数等统计信息。
+    """链路片段相关组件。
 
     Attributes:
-        span_id: Span 唯一标识。
-        trace_id: 所属 Trace 的 ID。
-        parent_span_id: 父 Span ID（触发此 Agent 的上游 Span）。
-        agent_name: Agent 名称。
-        start_time: Span 开始时间戳。
-        end_time: Span 结束时间戳。
-        duration_ms: Span 总耗时（毫秒）。
-        tool_calls: 工具调用次数。
-        llm_calls: LLM 调用次数。
-        status: Span 状态（success / error / timeout）。
-        events: Span 内的 TraceEvent 列表。
+        span_id: 链路片段ID。
+        trace_id: 链路ID。
+        parent_span_id: 链路片段ID。
+        agent_name: 智能体名称。
+        start_time: 开始。
+        end_time: 结束。
+        duration_ms: 持续时间毫秒。
+        tool_calls: 工具调用。
+        llm_calls: LLM调用。
+        status: 当前状态。
+        events: 事件。
     """
 
     span_id: str = field(default_factory=lambda: str(uuid.uuid4()))
@@ -107,25 +93,25 @@ class TraceSpan:
     events: list[TraceEvent] = field(default_factory=list)
 
     def finish(self) -> None:
-        """结束 Span，计算耗时。"""
+        """结束链路记录并写入完成状态。"""
         self.end_time = time.time()
         self.duration_ms = (self.end_time - self.start_time) * 1000
 
     def add_event(self, event: TraceEvent) -> None:
-        """向 Span 添加事件。
+        """保存事件。
 
         Args:
-            event: 要添加的 TraceEvent。
+            event: 待处理事件。
         """
         event.span_id = self.span_id
         event.trace_id = self.trace_id
         self.events.append(event)
 
     def to_dict(self) -> dict[str, Any]:
-        """将 TraceSpan 序列化为字典。
+        """处理到字典。
 
         Returns:
-            包含所有字段的字典。
+            结构化结果字典。
         """
         return {
             "span_id": self.span_id,

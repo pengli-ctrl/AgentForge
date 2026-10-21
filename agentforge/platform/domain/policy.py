@@ -1,13 +1,4 @@
-"""AgentForge 平台领域模型层：policy。
-
-本模块定义 policy 领域模型，约束业务状态、输入输出结构和跨层数据契约。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：ValidationOutcome、PolicyDecision、ActionPolicy、RelationTuple、PolicyFileLoader。
-"""
+"""策略模块。"""
 
 from __future__ import annotations
 
@@ -18,19 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ValidationOutcome(str, Enum):
-    """ValidationOutcome。
-
-    ValidationOutcome 是状态或类型枚举，用于约束系统内部取值，避免使用散落的字符串常量。
-
-    主要成员：
-    - ALLOWED: 'allowed'。
-    - DENIED: 'denied'。
-    - REQUIRES_APPROVAL: 'requires_approval'。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """校验状态枚举。"""
 
     ALLOWED = "allowed"
     DENIED = "denied"
@@ -38,26 +17,18 @@ class ValidationOutcome(str, Enum):
 
 
 class PolicyDecision(BaseModel):
-    """PolicyDecision。
+    """策略决策领域组件。
 
-    PolicyDecision 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - tenant_id: str。
-    - principal: str。
-    - action: str。
-    - resource_type: str。
-    - resource_id: str。
-    - outcome: ValidationOutcome。
-    - risk_level: str。
-    - reasons: list[str]。
-    - evaluated_at: datetime。
-    - 方法 allowed()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        tenant_id: 租户 ID，用于数据隔离。
+        principal: 字段值。
+        action: 操作。
+        resource_type: 资源类型。
+        resource_id: 资源ID。
+        outcome: 结果。
+        risk_level: 风险级别。
+        reasons: 字段值。
+        evaluated_at: 于。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -74,33 +45,26 @@ class PolicyDecision(BaseModel):
 
     @property
     def allowed(self) -> bool:
-        """执行 allowed 对应的逻辑，并返回处理结果。
+        """返回允许。
 
         Returns:
-            bool，函数执行后的结果。
+            操作是否成功。
         """
         return self.outcome == ValidationOutcome.ALLOWED
 
 
 class ActionPolicy(BaseModel):
-    """ActionPolicy。
+    """操作策略相关组件。
 
-    ActionPolicy 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - name: str。
-    - tenant_id: str。
-    - action: str。
-    - risk_level: str。
-    - allowed_roles: list[str]。
-    - required_permission: str | None。
-    - require_approval: bool。
-    - enabled: bool。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        name: 名称。
+        tenant_id: 租户 ID，用于数据隔离。
+        action: 操作。
+        risk_level: 风险级别。
+        allowed_roles: 允许角色。
+        required_permission: 必需权限。
+        require_approval: 要求审批。
+        enabled: 是否启用。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -116,22 +80,15 @@ class ActionPolicy(BaseModel):
 
 
 class RelationTuple(BaseModel):
-    """RelationTuple。
+    """关系相关组件。
 
-    RelationTuple 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - tenant_id: str。
-    - object_type: str。
-    - object_id: str。
-    - relation: str。
-    - subject_type: str。
-    - subject_id: str。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        tenant_id: 租户 ID，用于数据隔离。
+        object_type: 对象。
+        object_id: 对象ID。
+        relation: 关系。
+        subject_type: 字段值。
+        subject_id: ID。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -145,31 +102,20 @@ class RelationTuple(BaseModel):
 
 
 class PolicyFileLoader:
-    """PolicyFileLoader。
-
-    PolicyFileLoader 封装相关领域行为，保持职责单一并降低调用方复杂度。
-
-    主要成员：
-    - 方法 parse()。
-    - 方法 from_string()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """策略文件加载器相关组件。"""
 
     @staticmethod
     def parse(text: str) -> list[ActionPolicy]:
-        """执行 parse 对应的逻辑，并返回处理结果。
+        """解析策略文件加载器。
 
         Args:
-            text: str，调用方传入的 text 参数。
+            text: 待处理文本。
 
         Returns:
-            list[ActionPolicy]，函数执行后的结果。
+            结果列表。
 
         Raises:
-            ValueError: 当输入、状态或外部依赖不满足要求时抛出。
+            ValueError: 输入值或业务状态不合法时抛出。
         """
         import json
 
@@ -183,12 +129,12 @@ class PolicyFileLoader:
 
     @classmethod
     def from_string(cls, text: str) -> list[ActionPolicy]:
-        """执行 from_string 对应的逻辑，并返回处理结果。
+        """从字符串构造当前对象。
 
         Args:
-            text: str，调用方传入的 text 参数。
+            text: 待处理文本。
 
         Returns:
-            list[ActionPolicy]，函数执行后的结果。
+            结果列表。
         """
         return cls.parse(text)

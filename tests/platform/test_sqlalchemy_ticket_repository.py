@@ -1,4 +1,4 @@
-"""AgentForge 平台测试层：test_sqlalchemy_ticket_repository。
+"""SQLAlchemy工单仓储测试模块。
 
 本测试模块验证 test_sqlalchemy_ticket_repository 覆盖的业务路径、边界条件和回归场景。
 
@@ -7,25 +7,27 @@
 - 所有租户相关数据都必须携带 tenant_id 并保持隔离。
 - 关键执行路径应保留日志、审计或链路追踪信息。
 -
-主要函数：make_container、test_sqlalchemy_repository_persists_and_deduplicates、test_outbox_contains_event_and_dispatcher_marks_published、test_high_risk_ticket_requires_and_records_approval。
+主要函数：make_container、test_sqlalchemy_repository_persists_and_deduplicates、test_outbox_contains_ev
+    ent_and_dispatcher_marks_published、test_high_risk_ticket_requires_and_records_approval。
 """
 
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from agentforge.platform.domain.ticket import TicketStatus
 from agentforge.platform.infrastructure.db.base import Base
 from agentforge.platform.infrastructure.memory_event_publisher import MemoryEventPublisher
 from agentforge.platform.infrastructure.outbox_dispatcher import OutboxDispatcher
+from agentforge.platform.modules.support.domain.ticket import TicketStatus
 from agentforge.platform.runtime import build_sqlalchemy_container
+from tests.platform.support_fixtures import configure_sqlalchemy_support
 
 
 async def make_container():
-    """执行 make_container 对应的逻辑，并返回处理结果。
+    """构造容器。
 
     Returns:
-        None，函数执行后的结果。
+        处理结果。
     """
     engine = create_async_engine(
         "sqlite+aiosqlite://",
@@ -35,25 +37,23 @@ async def make_container():
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
-    return engine, build_sqlalchemy_container(session_factory)
+    container = build_sqlalchemy_container(session_factory)
+    support = configure_sqlalchemy_support(container, session_factory)
+    return engine, container, support
 
 
 @pytest.mark.asyncio
 async def test_sqlalchemy_repository_persists_and_deduplicates() -> None:
-    """验证 sqlalchemy_repository_persists_and_deduplicates 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
-    engine, container = await make_container()
+    """验证SQLAlchemy仓储持久化及对应的测试场景。"""
+    engine, container, support = await make_container()
     event = {
         "tenant_id": "tenant-1",
         "source": "feishu",
         "message_id": "msg-sql-1",
         "text": "How do I use this product?",
     }
-    first = await container.ticket_service.create_from_event(event)
-    second = await container.ticket_service.create_from_event(event)
+    first = await support.ticket_service.create_from_event(event)
+    second = await support.ticket_service.create_from_event(event)
     assert first.ticket_id == second.ticket_id
     assert first.status == TicketStatus.WAITING_REVIEW
     await engine.dispose()
@@ -61,13 +61,9 @@ async def test_sqlalchemy_repository_persists_and_deduplicates() -> None:
 
 @pytest.mark.asyncio
 async def test_outbox_contains_event_and_dispatcher_marks_published() -> None:
-    """验证 outbox_contains_event_and_dispatcher_marks_published 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
-    engine, container = await make_container()
-    await container.ticket_service.create_from_event(
+    """验证Outbox包含事件及调度器已发布对应的测试场景。"""
+    engine, container, support = await make_container()
+    await support.ticket_service.create_from_event(
         {
             "tenant_id": "tenant-1",
             "source": "feishu",
@@ -86,13 +82,9 @@ async def test_outbox_contains_event_and_dispatcher_marks_published() -> None:
 
 @pytest.mark.asyncio
 async def test_high_risk_ticket_requires_and_records_approval() -> None:
-    """验证 high_risk_ticket_requires_and_records_approval 对应的业务行为、边界条件和回归场景。
-
-    Returns:
-        None，函数执行后的结果。
-    """
-    engine, container = await make_container()
-    ticket = await container.ticket_service.create_from_event(
+    """验证高风险工单要求及记录审批对应的测试场景。"""
+    engine, container, support = await make_container()
+    ticket = await support.ticket_service.create_from_event(
         {
             "tenant_id": "tenant-1",
             "source": "feishu",
@@ -101,7 +93,7 @@ async def test_high_risk_ticket_requires_and_records_approval() -> None:
         }
     )
     assert ticket.status == TicketStatus.WAITING_APPROVAL
-    updated = await container.ticket_service.apply_approval(
+    updated = await support.ticket_service.apply_approval(
         tenant_id="tenant-1",
         ticket_id=ticket.ticket_id,
         decision="approve",

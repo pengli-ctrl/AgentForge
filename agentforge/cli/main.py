@@ -1,14 +1,4 @@
-"""AgentForge AgentForge 项目：main。
-
-本模块负责 main 相关能力，是 AgentForge 项目 的组成部分。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 涉及租户、任务、审计或成本的数据必须保持隔离和可追踪。
-- 关键路径应保留日志、指标或链路追踪信息。
-- 主要类：CLIClient。
-- 主要函数：main。
-"""
+"""主入口模块。"""
 
 from __future__ import annotations
 
@@ -22,29 +12,18 @@ logger = logging.getLogger(__name__)
 
 
 class CLIClient:
-    """CLI 命令行工具 — 提供交互式命令行接口。
-
-    不依赖外部 CLI 框架（typer/click），使用标准库 argparse 实现，
-    减少依赖。支持通过 SDK 客户端与 AgentForge API 交互。
-
-    Args:
-        base_url: AgentForge API 基础 URL。
-        api_key: API Key。
-    """
+    """CLI 命令行工具 — 提供交互式命令行接口。"""
 
     def __init__(
         self,
         base_url: str = "http://localhost:8000",
         api_key: str = "",
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 CLIClient。
 
         Args:
-            base_url: str，调用方传入的 base_url 参数。
-            api_key: str，调用方传入的 api_key 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            base_url: 服务基础 URL。
+            api_key: API键。
         """
         self.base_url = base_url
         self.api_key = api_key
@@ -53,10 +32,10 @@ class CLIClient:
         """运行 CLI 命令。
 
         Args:
-            args: 命令行参数列表（None 时使用 sys.argv）。
+            args: 位置参数。
 
         Returns:
-            退出码（0=成功，1=失败）。
+            整数结果。
         """
         parser = self._create_parser()
         parsed = parser.parse_args(args)
@@ -74,7 +53,11 @@ class CLIClient:
             return 1
 
     def _create_parser(self) -> Any:
-        """创建命令行参数解析器。"""
+        """创建命令行参数解析器。
+
+        Returns:
+            处理结果对象。
+        """
         import argparse
 
         parser = argparse.ArgumentParser(
@@ -121,16 +104,13 @@ class CLIClient:
         cancel_parser = subparsers.add_parser("cancel", help="Cancel a task")
         cancel_parser.add_argument("task_id", help="Task ID")
 
-        # Agent 注册与查询。
         subparsers.add_parser("agents", help="List registered agents")
 
         # 指标采集。
         subparsers.add_parser("metrics", help="Show Prometheus metrics")
 
-        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         subparsers.add_parser("workflows", help="List available workflows")
 
-        # 说明：该步骤用于实现上述逻辑并保证行为稳定。
         serve_parser = subparsers.add_parser("serve", help="Start API server")
         serve_parser.add_argument("--host", default="0.0.0.0", help="Host (default: 0.0.0.0)")
         serve_parser.add_argument("--port", type=int, default=8000, help="Port (default: 8000)")
@@ -141,7 +121,7 @@ class CLIClient:
         """分发命令到对应的处理方法。
 
         Args:
-            parsed: 解析后的命令行参数。
+            parsed: 输入参数。
         """
         from agentforge.sdk.client import AgentForgeClient
 
@@ -204,8 +184,8 @@ class CLIClient:
         """启动 API 服务。
 
         Args:
-            host: 监听地址。
-            port: 监听端口。
+            host: 输入参数。
+            port: 输入参数。
         """
         try:
             import uvicorn
@@ -228,7 +208,7 @@ def main() -> int:
     """CLI 主入口函数。
 
     Returns:
-        退出码。
+        整数结果。
     """
     return app.run()
 

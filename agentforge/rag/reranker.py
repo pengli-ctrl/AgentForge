@@ -1,30 +1,4 @@
-"""
-LLM Reranker — 用 LLM 对检索结果做精排（第三层防护）。
-
-混合检索（BM25 + FAISS + RRF）返回 Top-20 候选 chunk 后，
-用 LLM 对每个 chunk 与 query 的相关性打分（0-10 分），
-按评分排序后取 Top-K 交给生成层。
-
-效果对比（50 条 Golden Dataset）：
-| 阶段                         | Recall@5 | Recall@10 | 幻觉率 |
-|------------------------------|----------|-----------|--------|
-| 混合检索后（无 Rerank）       | 0.72     | 0.86      | 26%    |
-| + LLM Rerank                  | 0.88     | 0.92      | 18.5%  |
-
-为什么用 LLM 而不是 Cross-Encoder：
-1. 代码审查场景中，chunk 的相关性不是简单的词汇匹配
-   — query "validate_input 的安全检查逻辑" 需要理解函数语义
-2. LLM 能理解代码结构（如"这个 chunk 定义了输入验证，与 query 相关"）
-3. Cross-Encoder 需要标注数据训练，50 条 Golden Dataset 不够
-4. LLM Rerank 虽然慢（~2s），但只对 Top-20 打分，总成本可控
-
-评分标准：
-- 9-10: 直接回答了 query 的核心问题
-- 7-8:  与 query 高度相关，提供重要上下文
-- 4-6:  部分相关，提供背景信息
-- 1-3:  弱相关，几乎不含有用信息
-- 0:    完全不相关
-"""
+"""重排器模块。"""
 
 from __future__ import annotations
 
@@ -70,34 +44,18 @@ Ensure every chunk receives a score. Return the JSON directly."""
 
 
 class LLMReranker:
-    """LLM 驱动的重排序器 — 对检索 Top-K 候选做语义精排。
-
-    用 LLM 对每个 chunk 与 query 的相关性评分（0-10），
-    按评分降序排序后返回 Top-K。
-
-    设计原则：
-    1. 只对 Top-20 候选打分，控制 LLM 调用成本
-    2. LLM 返回 JSON 格式评分，用确定性代码解析（不信任 LLM 的排序）
-    3. 解析失败时降级为原始顺序（不阻塞流程）
-
-    Args:
-        llm_gateway: LLM 网关实例，用于调用 chat 方法。
-        max_chunks: 单次重排序的最大 chunk 数量（控制 prompt 长度）。
-    """
+    """LLM 驱动的重排序器 — 对检索 Top-K 候选做语义精排。"""
 
     def __init__(
         self,
         llm_gateway: LLMGateway,
         max_chunks: int = 20,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 LLMReranker。
 
         Args:
-            llm_gateway: LLMGateway，调用方传入的 llm_gateway 参数。
-            max_chunks: int，调用方传入的 max_chunks 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            llm_gateway: LLM 网关实例。
+            max_chunks: 最大分片。
         """
         self.llm_gateway = llm_gateway
         self.max_chunks = max_chunks
@@ -110,21 +68,13 @@ class LLMReranker:
     ) -> list[tuple[str, float]]:
         """对检索结果进行 LLM 精排。
 
-        流程：
-        1. 截取前 max_chunks 个候选 chunk
-        2. 构造 RERANK_PROMPT，包含 query 和所有 chunk 内容
-        3. 调用 LLM 获取评分 JSON
-        4. 解析 JSON，按评分降序排序
-        5. 返回 Top-K 的 (chunk_id, score) 元组列表
-
         Args:
-            query: 用户查询字符串。
-            chunks: 候选 chunk 列表，每个 chunk 是一个 dict，
-                   至少包含 ``chunk_id`` 和 ``content`` 两个键。
-            top_k: 返回的 Top-K 数量。
+            query: 检索或筛选查询。
+            chunks: 文本分片列表。
+            top_k: 返回结果数量上限。
 
         Returns:
-            按评分降序排列的 ``(chunk_id, score)`` 元组列表，长度 <= top_k。
+            结果列表。
         """
         if not chunks:
             return []
@@ -178,17 +128,13 @@ class LLMReranker:
         return result
 
     def _format_chunks(self, chunks: list[dict[str, Any]]) -> str:
-        """将 chunk 列表格式化为 prompt 文本。
-
-        每个 chunk 格式为：
-            [chunk_0] (file: xxx.py, type: function, name: validate_input)
-            <content>
+        """格式化分片。
 
         Args:
-            chunks: chunk 字典列表。
+            chunks: 文本分片列表。
 
         Returns:
-            格式化后的文本。
+            字符串结果。
         """
         lines: list[str] = []
         for i, chunk in enumerate(chunks):
@@ -218,19 +164,14 @@ class LLMReranker:
         llm_output: str,
         candidates: list[dict[str, Any]],
     ) -> list[tuple[str, float]]:
-        """解析 LLM 返回的评分 JSON。
-
-        期望格式：
-            {"scores": [{"chunk_id": "chunk_0", "score": 8}, ...]}
-
-        解析失败时降级为：所有 chunk 获得相同分数（保持原始顺序）。
+        """解析评分。
 
         Args:
-            llm_output: LLM 返回的文本。
-            candidates: 候选 chunk 列表（用于降级时保持顺序）。
+            llm_output: LLM输出。
+            candidates: 输入参数。
 
         Returns:
-            ``(chunk_id, score)`` 元组列表。
+            结果列表。
         """
         # 尝试提取 JSON（LLM 可能在 JSON 前后加了 markdown 标记）
         json_str = self._extract_json(llm_output)
@@ -275,15 +216,13 @@ class LLMReranker:
         return results
 
     def _extract_json(self, text: str) -> str | None:
-        """从 LLM 输出中提取 JSON 字符串。
-
-        处理 LLM 可能在 JSON 前后添加的 markdown 标记（```json ... ```）。
+        """提取JSON。
 
         Args:
-            text: LLM 输出文本。
+            text: 待处理文本。
 
         Returns:
-            提取的 JSON 字符串，提取失败返回 None。
+            无结果。
         """
         text = text.strip()
 

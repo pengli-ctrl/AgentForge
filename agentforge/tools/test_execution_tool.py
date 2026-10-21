@@ -1,11 +1,4 @@
-"""测试执行工具 — 运行单元测试并分析结果。
-
-Agent 通过工具注册表调用此工具执行测试命令，
-获取测试通过率和覆盖率信息。
-
-使用 asyncio.create_subprocess_exec 执行 pytest 命令，
-解析输出中的通过/失败/覆盖率等关键指标。
-"""
+"""测试执行工具模块。"""
 
 from __future__ import annotations
 
@@ -20,26 +13,13 @@ logger = logging.getLogger(__name__)
 
 
 class TestExecutionTool(BaseTool):
-    """测试执行工具 — 运行单元测试并分析结果。
-
-    功能：
-    - 执行 pytest 或 unittest 命令
-    - 解析测试输出，统计通过率和覆盖率
-    - 识别失败的测试用例
-    - 返回结构化测试报告
-
-    Args:
-        timeout: 测试执行超时时间（秒）。
-    """
+    """测试执行工具 — 运行单元测试并分析结果。"""
 
     def __init__(self, timeout: int = 300) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 TestExecutionTool。
 
         Args:
-            timeout: int，调用方传入的 timeout 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            timeout: 操作超时时间。
         """
         self.timeout = timeout
 
@@ -47,14 +27,18 @@ class TestExecutionTool(BaseTool):
 
     @property
     def name(self) -> str:
-        """工具唯一标识。"""
+        """工具唯一标识。
+
+        Returns:
+            字符串结果。
+        """
         return "test_execution"
 
     def schema(self) -> dict:
-        """执行 schema 对应的逻辑，并返回处理结果。
+        """返回工具参数的结构定义。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         return {
             "type": "function",
@@ -85,13 +69,13 @@ class TestExecutionTool(BaseTool):
 
     @staticmethod
     def _parse_output(output: str) -> dict[str, Any]:
-        """解析 pytest 输出，提取通过/失败/覆盖率等指标。
+        """解析输出。
 
         Args:
-            output: pytest 的 stdout/stderr 输出文本。
+            output: 输出。
 
         Returns:
-            包含解析结果的字典，键包括 passed/failed/total/coverage。
+            结构化结果字典。
         """
         result: dict[str, Any] = {
             "passed": 0,
@@ -128,21 +112,13 @@ class TestExecutionTool(BaseTool):
         return result
 
     async def execute(self, **kwargs: Any) -> ToolResult:
-        """执行测试。
-
-        使用 asyncio.create_subprocess_exec 执行 pytest 命令。
-        支持自定义 test_command 参数，否则使用默认命令。
-        设置 timeout 参数防止测试挂起。
+        """执行核心处理逻辑并返回结果。
 
         Args:
-            test_path: 测试文件或目录路径。
-            test_command: 自定义测试命令（可选）。
-            coverage: 是否收集覆盖率。
+            kwargs: 关键字参数。
 
         Returns:
-            测试结果。success=True 当所有测试通过（failed=0），
-            success=False 当有测试失败或执行超时。
-            metadata 包含 passed/failed/total/coverage 等信息。
+            工具结果结果。
         """
         test_path = kwargs.get("test_path", "")
         test_command = kwargs.get("test_command", "")

@@ -1,13 +1,4 @@
-"""RedisStateStore — Redis 状态存储封装。
-
-作为 Context Snapshot 的持久化后端，提供高速的上下文快照读写。
-在生产环境中，Context Snapshot 通过 Redis 持久化，确保服务重启后状态可恢复。
-
-V2 → V3 迁移说明：
-    V2 使用 Redis 共享状态（context 字典无限膨胀的根源）。
-    V3 使用 Context Snapshot 隔离 + Redis 作为快照持久化后端。
-    Redis 的角色从"共享可变状态"变为"不可变快照存储"。
-"""
+"""Redis状态模块。"""
 
 from __future__ import annotations
 
@@ -19,16 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class RedisStateStore:
-    """Redis 状态存储封装 — Context Snapshot 的持久化后端。
-
-    提供快照的保存、加载、删除和 TTL 管理功能。
-    当 Redis 不可用时，自动回退到内存存储。
-
-    Args:
-        redis_url: Redis 连接地址。
-        key_prefix: Key 前缀（用于命名空间隔离）。
-        default_ttl: 默认 TTL（秒），0 表示不过期。
-    """
+    """Redis状态相关组件。"""
 
     def __init__(
         self,
@@ -36,15 +18,12 @@ class RedisStateStore:
         key_prefix: str = "agentforge:snapshot",
         default_ttl: int = 86400,
     ) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 RedisStateStore。
 
         Args:
-            redis_url: str，调用方传入的 redis_url 参数。
-            key_prefix: str，调用方传入的 key_prefix 参数。
-            default_ttl: int，调用方传入的 default_ttl 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            redis_url: RedisURL。
+            key_prefix: 键前缀。
+            default_ttl: 默认。
         """
         self.redis_url = redis_url
         self.key_prefix = key_prefix
@@ -53,10 +32,7 @@ class RedisStateStore:
         self._fallback: dict[str, str] = {}
 
     async def connect(self) -> None:
-        """连接 Redis 服务。
-
-        连接失败时记录警告，自动回退到内存存储。
-        """
+        """连接Redis状态。"""
         try:
             import redis.asyncio as aioredis
 
@@ -70,7 +46,7 @@ class RedisStateStore:
             self._redis = None
 
     async def close(self) -> None:
-        """关闭 Redis 连接。"""
+        """关闭Redis状态。"""
         if self._redis:
             await self._redis.close()
             logger.info("Redis connection closed")
@@ -82,13 +58,13 @@ class RedisStateStore:
         snapshot: dict[str, Any],
         ttl: int | None = None,
     ) -> None:
-        """保存上下文快照到 Redis。
+        """保存快照。
 
         Args:
-            correlation_id: 工作流关联 ID。
-            version: 快照版本号。
-            snapshot: 快照数据。
-            ttl: TTL（秒），None 使用默认值。
+            correlation_id: 用于关联同一业务链路的关联 ID。
+            version: 资源版本号。
+            snapshot: 快照。
+            ttl: 输入参数。
         """
         key = self._make_key(correlation_id, version)
         value = json.dumps(snapshot, ensure_ascii=False, default=str)
@@ -114,14 +90,14 @@ class RedisStateStore:
         correlation_id: str,
         version: int,
     ) -> dict[str, Any] | None:
-        """从 Redis 加载上下文快照。
+        """加载快照。
 
         Args:
-            correlation_id: 工作流关联 ID。
-            version: 快照版本号。
+            correlation_id: 用于关联同一业务链路的关联 ID。
+            version: 资源版本号。
 
         Returns:
-            快照数据字典，不存在则返回 None。
+            结构化结果字典。
         """
         key = self._make_key(correlation_id, version)
 
@@ -141,13 +117,11 @@ class RedisStateStore:
     ) -> dict[str, Any] | None:
         """加载最新的上下文快照。
 
-        通过扫描版本号找到最新版本。
-
         Args:
-            correlation_id: 工作流关联 ID。
+            correlation_id: 用于关联同一业务链路的关联 ID。
 
         Returns:
-            最新版本的快照数据，不存在则返回 None。
+            结构化结果字典。
         """
         versions: list[tuple[int, str]] = []
         if self._redis:
@@ -179,10 +153,10 @@ class RedisStateStore:
         """删除指定工作流的所有快照。
 
         Args:
-            correlation_id: 工作流关联 ID。
+            correlation_id: 用于关联同一业务链路的关联 ID。
 
         Returns:
-            删除的快照数量。
+            整数结果。
         """
         if self._redis:
             pattern = f"{self.key_prefix}:{correlation_id}:*"
@@ -198,13 +172,13 @@ class RedisStateStore:
             return len(keys_to_delete)
 
     def _make_key(self, correlation_id: str, version: int) -> str:
-        """执行 _make_key 对应的逻辑，并返回处理结果。
+        """构造键。
 
         Args:
-            correlation_id: str，调用方传入的 correlation_id 参数。
-            version: int，调用方传入的 version 参数。
+            correlation_id: 用于关联同一业务链路的关联 ID。
+            version: 资源版本号。
 
         Returns:
-            str，函数执行后的结果。
+            字符串结果。
         """
         return f"{self.key_prefix}:{correlation_id}:{version}"

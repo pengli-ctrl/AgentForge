@@ -1,13 +1,4 @@
-"""AgentForge 平台基础设施层：static_gateway。
-
-本模块封装 static_gateway 对应外部系统或基础设施协议，提供稳定、可替换的适配接口。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：StaticModelGateway。
-"""
+"""静态网关模块。"""
 
 from __future__ import annotations
 
@@ -18,37 +9,24 @@ from agentforge.platform.observability.trace_recorder import TraceRecord, TraceR
 
 
 class StaticModelGateway:
-    """StaticModelGateway。
-
-    StaticModelGateway 封装外部系统或基础设施协议，向上提供稳定、可测试的接口。
-
-    主要成员：
-    - 方法 complete()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """静态模型网关抽象。"""
 
     def __init__(self, recorder: TraceRecorder | None = None) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 StaticModelGateway。
 
         Args:
-            recorder: TraceRecorder | None，调用方传入的 recorder 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            recorder: 记录器。
         """
         self._recorder = recorder
 
     async def complete(self, request: ModelRequest) -> ModelResponse:
-        """执行 complete 对应的逻辑，并返回处理结果。
+        """完成静态模型。
 
         Args:
-            request: ModelRequest，调用方传入的 request 参数。
+            request: 当前 HTTP 请求。
 
         Returns:
-            ModelResponse，函数执行后的结果。
+            模型响应结果。
         """
         citations = list(request.metadata.get("allowed_citations", []))
         _start = time.monotonic()

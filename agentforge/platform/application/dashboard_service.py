@@ -1,45 +1,18 @@
-"""AgentForge 平台应用服务层：dashboard_service。
-
-本模块实现 dashboard_service 应用服务，编排多个领域对象和基础设施组件完成业务流程。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：DashboardService。
-"""
+"""看板服务模块。"""
 
 from __future__ import annotations
 
 
 class DashboardService:
-    """DashboardService。
-
-    DashboardService 编排业务流程，协调仓储、模型、策略和外部连接器完成用例。
-
-    主要成员：
-    - 方法 attach_trace_recorder()。
-    - 方法 recent_traces()。
-    - 方法 cost_trend()。
-    - 方法 model_distribution()。
-    - 方法 quota_snapshot()。
-    - 方法 quality_metrics()。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
-    """
+    """看板应用服务，编排领域用例及其副作用。"""
 
     def __init__(self, cost_repository, quota_repository, regression_repository) -> None:
-        """初始化实例，并保存运行所需的依赖、配置和内部状态。
+        """初始化 DashboardService。
 
         Args:
-            cost_repository: Any，调用方传入的 cost_repository 参数。
-            quota_repository: Any，调用方传入的 quota_repository 参数。
-            regression_repository: Any，调用方传入的 regression_repository 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            cost_repository: 成本仓储。
+            quota_repository: 配额仓储。
+            regression_repository: 回归仓储。
         """
         self._cost = cost_repository
         self._quota = quota_repository
@@ -47,25 +20,22 @@ class DashboardService:
         self._trace_recorder = None
 
     def attach_trace_recorder(self, trace_recorder) -> None:
-        """执行 attach_trace_recorder 对应的逻辑，并返回处理结果。
+        """附加链路记录器。
 
         Args:
-            trace_recorder: Any，调用方传入的 trace_recorder 参数。
-
-        Returns:
-            None，函数执行后的结果。
+            trace_recorder: 链路记录器。
         """
         self._trace_recorder = trace_recorder
 
     async def recent_traces(self, tenant_id: str | None = None, limit: int = 50) -> dict:
-        """执行 recent_traces 对应的逻辑，并返回处理结果。
+        """获取最近的链路。
 
         Args:
-            tenant_id: str | None，调用方传入的 tenant_id 参数。
-            limit: int，调用方传入的 limit 参数。
+            tenant_id: 租户 ID，用于数据隔离。
+            limit: 返回记录的最大数量。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         if self._trace_recorder is None:
             return {
@@ -77,14 +47,14 @@ class DashboardService:
         return await self._trace_recorder.summary(tenant_id)
 
     async def cost_trend(self, tenant_id: str, days: int = 30) -> dict:
-        """执行 cost_trend 对应的逻辑，并返回处理结果。
+        """获取成本趋势。
 
         Args:
-            tenant_id: str，调用方传入的 tenant_id 参数。
-            days: int，调用方传入的 days 参数。
+            tenant_id: 租户 ID，用于数据隔离。
+            days: 统计天数。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         daily = await self._cost.daily_summary(tenant_id, days=days)
         return {
@@ -96,13 +66,13 @@ class DashboardService:
         }
 
     async def model_distribution(self, tenant_id: str) -> dict:
-        """执行 model_distribution 对应的逻辑，并返回处理结果。
+        """获取模型分布。
 
         Args:
-            tenant_id: str，调用方传入的 tenant_id 参数。
+            tenant_id: 租户 ID，用于数据隔离。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         summary = await self._cost.summary_for_tenant(tenant_id)
         by_model = summary.get("by_model", [])
@@ -119,13 +89,13 @@ class DashboardService:
         }
 
     async def quota_snapshot(self, tenant_id: str) -> dict:
-        """执行 quota_snapshot 对应的逻辑，并返回处理结果。
+        """执行配额快照。
 
         Args:
-            tenant_id: str，调用方传入的 tenant_id 参数。
+            tenant_id: 租户 ID，用于数据隔离。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         quota = None
         if self._quota is not None:
@@ -144,14 +114,14 @@ class DashboardService:
         return {"tenant_id": tenant_id, "configured": False, "used": used}
 
     async def quality_metrics(self, tenant_id: str, limit: int = 10) -> dict:
-        """执行 quality_metrics 对应的逻辑，并返回处理结果。
+        """获取质量指标。
 
         Args:
-            tenant_id: str，调用方传入的 tenant_id 参数。
-            limit: int，调用方传入的 limit 参数。
+            tenant_id: 租户 ID，用于数据隔离。
+            limit: 返回记录的最大数量。
 
         Returns:
-            dict，函数执行后的结果。
+            结构化结果字典。
         """
         if self._regression is None:
             return {"tenant_id": tenant_id, "configured": False, "runs": [], "recent": None}

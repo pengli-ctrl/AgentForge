@@ -22,9 +22,13 @@
 
 - [ ] Unit tests pass (`pytest tests/unit/`)
 - [ ] Integration tests pass (`pytest tests/integration/`)
+- [ ] Platform tests pass (`pytest tests/platform/`)
+- [ ] Infrastructure tests pass when affected (`make test-infra`)
 - [ ] New tests added for new functionality
 - [ ] All existing tests still pass
 - [ ] Code passes linting (`flake8`, `black --check`, `isort --check`)
+- [ ] Type checks pass (`mypy`)
+- [ ] Release checks pass when versions, migrations, or deployment assets change (`make release-check`)
 
 ## Checklist
 

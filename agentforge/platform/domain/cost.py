@@ -1,13 +1,4 @@
-"""AgentForge 平台领域模型层：cost。
-
-本模块定义 cost 领域模型，约束业务状态、输入输出结构和跨层数据契约。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：CostRecord。
-"""
+"""成本模块。"""
 
 from __future__ import annotations
 
@@ -17,24 +8,17 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class CostRecord(BaseModel):
-    """CostRecord。
+    """成本记录持久化模型。
 
-    CostRecord 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - tenant_id: str。
-    - task_id: str。
-    - model_name: str。
-    - provider: str。
-    - input_tokens: int。
-    - output_tokens: int。
-    - amount: float。
-    - created_at: datetime。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        tenant_id: 租户 ID，用于数据隔离。
+        task_id: 任务ID。
+        model_name: 模型名称。
+        provider: 提供方。
+        input_tokens: 输入。
+        output_tokens: 输出。
+        amount: 金额。
+        created_at: 创建时间。
     """
 
     model_config = ConfigDict(extra="forbid")

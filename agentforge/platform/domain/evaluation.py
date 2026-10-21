@@ -1,13 +1,4 @@
-"""AgentForge 平台领域模型层：evaluation。
-
-本模块定义 evaluation 领域模型，约束业务状态、输入输出结构和跨层数据契约。
-
-核心说明：
-- 对外接口保持稳定，避免调用方依赖内部实现细节。
-- 所有租户相关数据都必须携带 tenant_id 并保持隔离。
-- 关键执行路径应保留日志、审计或链路追踪信息。
-- 主要类：EvaluationSample。
-"""
+"""评估模块。"""
 
 from __future__ import annotations
 
@@ -15,36 +6,30 @@ from datetime import datetime, timezone
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from agentforge.platform.domain.ticket import RiskLevel, TicketPriority
+from agentforge.platform.domain.priority import PriorityLevel
+from agentforge.platform.domain.risk import RiskLevel
 
 
 class EvaluationSample(BaseModel):
-    """EvaluationSample。
+    """评估样本相关组件。
 
-    EvaluationSample 是结构化数据模型，负责承载输入、输出或持久化数据，并执行字段级校验。
-
-    主要成员：
-    - model_config: ConfigDict(extra='forbid')。
-    - sample_id: str。
-    - tenant_id: str。
-    - source_ticket_id: str。
-    - query: str。
-    - draft_text: str。
-    - final_text: str。
-    - action: str。
-    - reason: str。
-    - reviewer_id: str。
-    - intent: str | None。
-    - priority: TicketPriority。
-    - risk_level: RiskLevel。
-    - model_name: str。
-    - provider: str。
-    - trace_id: str。
-    - created_at: datetime。
-
-    设计约束：
-    - 保持接口稳定，不向调用方暴露不必要的数据结构。
-    - 涉及租户、权限、审计或成本的逻辑必须显式处理。
+    Attributes:
+        sample_id: 样本ID。
+        tenant_id: 租户 ID，用于数据隔离。
+        source_ticket_id: 来源工单ID。
+        query: 查询。
+        draft_text: 草稿文本。
+        final_text: 最终文本。
+        action: 操作。
+        reason: 变更原因。
+        reviewer_id: 审核人ID。
+        intent: 字段值。
+        priority: 优先级。
+        risk_level: 风险级别。
+        model_name: 模型名称。
+        provider: 提供方。
+        trace_id: 链路ID。
+        created_at: 创建时间。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -59,7 +44,7 @@ class EvaluationSample(BaseModel):
     reason: str = ""
     reviewer_id: str
     intent: str | None = None
-    priority: TicketPriority = TicketPriority.P3
+    priority: PriorityLevel = PriorityLevel.P3
     risk_level: RiskLevel = RiskLevel.LOW
     model_name: str = ""
     provider: str = ""
