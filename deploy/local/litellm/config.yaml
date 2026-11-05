@@ -1,0 +1,6 @@
+model_list:
+- model_name: mock-model
+  litellm_params:
+    model: openai/mock-model
+    api_base: http://mock-openai:8010/v1
+    api_key: mock-key

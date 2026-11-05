@@ -1,0 +1,24 @@
+{{- if .Values.edgeGateway.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "agentforge.fullname" . }}
+  labels:
+    {{- include "agentforge.labels" . | nindent 4 }}
+  annotations:
+    agentforge.io/edge-provider: envoy-gateway
+    agentforge.io/sse-idle-timeout: {{ .Values.edgeGateway.sse.idleTimeout | quote }}
+    agentforge.io/sse-max-duration: {{ .Values.edgeGateway.sse.maxDuration | quote }}
+spec:
+  parentRefs:
+    - name: {{ include "agentforge.fullname" . }}
+      sectionName: http
+  rules:
+    - matches:
+        - path:
+            type: {{ .Values.edgeGateway.route.pathType }}
+            value: {{ .Values.edgeGateway.route.path }}
+      backendRefs:
+        - name: {{ include "agentforge.fullname" . }}
+          port: {{ .Values.service.port }}
+{{- end }}
