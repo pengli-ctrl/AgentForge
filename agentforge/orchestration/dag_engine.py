@@ -153,17 +153,19 @@ EARLY_TERMINATION_FAILURE_RATIO = 0.30
 class DAGEngine:
     """DAG 引擎相关组件。"""
 
-    def __init__(self, max_nodes: int = 50, global_timeout: float = 300.0, max_parallel: int = 5):
+    def __init__(self, max_nodes: int = 50, global_timeout: float = 300.0, max_parallel: int = 5, context_store_factory=None):
         """初始化 DAGEngine。
 
         Args:
             max_nodes: 最大。
             global_timeout: 全局超时。
             max_parallel: 最大。
+            context_store_factory: 上下文存储工厂。
         """
         self._max_nodes = max_nodes
         self._global_timeout = global_timeout
         self._max_parallel = max_parallel
+        self._context_store_factory = context_store_factory or ContextStore
         self._agent_registry = None
         self._degradation_mgr = None
         self._request_guard = None
@@ -227,7 +229,7 @@ class DAGEngine:
         if self._request_guard and not self._request_guard.check_dag_size(len(dag.nodes)):
             return DAGResult(success=False, error="Request guard rejected DAG size")
 
-        ctx = context or ContextStore()
+        ctx = context or self._context_store_factory()
         if not context:
             await ctx.initialize(input_data)
         if self._degradation_mgr:

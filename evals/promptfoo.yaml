@@ -1,0 +1,12 @@
+﻿prompts:
+  - "[{\"role\":\"system\",\"content\":\"回答必须引用给定证据\"},{\"role\":\"user\",\"content\":\"{{query}}\"}]"
+providers:
+  - id: openai:mock-model
+    config:
+      apiBaseUrl: http://localhost:4000/v1
+tests:
+  - vars:
+      query: 发票重复怎么办
+    assert:
+      - type: contains
+        value: 证据

@@ -1,0 +1,17 @@
+﻿{{- if and .Values.edgeGateway.enabled .Values.edgeGateway.rateLimit.enabled }}
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: RateLimitPolicy
+metadata:
+  name: {{ include "agentforge.fullname" . }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: {{ include "agentforge.fullname" . }}
+  default:
+    local:
+      rules:
+        - limit:
+            requests: {{ .Values.edgeGateway.rateLimit.requestsPerSecond }}
+            unit: Second
+{{- end }}
