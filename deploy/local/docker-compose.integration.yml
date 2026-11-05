@@ -1,0 +1,25 @@
+services:
+  valkey:
+    image: valkey/valkey:8
+    ports: ["6379:6379"]
+  temporal:
+    image: temporalio/auto-setup:1.25.2
+    ports: ["7233:7233"]
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address :9001
+    ports: ["9000:9000","9001:9001"]
+  opa:
+    image: openpolicyagent/opa:latest
+    command: run --server --addr :8181 /policies
+    volumes: ["../../policies:/policies:ro"]
+    ports: ["8181:8181"]
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    command: --config /app/config.yaml --port 4000
+    volumes: ["../local/litellm/config.yaml:/app/config.yaml:ro"]
+    ports: ["4000:4000"]
+    depends_on: [mock-openai]
+  mock-openai:
+    build: ./mock_openai
+    ports: ["8010:8010"]

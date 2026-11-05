@@ -26,7 +26,8 @@ from agentforge.platform.api.quota_router import create_quota_router
 from agentforge.platform.api.rbac_router import create_rbac_router
 from agentforge.platform.api.regression_router import create_regression_router
 from agentforge.platform.api.release_router import create_release_router
-from agentforge.platform.api.security import ApiKeyAuthenticator
+from agentforge.platform.api.rate_limit_middleware import PlatformRateLimitMiddleware
+from agentforge.platform.api.security import build_authenticator
 from agentforge.platform.api.tenant_control_router import create_tenant_control_router
 from agentforge.platform.application.classification_evaluation_service import (
     ClassificationEvaluationService,
@@ -136,11 +137,7 @@ def create_platform_app(
         RuntimeError: 运行时依赖或状态不满足要求时抛出。
     """
     settings = get_settings()
-    authenticator = ApiKeyAuthenticator(
-        enabled=_resolve_auth_enabled(settings),
-        tenant_keys=settings.api_keys,
-        admin_key=settings.admin_api_key,
-    )
+    authenticator = build_authenticator(settings, enabled=_resolve_auth_enabled(settings))
     session_factory = None
     if container is None:
         if settings.env in {"prod", "staging"}:
@@ -191,6 +188,9 @@ def create_platform_app(
         raise RuntimeError("platform container was not initialized")
 
     app = FastAPI(title="AgentForge Platform", version=__version__, lifespan=_lifespan)
+    if settings.rate_limit_enabled:
+        from agentforge.platform.infrastructure.rate_limit import build_rate_limit_backend
+        app.add_middleware(PlatformRateLimitMiddleware, backend=build_rate_limit_backend(settings))
 
     enabled_modules = settings.enabled_module_names
     notification_gateway = support_notification_gateway or build_support_notification_gateway(
