@@ -52,6 +52,7 @@ POST /v1/admin/tenants/tenant-a/cancel
 - `private` 的 base fee 和 automation quota 均为 `0`，用于私有化合同交付。
 - 套餐包含租户模块开关和模块默认配置；切换套餐会重新应用模块和配置。
 - 默认套餐通过 `AGENTFORGE_SAAS_DEFAULT_PLAN=starter` 指定。
+- `asset` 是 Demo Asset 参考模块，可被套餐开通用于验证模块装配，但不计为第三条完整业务线。
 
 可通过 `AGENTFORGE_SAAS_PLANS_JSON` 覆盖或补充套餐。该变量必须是 JSON 数组，每个对象至少包含 `name`、`display_name`、`modules` 等 `PlanDefinition` 字段。
 
