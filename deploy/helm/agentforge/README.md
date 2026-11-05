@@ -111,3 +111,7 @@ GET /health/ready
 [`docs/security/PRIVATE_DELIVERY.md`](../../../docs/security/PRIVATE_DELIVERY.md)
 
 本文不承诺生产 HA、备份恢复、灾备或客户现场验收。
+
+## Envoy Gateway
+
+`edgeGateway.enabled=true` renders Kubernetes Gateway API `Gateway` and `HTTPRoute` resources. The chart does not install the Envoy Gateway controller; the cluster must provide it. Keep `ingress.enabled=true` as the rollback path until the Gateway migration is validated.

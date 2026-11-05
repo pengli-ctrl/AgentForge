@@ -55,6 +55,21 @@ service:
 
 ingress:
   enabled: false
+
+edgeGateway:
+  enabled: false
+  gatewayClassName: eg
+  listeners:
+    http:
+      port: 80
+    https:
+      port: 443
+  route:
+    path: /
+    pathType: PathPrefix
+  sse:
+    idleTimeout: 300s
+    maxDuration: 1800s
   className: nginx
   annotations: {}
   hosts:
