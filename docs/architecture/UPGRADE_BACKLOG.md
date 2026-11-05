@@ -43,3 +43,9 @@
 - Added Langfuse prompt adapter and GenAI trace attribute helper.
 - Remaining: add Ragas/promptfoo datasets and CI regression gate.
 - Remaining: add Langfuse self-hosted deployment values and trace export integration.
+
+## PR 7 - Persistent ContextStore
+
+- Added Redis-backed context storage and configurable factory while preserving memory default.
+- Remaining: wire ContextStore into DAGEngine/Temporal activities and add S3 claim-check for large payloads.
+- Remaining: add cross-process, restart, encryption, and migration parity tests.
