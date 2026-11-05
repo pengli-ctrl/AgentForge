@@ -19,3 +19,9 @@
 - Added configurable LiteLLM provider adapter and gateway factory.
 - Remaining: add LiteLLM Proxy deployment values and shadow-routing comparison metrics.
 - Remaining: validate 429/timeout/fallback behavior against a real proxy.
+
+## PR 3 - OIDC authentication
+
+- Added OIDC bearer adapter with API-key fallback and tenant/admin claim checks.
+- Remaining: connect a JWKS/JWT validator and Keycloak staging configuration.
+- Remaining: add token rotation, clock-skew, and IdP outage integration tests.

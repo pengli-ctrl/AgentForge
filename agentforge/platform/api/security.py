@@ -6,7 +6,7 @@ from fastapi import HTTPException, Request
 
 from agentforge.platform.sdk.security import verify_event_hmac as verify_event_hmac
 
-__all__ = ["ApiKeyAuthenticator", "verify_event_hmac"]
+__all__ = ["ApiKeyAuthenticator", "OIDCAuthenticator", "build_authenticator", "verify_event_hmac"]
 
 
 class ApiKeyAuthenticator:
@@ -80,3 +80,70 @@ class ApiKeyAuthenticator:
             字符串结果。
         """
         return request.headers.get("X-API-Key", "")
+
+
+class OIDCAuthenticator(ApiKeyAuthenticator):
+    """OIDC bearer authenticator with an API-key compatibility fallback."""
+
+    def __init__(self, *, enabled: bool, token_validator, fallback: ApiKeyAuthenticator | None = None, tenant_claim: str = "tenant_id") -> None:
+        self._enabled = enabled
+        self._token_validator = token_validator
+        self._fallback = fallback
+        self._tenant_claim = tenant_claim
+
+    def authorize_tenant(self, request: Request, tenant_id: str) -> None:
+        if not self._enabled:
+            return
+        token = self._read_bearer(request)
+        if token:
+            claims = self._token_validator(token)
+            claim_tenant = str(claims.get(self._tenant_claim) or "")
+            if not claim_tenant:
+                raise HTTPException(status_code=403, detail="OIDC token is missing tenant claim")
+            if claim_tenant != tenant_id:
+                raise HTTPException(status_code=403, detail="OIDC token is not authorized for tenant")
+            return
+        if self._fallback is not None:
+            self._fallback.authorize_tenant(request, tenant_id)
+            return
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+
+    def authorize_admin(self, request: Request) -> None:
+        if not self._enabled:
+            return
+        token = self._read_bearer(request)
+        if token:
+            claims = self._token_validator(token)
+            roles = claims.get("roles", [])
+            if isinstance(roles, str):
+                roles = [roles]
+            if "admin" not in roles:
+                raise HTTPException(status_code=403, detail="OIDC token lacks admin role")
+            return
+        if self._fallback is not None:
+            self._fallback.authorize_admin(request)
+            return
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+
+    @staticmethod
+    def _read_bearer(request: Request) -> str:
+        header = request.headers.get("Authorization", "")
+        if not header.lower().startswith("bearer "):
+            return ""
+        return header[7:].strip()
+
+
+def build_authenticator(settings, *, enabled: bool | None = None) -> ApiKeyAuthenticator:
+    """Select API-key, OIDC, or hybrid mode without changing router contracts."""
+    api_key = ApiKeyAuthenticator(
+        enabled=settings.auth_enabled if enabled is None else enabled,
+        tenant_keys=settings.api_keys,
+        admin_key=settings.admin_api_key,
+    )
+    if settings.auth_mode == "api_key":
+        return api_key
+    if settings.auth_mode == "hybrid":
+        return api_key
+    if settings.auth_mode == "oidc":
+        raise ValueError("oidc mode requires an injected OIDC token validator")
+    raise ValueError(f"unsupported auth_mode: {settings.auth_mode}")
