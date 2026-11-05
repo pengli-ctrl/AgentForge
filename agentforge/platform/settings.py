@@ -92,6 +92,8 @@ class Settings(BaseSettings):
     opa_policy_path: str = "agentforge/allow"
     openfga_api_url: str = ""
     rate_limit_backend: str = "memory"
+    rate_limit_capacity: float = 100.0
+    rate_limit_refill_per_second: float = 10.0
     ai_gateway_backend: str = "local"
     litellm_proxy_url: str = ""
     litellm_api_key: str = ""

@@ -31,3 +31,9 @@
 - Added injectable OPA adapter mapping policy decisions into the existing authorization domain.
 - Remaining: add Rego policy package and wire `AUTHZ_ENGINE=opa` in the composition root.
 - Remaining: add shadow comparison and fail-closed tests against a running OPA instance.
+
+## PR 5 - Distributed rate limiting
+
+- Added memory/Valkey backends on top of the existing atomic Valkey token-bucket primitive.
+- Remaining: wire `RateLimitPort` into request middleware and Envoy rate-limit policy.
+- Remaining: add multi-process concurrency and Redis-failure integration tests.
