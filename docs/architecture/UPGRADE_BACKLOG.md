@@ -25,3 +25,9 @@
 - Added OIDC bearer adapter with API-key fallback and tenant/admin claim checks.
 - Remaining: connect a JWKS/JWT validator and Keycloak staging configuration.
 - Remaining: add token rotation, clock-skew, and IdP outage integration tests.
+
+## PR 4 - OPA authorization
+
+- Added injectable OPA adapter mapping policy decisions into the existing authorization domain.
+- Remaining: add Rego policy package and wire `AUTHZ_ENGINE=opa` in the composition root.
+- Remaining: add shadow comparison and fail-closed tests against a running OPA instance.
