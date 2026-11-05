@@ -55,3 +55,9 @@
 - Added deterministic graph validation with cycle, node, edge, and budget checks.
 - Remaining: implement the generic Temporal DAG Workflow and switch `DAG_EXECUTOR=temporal` behind shadow mode.
 - Remaining: add replay, worker-restart, duplicate-Activity, and completed-node immutability tests.
+
+## PR 9 - RAG parser
+
+- Added pluggable Docling adapter and fallback parser with page/bbox preserving contract.
+- Remaining: connect real Docling/PaddleOCR/Unstructured adapters and shadow-index evaluation.
+- Remaining: add golden-document regression set, OCR/table tests, and alias rollback.
