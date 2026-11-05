@@ -1,4 +1,4 @@
-"""安全模块。"""
+"""提供架构升级适配。"""
 
 from __future__ import annotations
 
@@ -83,15 +83,32 @@ class ApiKeyAuthenticator:
 
 
 class OIDCAuthenticator(ApiKeyAuthenticator):
-    """OIDC bearer authenticator with an API-key compatibility fallback."""
+    """提供 OIDC Bearer 认证和 API Key 兼容回退。"""
 
     def __init__(self, *, enabled: bool, token_validator, fallback: ApiKeyAuthenticator | None = None, tenant_claim: str = "tenant_id") -> None:
+        """提供架构升级适配。
+
+        Args:
+            enabled: 输入参数。
+            token_validator: 输入参数。
+            fallback: 输入参数。
+            tenant_claim: 输入参数。
+        """
         self._enabled = enabled
         self._token_validator = token_validator
         self._fallback = fallback
         self._tenant_claim = tenant_claim
 
     def authorize_tenant(self, request: Request, tenant_id: str) -> None:
+        """提供架构升级适配。
+
+        Args:
+            request: 输入参数。
+            tenant_id: 输入参数。
+
+        Raises:
+    ValueError: 输入不合法时抛出。
+        """
         if not self._enabled:
             return
         token = self._read_bearer(request)
@@ -109,6 +126,14 @@ class OIDCAuthenticator(ApiKeyAuthenticator):
         raise HTTPException(status_code=401, detail="Missing bearer token")
 
     def authorize_admin(self, request: Request) -> None:
+        """提供架构升级适配。
+
+        Args:
+            request: 输入参数。
+
+        Raises:
+    ValueError: 输入不合法时抛出。
+        """
         if not self._enabled:
             return
         token = self._read_bearer(request)
@@ -127,6 +152,14 @@ class OIDCAuthenticator(ApiKeyAuthenticator):
 
     @staticmethod
     def _read_bearer(request: Request) -> str:
+        """提供架构升级适配。
+
+        Args:
+            request: 输入参数。
+
+        Returns:
+    处理结果。
+        """
         header = request.headers.get("Authorization", "")
         if not header.lower().startswith("bearer "):
             return ""
@@ -134,7 +167,18 @@ class OIDCAuthenticator(ApiKeyAuthenticator):
 
 
 def build_authenticator(settings, *, enabled: bool | None = None) -> ApiKeyAuthenticator:
-    """Select API-key, OIDC, or hybrid mode without changing router contracts."""
+    """根据配置选择认证模式。
+
+    Args:
+        settings: 平台配置。
+        enabled: 是否启用认证。
+
+    Returns:
+        认证器实例。
+
+    Raises:
+        ValueError: 认证模式不支持时抛出。
+    """
     api_key = ApiKeyAuthenticator(
         enabled=settings.auth_enabled if enabled is None else enabled,
         tenant_keys=settings.api_keys,

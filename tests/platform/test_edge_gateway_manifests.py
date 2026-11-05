@@ -1,3 +1,4 @@
+"""提供架构升级适配。"""
 from pathlib import Path
 import shutil
 import subprocess
@@ -9,6 +10,8 @@ CHART = ROOT / "deploy" / "helm" / "agentforge"
 
 
 def test_edge_gateway_values_and_templates_exist() -> None:
+    """提供架构升级适配。
+    """
     values = yaml.safe_load((CHART / "values.yaml").read_text(encoding="utf-8"))
     assert values["edgeGateway"]["enabled"] is False
     assert values["edgeGateway"]["gatewayClassName"] == "eg"
@@ -17,6 +20,8 @@ def test_edge_gateway_values_and_templates_exist() -> None:
 
 
 def test_helm_renders_gateway_resources_when_enabled() -> None:
+    """提供架构升级适配。
+    """
     helm = shutil.which("helm")
     if helm is None:
         return

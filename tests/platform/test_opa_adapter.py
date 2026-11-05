@@ -1,3 +1,4 @@
+"""提供架构升级适配。"""
 import httpx
 import pytest
 
@@ -7,7 +8,17 @@ from agentforge.platform.infrastructure.authz.opa_adapter import OPAPolicyAdapte
 
 @pytest.mark.asyncio
 async def test_opa_adapter_maps_allow_decision() -> None:
+    """提供架构升级适配。
+    """
     def handler(request: httpx.Request) -> httpx.Response:
+        """提供架构升级适配。
+
+        Args:
+            request: 输入参数。
+
+        Returns:
+    处理结果。
+        """
         assert request.url.path.endswith("/v1/data/agentforge/allow")
         return httpx.Response(200, json={"result": {"outcome": "allowed", "reasons": []}})
 
@@ -20,7 +31,17 @@ async def test_opa_adapter_maps_allow_decision() -> None:
 
 @pytest.mark.asyncio
 async def test_opa_adapter_maps_requires_approval() -> None:
+    """提供架构升级适配。
+    """
     def handler(request: httpx.Request) -> httpx.Response:
+        """提供架构升级适配。
+
+        Args:
+            request: 输入参数。
+
+        Returns:
+    处理结果。
+        """
         return httpx.Response(200, json={"result": {"outcome": "requires_approval", "reasons": ["high_risk"]}})
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))

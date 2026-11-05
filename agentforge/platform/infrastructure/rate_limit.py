@@ -1,4 +1,4 @@
-"""Rate-limit backend selection and distributed adapter."""
+"""提供架构升级适配。"""
 
 from __future__ import annotations
 
@@ -10,18 +10,42 @@ from agentforge.platform.infrastructure.valkey_coordination import ValkeyCoordin
 
 @dataclass(frozen=True)
 class RateLimitDecision:
+    """提供架构升级适配。
+
+    Attributes:
+        allowed: 配置字段。
+        retry_after_ms: 配置字段。
+        backend: 配置字段。
+    """
     allowed: bool
     retry_after_ms: int = 0
     backend: str = "memory"
 
 
 class InMemoryRateLimitBackend:
+    """提供架构升级适配。
+    """
     def __init__(self, capacity: float = 100.0, refill_per_second: float = 10.0) -> None:
+        """提供架构升级适配。
+
+        Args:
+            capacity: 输入参数。
+            refill_per_second: 输入参数。
+        """
         self._capacity = capacity
         self._refill = refill_per_second
         self._buckets: dict[str, tuple[float, float]] = {}
 
     async def acquire(self, key: str, *, cost: float = 1.0) -> RateLimitDecision:
+        """提供架构升级适配。
+
+        Args:
+            key: 输入参数。
+            cost: 输入参数。
+
+        Returns:
+    处理结果。
+        """
         import time
         now = time.monotonic()
         tokens, updated = self._buckets.get(key, (self._capacity, now))
@@ -35,21 +59,58 @@ class InMemoryRateLimitBackend:
 
 
 class ValkeyRateLimitBackend:
+    """提供架构升级适配。
+    """
     def __init__(self, coordination: ValkeyCoordination, capacity: float, refill_per_second: float) -> None:
+        """提供架构升级适配。
+
+        Args:
+            coordination: 输入参数。
+            capacity: 输入参数。
+            refill_per_second: 输入参数。
+        """
         self._coordination = coordination
         self._capacity = capacity
         self._refill = refill_per_second
 
     @classmethod
     def from_url(cls, url: str, capacity: float, refill_per_second: float) -> "ValkeyRateLimitBackend":
+        """提供架构升级适配。
+
+        Args:
+            url: 输入参数。
+            capacity: 输入参数。
+            refill_per_second: 输入参数。
+
+        Returns:
+    处理结果。
+        """
         return cls(ValkeyCoordination.from_url(url), capacity, refill_per_second)
 
     async def acquire(self, key: str, *, cost: float = 1.0) -> RateLimitDecision:
+        """提供架构升级适配。
+
+        Args:
+            key: 输入参数。
+            cost: 输入参数。
+
+        Returns:
+    处理结果。
+        """
         result = await self._coordination.rate_limit(key, capacity=self._capacity, refill_rate=self._refill, cost=cost)
         return RateLimitDecision(allowed=result.allowed, retry_after_ms=result.retry_after_ms, backend="valkey")
 
 
 def build_rate_limit_backend(settings: Any, coordination: ValkeyCoordination | None = None):
+    """提供架构升级适配。
+
+    Args:
+        settings: 输入参数。
+        coordination: 输入参数。
+
+    Raises:
+    ValueError: 输入不合法时抛出。
+    """
     if settings.rate_limit_backend == "memory":
         return InMemoryRateLimitBackend(settings.rate_limit_capacity, settings.rate_limit_refill_per_second)
     if settings.rate_limit_backend == "valkey":

@@ -1,8 +1,11 @@
+"""提供架构升级适配。"""
 from agentforge.platform.settings import Settings
 from agentforge.platform.sdk.upgrade_ports import AuthPort, ContextStorePort, DagExecutorPort, PolicyPort, PromptRegistryPort, RagParserPort, RateLimitPort
 
 
 def test_upgrade_settings_defaults_are_backward_compatible() -> None:
+    """提供架构升级适配。
+    """
     settings = Settings(_env_file=None)
     assert settings.edge_gateway_provider == "ingress"
     assert settings.auth_mode == "api_key"
@@ -15,5 +18,7 @@ def test_upgrade_settings_defaults_are_backward_compatible() -> None:
 
 
 def test_upgrade_ports_are_protocols() -> None:
+    """提供架构升级适配。
+    """
     ports = (AuthPort, PolicyPort, RateLimitPort, ContextStorePort, PromptRegistryPort, RagParserPort, DagExecutorPort)
     assert all(getattr(port, "_is_protocol", False) for port in ports)

@@ -1,4 +1,4 @@
-"""Deterministic DAG validation for the Temporal execution path."""
+"""提供架构升级适配。"""
 
 from __future__ import annotations
 
@@ -8,18 +8,39 @@ from graphlib import CycleError, TopologicalSorter
 
 @dataclass(frozen=True)
 class DagValidationResult:
+    """提供架构升级适配。
+
+    Attributes:
+        ok: 配置字段。
+        order: 配置字段。
+        errors: 配置字段。
+    """
     ok: bool
     order: tuple[str, ...] = ()
     errors: tuple[str, ...] = field(default_factory=tuple)
 
 
 class DagValidator:
-    """Validate node identity, edges, cycles, and the global node budget."""
+    """校验节点身份、边、环和全局节点预算。"""
 
     def __init__(self, max_nodes: int = 50) -> None:
+        """提供架构升级适配。
+
+        Args:
+            max_nodes: 输入参数。
+        """
         self._max_nodes = max_nodes
 
     def validate(self, nodes: dict[str, str], edges: list[tuple[str, str]]) -> DagValidationResult:
+        """提供架构升级适配。
+
+        Args:
+            nodes: 输入参数。
+            edges: 输入参数。
+
+        Returns:
+    处理结果。
+        """
         errors: list[str] = []
         if len(nodes) > self._max_nodes:
             errors.append("max_nodes_exceeded")

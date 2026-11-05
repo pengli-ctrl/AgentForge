@@ -1,4 +1,4 @@
-"""Selection of the model-gateway backend."""
+"""提供架构升级适配。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,19 @@ from agentforge.platform.settings import Settings
 
 
 def build_inner_model_gateway(settings: Settings, recorder: TraceRecorder | None = None, *, default_backend: str = "static"):
-    """Return the configured provider adapter while preserving the existing port."""
+    """根据配置构建模型网关适配器。
+
+    Args:
+        settings: 平台配置。
+        recorder: 链路记录器。
+        default_backend: 默认后端。
+
+    Returns:
+        模型网关适配器。
+
+    Raises:
+        ValueError: 后端配置不支持时抛出。
+    """
     backend = settings.ai_gateway_backend
     if backend == "local":
         backend = default_backend

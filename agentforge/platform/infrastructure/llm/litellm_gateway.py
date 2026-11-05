@@ -23,6 +23,8 @@ class LiteLLMModelGateway:
         Args:
             completion_fn: 完成函数。
             recorder: 记录器。
+            api_base: LiteLLM 代理地址。
+            api_key: LiteLLM API 密钥。
         """
         self._completion_fn = completion_fn
         self._recorder = recorder

@@ -59,6 +59,30 @@ class Settings(BaseSettings):
         outbox_poll_interval_seconds: Outbox。
         kafka_bootstrap_servers: 启动装配。
         kafka_topic: 字段值。
+        owasp_enabled: 配置字段。
+        edge_gateway_provider: 配置字段。
+        auth_mode: 配置字段。
+        oidc_issuer_url: 配置字段。
+        oidc_audience: 配置字段。
+        oidc_jwks_url: 配置字段。
+        authz_engine: 配置字段。
+        opa_url: 配置字段。
+        opa_policy_path: 配置字段。
+        openfga_api_url: 配置字段。
+        rate_limit_backend: 配置字段。
+        rate_limit_capacity: 配置字段。
+        rate_limit_refill_per_second: 配置字段。
+        ai_gateway_backend: 配置字段。
+        litellm_proxy_url: 配置字段。
+        litellm_api_key: 配置字段。
+        prompt_registry_backend: 配置字段。
+        langfuse_public_key: 配置字段。
+        langfuse_secret_key: 配置字段。
+        telemetry_backend: 配置字段。
+        context_store_backend: 配置字段。
+        context_store_ttl_seconds: 配置字段。
+        dag_executor: 配置字段。
+        rag_parser_backend: 配置字段。
     """
 
     model_config = SettingsConfigDict(

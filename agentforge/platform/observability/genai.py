@@ -1,4 +1,4 @@
-"""OpenTelemetry GenAI semantic attribute helpers."""
+"""提供架构升级适配。"""
 
 from __future__ import annotations
 
@@ -6,6 +6,16 @@ from typing import Any
 
 
 def set_genai_attributes(span: Any, *, provider: str, model: str, tenant_id: str = "", prompt_version: str = "", operation: str = "chat") -> None:
+    """提供架构升级适配。
+
+    Args:
+        span: 输入参数。
+        provider: 输入参数。
+        model: 输入参数。
+        tenant_id: 输入参数。
+        prompt_version: 输入参数。
+        operation: 输入参数。
+    """
     if span is None or not hasattr(span, "set_attribute"):
         return
     span.set_attribute("gen_ai.system", provider)
