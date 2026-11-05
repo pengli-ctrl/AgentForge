@@ -44,8 +44,7 @@ from agentforge.platform.application.usage_metering_service import (
 )
 from agentforge.platform.application.version_registry import ModelVersionRegistry
 from agentforge.platform.domain.model import ModelProfile
-from agentforge.platform.infrastructure.llm.litellm_gateway import LiteLLMModelGateway
-from agentforge.platform.infrastructure.llm.static_gateway import StaticModelGateway
+from agentforge.platform.infrastructure.llm.gateway_factory import build_inner_model_gateway
 from agentforge.platform.infrastructure.memory_audit_repository import MemoryAuditRepository
 from agentforge.platform.infrastructure.memory_connector_repository import MemoryConnectorRepository
 from agentforge.platform.infrastructure.memory_cost_repository import MemoryCostRepository
@@ -450,7 +449,9 @@ def build_memory_container(
     run_repository = MemoryReportRunRepository()
     outbox_store = MemoryOutboxStore()
     trace_recorder = TraceRecorder()
-    inner = model_gateway or StaticModelGateway(recorder=trace_recorder)
+    inner = model_gateway or build_inner_model_gateway(
+        get_settings(), trace_recorder, default_backend="static"
+    )
     return ServiceContainer(
         knowledge_repository=MemoryKnowledgeRepository(),
         model_gateway=_wrap_gateway(
@@ -512,7 +513,9 @@ def build_sqlalchemy_container(
     scheduled_report_repository = SQLAlchemyScheduledReportRepository(session_factory)
     run_repository = SQLAlchemyReportRunRepository(session_factory)
     trace_recorder = TraceRecorder()
-    inner = model_gateway or LiteLLMModelGateway(recorder=trace_recorder)
+    inner = model_gateway or build_inner_model_gateway(
+        get_settings(), trace_recorder, default_backend="litellm"
+    )
     return ServiceContainer(
         knowledge_repository=SQLAlchemyKnowledgeRepository(session_factory),
         model_gateway=_wrap_gateway(

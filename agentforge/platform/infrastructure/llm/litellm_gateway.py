@@ -15,15 +15,21 @@ class LiteLLMModelGateway:
         self,
         completion_fn: Callable[..., Awaitable] | None = None,
         recorder: TraceRecorder | None = None,
+        api_base: str = "",
+        api_key: str = "",
     ) -> None:
         """初始化 LiteLLMModelGateway。
 
         Args:
             completion_fn: 完成函数。
             recorder: 记录器。
+            api_base: LiteLLM 代理地址。
+            api_key: LiteLLM API 密钥。
         """
         self._completion_fn = completion_fn
         self._recorder = recorder
+        self._api_base = api_base
+        self._api_key = api_key
 
     async def complete(self, request: ModelRequest) -> ModelResponse:
         """完成任务。
@@ -53,6 +59,8 @@ class LiteLLMModelGateway:
                     {"role": "user", "content": request.user_prompt},
                 ],
                 temperature=request.temperature,
+                api_base=self._api_base or None,
+                api_key=self._api_key or None,
             )
         except BaseException as exc:  # noqa: BLE001 - record failure, re-raise
             if self._recorder is not None:

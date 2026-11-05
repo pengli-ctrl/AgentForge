@@ -59,6 +59,31 @@ class Settings(BaseSettings):
         outbox_poll_interval_seconds: Outbox。
         kafka_bootstrap_servers: 启动装配。
         kafka_topic: 字段值。
+        owasp_enabled: 配置字段。
+        edge_gateway_provider: 配置字段。
+        auth_mode: 配置字段。
+        oidc_issuer_url: 配置字段。
+        oidc_audience: 配置字段。
+        oidc_jwks_url: 配置字段。
+        authz_engine: 配置字段。
+        opa_url: 配置字段。
+        opa_policy_path: 配置字段。
+        openfga_api_url: 配置字段。
+        rate_limit_enabled: 是否启用平台限流。
+        rate_limit_backend: 配置字段。
+        rate_limit_capacity: 配置字段。
+        rate_limit_refill_per_second: 配置字段。
+        ai_gateway_backend: 配置字段。
+        litellm_proxy_url: 配置字段。
+        litellm_api_key: 配置字段。
+        prompt_registry_backend: 配置字段。
+        langfuse_public_key: 配置字段。
+        langfuse_secret_key: 配置字段。
+        telemetry_backend: 配置字段。
+        context_store_backend: 配置字段。
+        context_store_ttl_seconds: 配置字段。
+        dag_executor: 配置字段。
+        rag_parser_backend: 配置字段。
     """
 
     model_config = SettingsConfigDict(
@@ -81,6 +106,31 @@ class Settings(BaseSettings):
     vector_store: str = "pgvector"
     otel_exporter_otlp_endpoint: str = "http://localhost:4317"
     langfuse_host: str = "http://localhost:3000"
+    owasp_enabled: bool = True
+    edge_gateway_provider: str = "ingress"
+    auth_mode: str = "api_key"
+    oidc_issuer_url: str = ""
+    oidc_audience: str = "agentforge"
+    oidc_jwks_url: str = ""
+    authz_engine: str = "local"
+    opa_url: str = ""
+    opa_policy_path: str = "agentforge/allow"
+    openfga_api_url: str = ""
+    rate_limit_enabled: bool = False
+    rate_limit_backend: str = "memory"
+    rate_limit_capacity: float = 100.0
+    rate_limit_refill_per_second: float = 10.0
+    ai_gateway_backend: str = "local"
+    litellm_proxy_url: str = ""
+    litellm_api_key: str = ""
+    prompt_registry_backend: str = "local"
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    telemetry_backend: str = "local"
+    context_store_backend: str = "memory"
+    context_store_ttl_seconds: int = 3600
+    dag_executor: str = "local"
+    rag_parser_backend: str = "legacy"
     feishu_encrypt_key: str = ""
     feishu_verification_token: str = ""
     feishu_app_id: str = ""
