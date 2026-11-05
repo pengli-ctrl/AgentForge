@@ -137,15 +137,15 @@ flowchart TB
 | Nginx Ingress | Helm 保留 `ingress.yaml` 和 `edgeGateway.className` 兼容字段 | 兼容回退，不是主推入口 |
 | FastAPI | 平台 API、模块 Router、认证中间件、限流中间件都在 FastAPI 中装配 | 已落地 |
 | LiteLLM | `LiteLLMGateway` adapter 和 `gateway_factory`，可通过 `AGENTFORGE_AI_GATEWAY_BACKEND` 切换 | 已落地适配层；外部 Proxy 和真实模型凭证按环境提供 |
-| OIDC / JWKS | JWT 签名、issuer、audience、过期时间和 claim 映射；本地提供 Keycloak Compose | 已落地认证器；企业 IdP 需现场配置 |
-| OPA | `OpaPolicyAdapter`、Rego 策略资产、本地 Compose 和双跑测试 | 已落地；`AGENTFORGE_AUTHZ_ENGINE=opa` 可切换 |
+| OIDC / JWKS | JWKS 校验器、OIDC authenticator、JWT 签名/issuer/audience/过期时间和 claim 校验；本地提供 Keycloak Compose | 校验能力与测试已落地；`oidc` 模式需 composition root 显式注入 validator，默认仍走 API Key |
+| OPA | `OPAPolicyAdapter`、Rego 策略资产、本地 Compose 和 adapter 测试 | adapter 与资产已落地；默认运行时仍使用本地 PolicyEngine，切换需显式装配和故障验证 |
 | OpenFGA | `openfga_adapter.py` 提供关系权限适配边界 | 适配层已预留，不作为当前默认授权引擎 |
 | Valkey 限流 | Memory / Valkey 两种后端，平台中间件可按配置启用 | 已落地；生产默认关闭，需显式开启 |
-| Redis ContextStore | 租户、会话、DAG 命名空间、TTL 和访问日志 | 已落地；默认仍为 memory，生产可切 Redis |
-| Temporal | 模块 Task Queue、Support Workflow、SLA Sweep、OCR Job、Expense 门禁扫描、台账写回和通用 DAG Workflow | 已落地 Workflow/Activity 代码与本地集成测试 |
+| Redis ContextStore | 租户、会话、DAG 命名空间、TTL、访问日志和工厂 | 实现与测试已落地；默认仍为 memory，Worker/DAG 需显式使用工厂接线 |
+| Temporal | 模块 Task Queue、Support Workflow、SLA Sweep、OCR Job、Expense 门禁扫描、台账写回和通用 DAG Workflow | 模块 Workflow 已接线；通用 `TemporalDagWorkflow` 已有定义和测试，DAG executor 仍需显式选择 |
 | Outbox / Kafka / DLQ | Outbox Store、Dispatcher、Worker、handler receipt、重试、重放和丢弃 | 已落地 |
 | RAG 解析 | Docling 为可注入真实适配器；PaddleOCR、Unstructured、Tika 为适配边界 | 未在仓库内托管解析服务，真实服务需接入 |
-| Prompt / Trace | Langfuse Prompt adapter、OTel GenAI 属性、本地 OTel Collector | 已落地适配层；Langfuse 自托管和真实项目凭证按环境接入 |
+| Prompt / Trace | Langfuse Prompt adapter、OTel GenAI 属性、本地 OTel Collector 资产 | adapter、属性和测试已落地；Langfuse 项目与 Prompt 读取需显式接线 |
 | 评测 | Golden Set、promptfoo 配置、分类/检索评估和回归服务 | 已落地仓库资产；真实评测数据由业务补充 |
 
 > 设计原则：能由成熟组件承担的通用能力优先组件化。自研集中在业务路由公式、模块契约、高风险审批、租户边界、引用回查、预算策略和财务门禁规则。
@@ -486,7 +486,7 @@ AGENTFORGE_LOCAL_STACK=1 python -m pytest tests/integration -q
 docker compose -f deploy/local/docker-compose.integration.yml down -v
 ```
 
-该环境用于验证 OPA、Valkey 限流、Mock OpenAI、LiteLLM adapter、Prompt/Trace 和模块协议边界。MinIO、Temporal、真实 OCR、真实 IdP 等目标环境组件不在本地 Mock 中伪装成生产服务。
+该命令启动 Mock OpenAI、OPA 和 Valkey，用于本地 readiness 与服务集成检查；Security Integration、Observability Integration 和 OIDC/JWKS 测试由各自测试集和 GitHub Actions Job 验证。LiteLLM Proxy、真实模型供应商、MinIO、Temporal、真实 OCR 和真实 IdP 需要按目标环境显式启动和配置，不能把 adapter 存在等同于生产供应商已接入。
 
 ### kind + Envoy Gateway
 

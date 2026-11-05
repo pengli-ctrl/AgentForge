@@ -33,7 +33,8 @@ Acknowledgement target: 48 hours. Critical fixes target: 7 days. High-severity f
 - API keys are bound to tenants and compared using constant-time comparison.
 - Admin and tenant keys have separate privileges.
 - RBAC, declarative policy, tenant/module access, and high-risk approval checks apply at API and application boundaries.
-- OIDC provides a provider extension point and tenant/permission checks; production IdP integration must be configured per customer.
+- OPA adapter and Rego assets are available; the default runtime still uses the local PolicyEngine until OPA is explicitly wired and failure behavior is validated.
+- OIDC provides a JWKS/RS256 validator, Bearer authenticator, issuer/audience/time checks, and tenant/admin claim validation. OIDC mode requires explicit composition-root wiring; production IdP integration must be configured per customer.
 
 ### Tenant isolation
 
@@ -65,6 +66,8 @@ Acknowledgement target: 48 hours. Critical fixes target: 7 days. High-severity f
 - Do not expose PostgreSQL, Temporal, MinIO, Valkey, or Kafka ports publicly.
 - Use network policies and firewall rules between application and infrastructure networks.
 - Webhook endpoints use HMAC and/or provider signature verification.
+- Envoy Gateway / Gateway API manifests are available for TLS, routing and entry rate limiting. The controller, CRDs and GatewayClass must be provided by the target cluster.
+- Platform rate limiting supports Memory and Valkey backends, but it is disabled by default and must be enabled and failure-tested in production.
 - Connector credentials must come from a secret manager and use least-privilege accounts.
 - Apply WAF, DLP, IP allow-lists, and egress controls where required by the deployment environment.
 
@@ -74,6 +77,7 @@ Acknowledgement target: 48 hours. Critical fixes target: 7 days. High-severity f
 - Use a read-only root filesystem, disable privilege escalation, and drop Linux capabilities.
 - Use Kubernetes Secrets or an external secret manager, not ConfigMaps, for credentials.
 - Run the migration Job before rolling out API and workers.
+- Gateway API and Ingress are both disabled by default; explicitly choose the entry path supported by the target cluster.
 - Enforce Pod Security, resource quotas, network policies, TLS, and image admission controls.
 - Scan images for vulnerabilities and produce an SBOM before production release.
 
@@ -83,9 +87,10 @@ AgentForge is a commercial baseline, not a production-certified platform. The co
 
 Before using the project in a real customer environment, the delivery team must separately complete and verify:
 
-- real IdP discovery, JWKS validation, and group claim mapping;
+- real IdP discovery, OIDC composition wiring, group claim mapping and JWKS rotation drills;
 - Vault/KMS custody, rotation, and disaster recovery;
 - WAF/DLP, network policy, and egress controls;
+- OPA policy distribution, dual-run comparison and fail-closed drills;
 - high availability and capacity validation for external middleware;
 - Kubernetes installation, upgrade, rollback, backup, and restore drills;
 - image and dependency vulnerability scanning.

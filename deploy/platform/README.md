@@ -89,6 +89,21 @@ GET /health/ready
 make platform-down
 ```
 
+## 接入集成环境
+
+平台接口之外的组件接入验证使用 `deploy/local`：
+
+```bash
+docker compose -f deploy/local/docker-compose.integration.yml up -d --build mock-openai opa valkey
+python scripts/check_local_stack.py
+AGENTFORGE_LOCAL_STACK=1 python -m pytest tests/integration -q
+docker compose -f deploy/local/docker-compose.integration.yml down -v
+```
+
+该命令用于启动 Mock OpenAI、OPA 和 Valkey 并检查本地 readiness；OPA/限流、OIDC/JWKS、OTel/Prompt 和 kind + Envoy Gateway 由各自测试集和 CI Job 验证。LiteLLM Proxy、真实模型供应商和目标环境中间件需要显式启动和配置。
+
+`deploy/local/docker-compose.integration.yml` 与平台 Compose 使用相同的 Valkey/Temporal 等端口，不能在同一主机同时启动。
+
 ## 鉴权与默认值
 
 Compose 中提供的是本地演示默认值，生产不得直接使用。
@@ -171,7 +186,7 @@ Compose 使用命名卷：
 
 该目录不是生产高可用部署方案。私有化交付形态请参考：
 
-- `deploy/helm/agentforge`；
+- `deploy/helm/agentforge`，支持 Gateway API、HTTPRoute、RateLimitPolicy 和 Ingress 兼容模板；
 - 外部 PostgreSQL、Temporal、MinIO/S3、Valkey 和 Kafka；
 - 目标环境自行提供的监控、告警、备份和灾备体系。
 

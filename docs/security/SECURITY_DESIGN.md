@@ -14,12 +14,15 @@ AgentForge 的安全能力用于验证企业 AI 平台的默认边界和实现�
 
 ## 2. 身份与权限
 
-- API Key 默认 fail-closed；未配置管理密钥或租户密钥时拒绝启动。
+- API Key 默认 fail-closed；生产环境未配置管理密钥或租户密钥时拒绝启动。
 - API Key 使用常量时间比较，并绑定 `tenant_id`。
 - Admin Key 与租户 Key 权限分离。
 - RBAC、声明式策略、租户状态和模块启用状态共同参与授权。
 - 高风险写回同时经过 Policy/RBAC 和人工审批边界。
-- OIDC 提供 Provider Port、Principal、Bearer Token 和租户/权限校验；真实 IdP discovery、JWKS 与 group claim 映射按客户环境接入。
+- OIDC 提供 JWKS/RS256 校验器、Bearer 认证器、issuer、audience、exp 和 nbf 校验，以及 tenant/admin claim 检查。
+- OIDC mode 需要 composition root 注入 validator；未完成注入时保持 fail-closed，不能用 API Key 默认值伪装 OIDC 已启用。
+- OPA adapter 支持 allow、deny、requires_approval 和 approval_ref；默认运行时仍使用本地 PolicyEngine，切换到 OPA 需要显式装配和不可用时的 fail-closed 验证。
+- OpenFGA 仅作为关系权限适配边界，不是当前默认授权引擎。
 
 ## 3. 租户隔离
 
@@ -28,6 +31,7 @@ AgentForge 的安全能力用于验证企业 AI 平台的默认边界和实现�
 - 跨租户 list/get 返回空、404 或 403，不能泄露资源是否存在。
 - suspended/cancelled 租户在模块 API 边界 fail-closed。
 - 模块契约套件提供 tenant isolation probe。
+- RAG 检索必须绑定租户、权限和文档版本，不能先返回全量向量再依赖上游补过滤。
 
 ## 4. Secret 与密钥
 
@@ -54,17 +58,21 @@ AgentForge 的安全能力用于验证企业 AI 平台的默认边界和实现�
 - 回调支持时间窗口防重放。
 - Connector 支持注册、allow-list、幂等和审计。
 - OpenAPI Connector 提供有界重试和限流。
+- Feishu、ERP、Webhook 等外部写回必须使用幂等键；超时不能直接等价为失败并盲目重试。
 - WAF、IP allow-list、DLP 和外部 API 网络策略属于部署环境边界。
 
 ## 7. 限流、缓存与事件可靠性
 
-- Valkey 支持限流、`retry_after`、TTL 缓存和分布式锁。
+- Valkey 支持原子 Token Bucket 限流、`retry_after`、JSON 缓存和分布式锁。
+- 平台限流中间件支持 Memory / Valkey 后端；默认关闭，生产必须显式开启并验证故障策略。
+- Redis ContextStore 支持租户/会话/DAG 命名空间、TTL 和访问日志；默认仍使用 Memory，生产接线需显式完成。
 - Circuit Breaker 与请求放大保护限制故障扩散。
 - 配额感知模型网关提供租户级硬门禁。
 - Outbox 支持 handler receipt、retry、DLQ、replay 和 discard。
 - 缓存必须包含租户、权限和数据版本边界；高风险或强一致场景禁止使用语义缓存。
+- AI Gateway 只负责模型选择、Fallback、缓存和成本，不承担租户授权。
 
-## 8. 容器与交付默认值
+## 8. 接入网关与容器交付
 
 Helm Chart 包含：
 
@@ -72,10 +80,14 @@ Helm Chart 包含：
 - Temporal Worker Deployment；
 - Outbox Worker Deployment；
 - Migration Job；
-- Service、Ingress、ServiceAccount 和 ConfigMap。
+- Gateway API `Gateway`、`HTTPRoute`、可选 `RateLimitPolicy`；
+- Ingress 兼容模板；
+- Service、ServiceAccount 和 ConfigMap。
 
 安全默认值：
 
+- Gateway API 和 Ingress 都默认关闭，按环境选择；
+- 启用 Gateway API 时必须由集群提供 CRD、controller 和 GatewayClass；
 - `runAsNonRoot=true`；
 - `readOnlyRootFilesystem=true`；
 - `allowPrivilegeEscalation=false`；
@@ -87,7 +99,8 @@ Helm Chart 包含：
 
 以下内容不作为仓库已经完成的承诺：
 
-- 客户真实 IdP discovery、JWKS、签名校验和 group claim 映射；
+- 客户真实 IdP discovery、group claim 映射、OIDC composition 接线和故障演练；
+- OPA 在生产默认路径的完整装配、策略分发、双跑和回滚；
 - 客户 Vault/KMS 的托管、轮换、灾备和权限验收；
 - WAF、DLP、网络策略与出站访问控制；
 - PostgreSQL、Temporal、MinIO、Valkey 的高可用和容量验证；

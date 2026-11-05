@@ -1,6 +1,6 @@
 # AgentForge Helm Chart
 
-该 Chart 用于 AgentForge 3.1.0 私有化部署。它部署无状态应用组件，并连接客户已有的 PostgreSQL、Temporal、MinIO/S3 和 Valkey/Redis。
+该 Chart 用于 AgentForge 3.1.0 私有化部署。它部署无状态应用组件，并连接客户已有的 PostgreSQL、Temporal、MinIO/S3、Valkey/Redis 和 Kafka。
 
 ## 包含组件
 
@@ -8,7 +8,9 @@
 - Temporal Worker Deployment；
 - Outbox Worker Deployment；
 - pre-install/pre-upgrade Migration Job；
-- Service、Ingress、ServiceAccount、ConfigMap。
+- Service、Gateway、HTTPRoute、RateLimitPolicy；
+- Ingress 兼容模板；
+- ServiceAccount 和 ConfigMap。
 
 Migration Job 执行：
 
@@ -20,9 +22,10 @@ alembic upgrade head
 
 - Kubernetes 1.27+；
 - Helm 3；
-- 可访问的 PostgreSQL 15+、Temporal 1.32+、MinIO/S3 和 Valkey/Redis 7+；
+- 可访问的 PostgreSQL 15+、Temporal 1.32+、MinIO/S3、Valkey/Redis 7+ 和 Kafka；
 - 已推送的 AgentForge 镜像；
-- 已创建的 Kubernetes Secret。
+- 已创建的 Kubernetes Secret；
+- 使用 Gateway API 时，集群已安装 Gateway API CRD、Envoy Gateway controller 和对应 GatewayClass。
 
 ## Secret
 
@@ -40,6 +43,16 @@ kubectl -n agentforge create secret generic agentforge-secrets \
 ```
 
 推荐使用 Vault/External Secrets Operator 创建 Secret。模块中的外部凭据应通过 `secret_refs` 引用 Secret Provider。
+
+可选集成配置包括：
+
+- OIDC：`AGENTFORGE_OIDC_ISSUER_URL`、`AGENTFORGE_OIDC_AUDIENCE`、`AGENTFORGE_OIDC_JWKS_URL`；
+- OPA：`AGENTFORGE_OPA_URL`、`AGENTFORGE_OPA_POLICY_PATH`；
+- LiteLLM：`AGENTFORGE_LITELLM_PROXY_URL`、`AGENTFORGE_LITELLM_API_KEY`；
+- Valkey 限流：`AGENTFORGE_RATE_LIMIT_ENABLED`、`AGENTFORGE_RATE_LIMIT_BACKEND=valkey`；
+- Prompt：`AGENTFORGE_PROMPT_REGISTRY_BACKEND=langfuse`。
+
+OIDC、OPA、Langfuse 和 Redis ContextStore 可能需要 composition root 显式完成适配器接线；仅设置环境变量不等价于生产链路已启用。
 
 ## 安装
 
@@ -61,7 +74,38 @@ helm upgrade --install agentforge deploy/helm/agentforge \
 - ClusterIP Service；
 - 非 root、只读根文件系统、drop 全部 capabilities。
 
-Ingress 默认关闭，生产需配置 TLS、域名、WAF 和网络策略。
+默认入口：
+
+- `ingress.enabled=false`；
+- `edgeGateway.enabled=false`；
+- 私有化环境必须按控制器能力选择 Gateway API 或 Ingress，并配置 TLS、域名、WAF 和网络策略。
+
+## Envoy Gateway / Gateway API
+
+启用 Helm 资源：
+
+```bash
+helm upgrade --install agentforge deploy/helm/agentforge \
+  -n agentforge \
+  --set existingSecret=agentforge-secrets \
+  --set edgeGateway.enabled=true \
+  --set edgeGateway.gatewayClassName=eg
+```
+
+Chart 会渲染：
+
+- `Gateway`；
+- `HTTPRoute`；
+- `edgeGateway.rateLimit.enabled=true` 时的 `RateLimitPolicy`。
+
+Chart 不安装 Envoy Gateway controller，不创建 GatewayClass，也不管理 TLS 证书和 DNS。默认 SSE 配置：
+
+```text
+edgeGateway.sse.idleTimeout=300s
+edgeGateway.sse.maxDuration=1800s
+```
+
+Ingress 仅作为兼容回退，不是默认入口。不要把 `ingress.enabled=true` 与 Gateway API 同时当作两套生产入口长期并行运行。
 
 ## 外部依赖
 
@@ -71,7 +115,8 @@ Chart 默认不托管：
 - Temporal；
 - MinIO/S3；
 - Valkey/Redis；
-- Kafka（生产由 Outbox Worker 配置接入）。
+- Kafka；
+- OTel Collector、Langfuse 或企业 IdP。
 
 可通过 `config` 覆盖连接配置，通过 `existingSecret` 注入敏感值。
 
@@ -81,6 +126,10 @@ Chart 默认不托管：
 helm lint deploy/helm/agentforge
 helm template agentforge deploy/helm/agentforge -n agentforge \
   --set existingSecret=agentforge-secrets
+
+helm template agentforge deploy/helm/agentforge -n agentforge \
+  --set edgeGateway.enabled=true > /tmp/agentforge-gateway.yaml
+kubectl apply --dry-run=server -f /tmp/agentforge-gateway.yaml
 
 kubectl -n agentforge rollout status deploy/agentforge-agentforge-api
 kubectl -n agentforge rollout status deploy/agentforge-agentforge-worker
@@ -111,7 +160,3 @@ GET /health/ready
 [`docs/security/PRIVATE_DELIVERY.md`](../../../docs/security/PRIVATE_DELIVERY.md)
 
 本文不承诺生产 HA、备份恢复、灾备或客户现场验收。
-
-## Envoy Gateway
-
-`edgeGateway.enabled=true` renders Kubernetes Gateway API `Gateway` and `HTTPRoute` resources. The chart does not install the Envoy Gateway controller; the cluster must provide it. Keep `ingress.enabled=true` as the rollback path until the Gateway migration is validated.
