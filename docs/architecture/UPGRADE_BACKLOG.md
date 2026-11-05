@@ -13,3 +13,9 @@
 - Added optional Gateway API templates and SSE metadata.
 - Remaining: validate with a real Envoy Gateway controller and add TLS/canary route policies.
 - Remaining: add staging smoke tests for SSE buffering, TLS, and tenant/version header routing.
+
+## PR 2 - LiteLLM gateway
+
+- Added configurable LiteLLM provider adapter and gateway factory.
+- Remaining: add LiteLLM Proxy deployment values and shadow-routing comparison metrics.
+- Remaining: validate 429/timeout/fallback behavior against a real proxy.
