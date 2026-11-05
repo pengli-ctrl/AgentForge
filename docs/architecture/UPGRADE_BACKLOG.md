@@ -49,3 +49,9 @@
 - Added Redis-backed context storage and configurable factory while preserving memory default.
 - Remaining: wire ContextStore into DAGEngine/Temporal activities and add S3 claim-check for large payloads.
 - Remaining: add cross-process, restart, encryption, and migration parity tests.
+
+## PR 8 - DAG/Temporal convergence
+
+- Added deterministic graph validation with cycle, node, edge, and budget checks.
+- Remaining: implement the generic Temporal DAG Workflow and switch `DAG_EXECUTOR=temporal` behind shadow mode.
+- Remaining: add replay, worker-restart, duplicate-Activity, and completed-node immutability tests.
