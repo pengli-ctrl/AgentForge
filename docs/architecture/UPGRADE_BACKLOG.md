@@ -37,3 +37,9 @@
 - Added memory/Valkey backends on top of the existing atomic Valkey token-bucket primitive.
 - Remaining: wire `RateLimitPort` into request middleware and Envoy rate-limit policy.
 - Remaining: add multi-process concurrency and Redis-failure integration tests.
+
+## PR 6 - Prompt/eval/trace
+
+- Added Langfuse prompt adapter and GenAI trace attribute helper.
+- Remaining: add Ragas/promptfoo datasets and CI regression gate.
+- Remaining: add Langfuse self-hosted deployment values and trace export integration.
